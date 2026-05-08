@@ -1,0 +1,367 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// NextAuth models
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  CLIENT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(EDITOR)
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Dominio del negocio
+// ---------------------------------------------------------------------------
+
+model Client {
+  id              String   @id @default(cuid())
+  cerebroClientId String?  @unique
+  name            String
+  domain          String
+  plan            SeoPlan
+  status          ClientStatus
+  brandColor      String?
+  createdAt       DateTime @default(now())
+
+  sites            Site[]
+  keywords         Keyword[]
+  competitors      Competitor[]
+  cycles           MonthlyCycle[]
+  hypotheses       Hypothesis[]
+  insights         Insight[]
+  events           TimelineEvent[]
+  clientUsers      ClientUser[]
+  aiSearchVisibility AiSearchVisibility[]
+}
+
+model Site {
+  id          String  @id @default(cuid())
+  clientId    String
+  client      Client  @relation(fields: [clientId], references: [id])
+  url         String
+  gscProperty String?
+  ga4Property String?
+
+  audits      Audit[]
+  pageMetrics PageMetric[]
+  backlinks   Backlink[]
+}
+
+model MonthlyCycle {
+  id              String      @id @default(cuid())
+  clientId        String
+  client          Client      @relation(fields: [clientId], references: [id])
+  yearMonth       String
+  status          CycleStatus
+  strategySummary String?     @db.Text
+  notionPageId    String?
+  reportPdfUrl    String?
+  startedAt       DateTime
+  closedAt        DateTime?
+
+  tasks      Task[]
+  hypotheses Hypothesis[]
+
+  @@unique([clientId, yearMonth])
+}
+
+model Task {
+  id               String       @id @default(cuid())
+  cycleId          String
+  cycle            MonthlyCycle @relation(fields: [cycleId], references: [id])
+  notionTaskId     String?      @unique
+  title            String
+  description      String?      @db.Text
+  status           TaskStatus
+  priority         Int
+  assignedTo       String?
+  dueDate          DateTime?
+  completedAt      DateTime?
+  affectedUrls     String[]
+  affectedKeywords Keyword[]
+
+  hypothesis Hypothesis?
+}
+
+model Hypothesis {
+  id              String           @id @default(cuid())
+  clientId        String
+  client          Client           @relation(fields: [clientId], references: [id])
+  cycleId         String
+  cycle           MonthlyCycle     @relation(fields: [cycleId], references: [id])
+  taskId          String?          @unique
+  task            Task?            @relation(fields: [taskId], references: [id])
+  statement       String           @db.Text
+  expectedMetric  String
+  expectedDelta   Float
+  timeframeDays   Int
+  baseline        Json
+  validation      ValidationStatus
+  validatedAt     DateTime?
+  validationNotes String?          @db.Text
+}
+
+model Keyword {
+  id         String  @id @default(cuid())
+  clientId   String
+  client     Client  @relation(fields: [clientId], references: [id])
+  term       String
+  country    String  @default("MX")
+  language   String  @default("es")
+  targetUrl  String?
+  isPriority Boolean @default(false)
+
+  rankings        KeywordRanking[]
+  affectedByTasks Task[]
+}
+
+model KeywordRanking {
+  id           String   @id @default(cuid())
+  keywordId    String
+  keyword      Keyword  @relation(fields: [keywordId], references: [id])
+  date         DateTime
+  position     Int?
+  rankingUrl   String?
+  searchEngine String   @default("google")
+  delta        Int?
+
+  @@index([keywordId, date])
+}
+
+model Competitor {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id])
+  domain          String
+  domainAuthority Int?
+  lastAnalyzed    DateTime?
+  snapshotData    Json?
+}
+
+model Audit {
+  id               String   @id @default(cuid())
+  siteId           String
+  site             Site     @relation(fields: [siteId], references: [id])
+  date             DateTime @default(now())
+  scoreOverall     Int
+  scoreTechnical   Int
+  scorePerformance Int
+  scoreContent     Int
+  issues           Json
+  pagesCrawled     Int
+  cwvData          Json?
+  summary          String?  @db.Text
+}
+
+model Backlink {
+  id              String        @id @default(cuid())
+  siteId          String
+  site            Site          @relation(fields: [siteId], references: [id])
+  sourceDomain    String
+  sourceUrl       String
+  targetUrl       String
+  anchorText      String?
+  followType      String
+  domainAuthority Int?
+  firstSeen       DateTime
+  lastSeen        DateTime
+  status          BacklinkStatus
+}
+
+model PageMetric {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+  url         String
+  date        DateTime
+  source      String
+  clicks      Int?
+  impressions Int?
+  ctr         Float?
+  position    Float?
+  sessions    Int?
+  bounceRate  Float?
+  conversions Int?
+
+  @@index([siteId, url, date])
+}
+
+model Insight {
+  id               String      @id @default(cuid())
+  clientId         String
+  client           Client      @relation(fields: [clientId], references: [id])
+  type             InsightType
+  severity         String
+  title            String
+  description      String      @db.Text
+  suggestedAction  String?     @db.Text
+  dataPoints       Json?
+  affectedUrls     String[]
+  affectedKeywords String[]
+  generatedAt      DateTime    @default(now())
+  acknowledgedAt   DateTime?
+  dismissed        Boolean     @default(false)
+}
+
+model TimelineEvent {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
+  date        DateTime
+  type        EventType
+  title       String
+  description String?   @db.Text
+  source      String
+}
+
+model AiSearchVisibility {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  date      DateTime
+  llmSource String
+  query     String
+  mentioned Boolean
+  position  Int?
+  context   String?  @db.Text
+}
+
+model ClientUser {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
+  email       String
+  name        String?
+  lastLoginAt DateTime?
+}
+
+model ApiUsage {
+  id       String   @id @default(cuid())
+  provider String
+  endpoint String
+  cost     Decimal  @db.Decimal(10, 6)
+  clientId String?
+  date     DateTime @default(now())
+
+  @@index([provider, date])
+  @@index([clientId, date])
+}
+
+model JobLog {
+  id        String   @id @default(cuid())
+  jobName   String
+  clientId  String?
+  status    String
+  error     String?  @db.Text
+  attempts  Int
+  createdAt DateTime @default(now())
+
+  @@index([jobName, createdAt])
+}
+
+enum SeoPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  CHURNED
+}
+
+enum CycleStatus {
+  PLANNING
+  ACTIVE
+  CLOSING
+  CLOSED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum ValidationStatus {
+  PENDING
+  VALIDATED
+  REFUTED
+  PARTIAL
+}
+
+enum BacklinkStatus {
+  ACTIVE
+  LOST
+}
+
+enum InsightType {
+  OPPORTUNITY
+  WARNING
+  WIN
+  INFO
+}
+
+enum EventType {
+  ALGORITHM_UPDATE
+  CLIENT_LAUNCH
+  SEO_ACTION
+  EXTERNAL
+}
