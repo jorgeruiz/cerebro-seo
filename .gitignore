@@ -48,6 +48,5 @@ docker-compose.override.yml
 # Build artifacts
 /dist
 
-# Session artifacts (generados localmente)
+# Artifacts generados localmente (no para el repo)
 validation-report.md
-SESSION_*_REPORT.md
