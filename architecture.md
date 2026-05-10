@@ -184,6 +184,27 @@ model VerificationToken {
 }
 ```
 
+### ApiUsage — columnas reales (verificado contra BD 2026-05-10)
+
+```prisma
+model ApiUsage {
+  id       String   @id @default(cuid())
+  provider String                          // "dataforseo", "anthropic", etc.
+  endpoint String                          // e.g. "serp/organic/live/validation"
+  cost     Decimal  @db.Decimal(10, 6)    // CUIDADO: es "cost", no "costUsd"
+  clientId String?
+  date     DateTime @default(now())        // CUIDADO: es "date", no "createdAt"
+
+  @@index([provider, date])
+  @@index([clientId, date])
+}
+```
+
+> **Nota para queries manuales:** usar `cost` y `date`, no `costUsd` ni `createdAt`. Ejemplo:
+> ```sql
+> SELECT provider, endpoint, cost, date FROM "ApiUsage" ORDER BY date DESC LIMIT 10;
+> ```
+
 ### Modelos de negocio (campos nuevos vs v1 marcados con ★)
 
 Los modelos base (Client, Site, MonthlyCycle, Task, Hypothesis, Keyword, KeywordRanking, Competitor, Audit, Backlink, PageMetric, Insight, TimelineEvent, AiSearchVisibility, ClientUser, ApiUsage) mantienen la misma estructura. Campos y modelos agregados:
