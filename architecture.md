@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-05-07 (v2)
+**Última actualización:** 2026-05-10 (v3)
 
 ---
 
@@ -11,12 +11,12 @@ Frontend:    Next.js 14 (App Router) + TypeScript + TailwindCSS + shadcn/ui
 Charts:      Recharts (consistencia con Cerebro)
 Backend:     Next.js API Routes + tRPC (tRPC pendiente de implementar en Fase 2)
 DB:          PostgreSQL 16 + Prisma ORM v5.22
-Auth:        NextAuth v4 (Google OAuth + Magic Link para clientes)
+Auth:        NextAuth v4 (Google OAuth — solo equipo interno, sin magic link)
 Jobs:        BullMQ v5 + Redis / ioredis v5
 Crawler:     Cheerio (default) + Playwright (fallback para SPAs)
 Cache:       Redis para datos de DataForSEO (TTL 24h-7d según endpoint)
 Deploy:      Easypanel VPS (proyecto separado de Cerebro)
-Dev local:   Docker — PostgreSQL 16 + Redis 7 via docker-compose
+Dev local:   OrbStack — PostgreSQL 16 + Redis 7 via docker-compose (Docker Desktop no arranca en MacBook Air M4 / macOS Tahoe 26.2)
 Repo:        github.com/jorgeruiz/cerebro-seo (privado, cuenta personal jorgeruiz)
 ```
 
@@ -89,6 +89,23 @@ cerebro-seo/
 └── tsconfig.json
 ```
 
+**Implementado en Sesión 3 (ahora existe):**
+```
+src/server/providers/
+├── seo-data.ts    # Interface SeoDataProvider + 8 tipos auxiliares
+└── dataforseo.ts  # DataForSeoProvider: getKeywordRanking, bulkGetRankings,
+                   #   getDomainAuthority, getBacklinksSummary (reales)
+                   #   + stubs: getKeywordSuggestions, getKeywordVolume,
+                   #     getCompetitorOverview, getOrganicCompetitors, getSerp (Fase 2-3)
+
+scripts/
+└── validate-dataforseo.ts  # Script de validación SERP Live (15 queries, ejecutado ×2)
+
+prisma/migrations/
+└── 20260510075453_init/    # Primera migración — 21 tablas creadas
+    └── migration.sql
+```
+
 **Por implementar (no existe todavía):**
 ```
 src/
@@ -98,9 +115,6 @@ src/
 │   │       ├── clientes.ts         # Migración de /api/clientes
 │   │       ├── ciclos.ts
 │   │       └── insights.ts
-│   ├── providers/                  # Provider layer — Fase 1 restante
-│   │   ├── seo-data.ts             # Interface SeoDataProvider
-│   │   └── dataforseo.ts           # Implementación DataForSeoProvider
 │   └── jobs/
 │       └── workers/                # Agentes pendientes — Fases 2-4
 │           ├── crawler-worker.ts
@@ -111,11 +125,9 @@ src/
 │           ├── cycle-close-worker.ts
 │           ├── report-worker.ts
 │           └── sync-worker.ts
-├── lib/
-│   ├── cerebro-bridge.ts           # Cliente REST para Cerebro — Fase 2
-│   └── notion.ts                   # Acceso a Notion vía Cerebro — Fase 2
-└── app/
-    └── (client-portal)/            # Vista para clientes finales — Fase 5
+└── lib/
+    ├── cerebro-bridge.ts           # Cliente REST para Cerebro — Fase 2
+    └── notion.ts                   # Acceso a Notion vía Cerebro — Fase 2
 ```
 
 ---
@@ -219,10 +231,10 @@ model JobLog {
 
 Toda integración con APIs externas de SEO se abstrae detrás de `SeoDataProvider`. Permite cambiar/agregar proveedores sin tocar lógica de negocio ni frontend.
 
-**Estado:** Diseñado, pendiente de implementar en Fase 1 (próxima sesión).
+**Estado:** ✅ Implementado (Sesión 3). Archivos: `src/server/providers/seo-data.ts` y `src/server/providers/dataforseo.ts`.
 
 ```typescript
-// src/server/providers/seo-data.ts (por implementar)
+// src/server/providers/seo-data.ts
 
 export interface SeoDataProvider {
   name: string;
@@ -254,6 +266,16 @@ export interface SeoDataProvider {
 
 export class DataForSeoProvider implements SeoDataProvider { /* ... */ }
 ```
+
+**Métodos implementados en DataForSeoProvider:**
+- `getKeywordRanking()` — SERP Live, depth 100, con retry exponencial
+- `bulkGetRankings()` — SERP Standard Queue con polling (max 10 min, batches de 100)
+- `getDomainAuthority()` — Labs Domain Rank, cache Redis 7d
+- `getBacklinksSummary()` — Backlinks Summary, cache Redis 24h
+
+**Stubs (Fase 2-3):** `getKeywordSuggestions`, `getKeywordVolume`, `getCompetitorOverview`, `getOrganicCompetitors`, `getSerp`.
+
+**Nota de costos DataForSEO:** el precio base $0.002/query es para depth:10. depth:100 cuesta $0.0155/query ($0.002 + 9 × $0.0015). Para tracking masivo en producción usar Standard Queue.
 
 **Beneficios:**
 - Swap del provider sin refactorizar frontend ni lógica de negocio.
@@ -390,9 +412,9 @@ Implementación pendiente en `src/lib/cerebro-bridge.ts` (Fase 2). Ver `integrat
 
 ## 9. Seguridad
 
-- **Auth:** NextAuth v4. Google OAuth (equipo interno) + Email magic link (clientes finales).
-- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR, CLIENT). Rol inyectado en sesión via callback.
-- **Autorización server-side:** Admin layout verifica rol. CLIENT role → redirect a `/portal`.
+- **Auth:** NextAuth v4. Google OAuth únicamente — herramienta 100% interna, sin acceso de clientes finales.
+- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR). `CLIENT` existe en el enum del schema pero no se usa — reservado si en el futuro se construye vista cliente.
+- **Autorización server-side:** Admin layout verifica rol ADMIN o EDITOR.
 - **Row-level security:** toda query Prisma filtrada por `clientId` derivado de la sesión. Nunca confiar en `clientId` del request.
 - **Bridge Cerebro:** shared secret en header `x-internal-secret`, validado en ambos servicios.
 - **API keys de proveedores:** solo en variables de entorno, nunca en commits.
@@ -409,6 +431,6 @@ Ver `.env.example` en la raíz. Validadas con Zod en `src/env.ts` al startup —
 
 ## 11. Decisiones técnicas pendientes
 
-1. **Single Sign-On real** entre Cerebro y Cerebro SEO: cookie en dominio padre `clicksociety.mx` vs login separado con mismas credenciales. *Resolver antes de Fase 5.*
+1. **Single Sign-On real** entre Cerebro y Cerebro SEO: cookie en dominio padre `clicksociety.mx` vs login separado con mismas credenciales. *Resolver antes de Fase 2 en producción.*
 2. **Almacenamiento de PDFs:** recomendación: Cloudflare R2. Confirmar al implementar ReportAgent en Fase 4.
 3. **AI Search Visibility provider:** DataForSEO LLM APIs vs Profound vs stack propio. *Definir en Fase 4.*

@@ -1,20 +1,20 @@
 # Cerebro SEO — Project Spec
 
 **Owner:** Jorge Ruiz (Click Society)
-**Estado:** Fase 1 en curso
-**Última actualización:** 2026-05-07 (v2)
+**Estado:** Fase 1 en curso (BD funcionando, GSC/GA4 pendiente)
+**Última actualización:** 2026-05-10 (v3)
 
 ---
 
 ## 1. Visión
 
-Cerebro SEO es una aplicación SEO white-label para Click Society que sustituye herramientas externas (SEMrush, Ahrefs, Ubersuggest) y se integra de forma nativa con Cerebro para convertir el trabajo SEO en un ciclo operativo medible: estrategia → tareas → ejecución → resultados.
+Cerebro SEO es una aplicación SEO **100% interna** para Click Society que sustituye herramientas externas (SEMrush, Ahrefs, Ubersuggest) y se integra de forma nativa con Cerebro para convertir el trabajo SEO en un ciclo operativo medible: estrategia → tareas → ejecución → resultados.
+
+**Tesis del producto:** Cerebro SEO no compite en métricas SEO crudas — compite en CONTEXTO. Cruza datos SEO (DataForSEO, GSC, GA4) con Notion (clientes, tareas, estrategia, bitácora) y Cerebro web (análisis, conversaciones, hipótesis) en una sola pantalla por cliente.
 
 A diferencia de las herramientas comerciales que solo muestran métricas, Cerebro SEO **da seguimiento a la estrategia**: cada actividad ejecutada se vincula con su impacto medible, y cada mes el sistema valida hipótesis, propone nuevas y cierra el ciclo.
 
-**Propuesta de valor para clientes:** transparencia total del trabajo SEO en un panel branded de Click Society, con métricas en tiempo real y reporte mensual auto-generado.
-
-**Propuesta de valor interna:** Félix (responsable SEO) trabaja desde una sola interfaz que centraliza datos, tareas y análisis. Reduce horas de reporting manual.
+**Propuesta de valor interna:** el equipo (Félix, Cindy, Jorge) trabaja desde una sola interfaz que centraliza datos, tareas y análisis. Reduce horas de reporting manual. No hay portal para clientes finales en v1.
 
 ---
 
@@ -23,7 +23,7 @@ A diferencia de las herramientas comerciales que solo muestran métricas, Cerebr
 1. **Estrategia primero, métricas después.** El panel se organiza alrededor del ciclo mensual del cliente, no alrededor de las herramientas.
 2. **Cada acción es una hipótesis.** Toda tarea declara qué resultado espera producir y en cuánto tiempo. Al cierre del mes se valida.
 3. **Cerebro es el cerebro.** Cerebro SEO es la interfaz visual; Cerebro (chat) es donde se piensa, decide y planea. La integración es bidireccional y profunda.
-4. **El cliente ve lo mismo que el equipo, sin jerga.** Misma data, vista limpia, sin notas internas, exportable a PDF.
+4. **El reporte mensual es el entregable al cliente.** PDF auto-generado, limpio, sin jerga, brandeado Click Society. La interfaz de Cerebro SEO es interna — el cliente no accede al panel.
 5. **Pago por uso, no suscripción.** Stack de proveedores externos elegido para escalar linealmente con clientes (DataForSEO).
 
 ---
@@ -98,7 +98,8 @@ La vista central del producto. Estructura jerárquica:
 |---|---|---|
 | ADMIN (Jorge) | Todo. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
 | EDITOR (Félix, Cindy) | Todos los clientes asignados. Sin visibilidad de costos. | Google OAuth |
-| CLIENT | Solo su propia cuenta. Vista limpia, sin jerga, sin notas internas. | Magic link, sin password |
+
+> `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales. Si en el futuro se construye acceso de cliente, se reabre el debate.
 
 ---
 
@@ -146,10 +147,10 @@ PDF brandeado Click Society. Estructura:
 | Deploy en Easypanel VPS | ✅ Decidido | Proyecto separado en el mismo VPS |
 | Provider de datos SEO: **DataForSEO** | ✅ Decidido | Pay-per-use, escala lineal |
 | Provider abstraído (provider layer) | ✅ Decidido | Interface `SeoDataProvider` |
-| Equipo con Google OAuth, clientes con magic link | ✅ Decidido | Sin password para nadie |
+| Solo Google OAuth (equipo interno) | ✅ Decidido | Sin magic link, sin portal cliente en v1 |
 | Sync de clientes con Cerebro | ✅ Decidido | REST interno con shared secret |
 | Frecuencia de tracking | ✅ Decidido | Diario top 10 keywords (`isPriority`), semanal resto |
-| Vista cliente en v1 | ✅ Decidido | Implementada en Fase 5 |
+| Vista cliente en v1 | ❌ Eliminado | Herramienta 100% interna. Reabrír debate si se necesita en el futuro. |
 | Multi-tenant | ✅ Decidido | Solo Click Society en v1; refactorizar si se comercializa |
 
 ---
@@ -177,8 +178,9 @@ Setup completo + datos reales iniciales + deploy.
 - ✅ Next.js, Prisma schema, auth, layout, branding
 - ✅ Sistema de multiagentes (infraestructura)
 - ✅ Listado de clientes, wizard de alta, vista detalle con gráfica
-- ❌ Setup git + Docker + primera migración
-- ❌ Provider layer DataForSEO (interface + DataForSeoProvider)
+- ✅ Setup git + OrbStack + primera migración (21 tablas)
+- ✅ Provider layer DataForSEO (interface + DataForSeoProvider, 4 métodos reales)
+- ✅ BD local funcionando — ApiUsage poblada con 15 rows de validación
 - ❌ Conexión GSC + GA4 con datos reales
 - ❌ Deploy inicial en Easypanel + subdominio `seo.clicksociety.mx`
 
@@ -191,26 +193,21 @@ GSC/GA4 en portada, primer audit, sync con Notion, InsightsAgent con datos reale
 - InsightsAgent corriendo primer ciclo completo con datos reales
 - tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
 
-**Fase 3 — Competencia + Backlinks + Eventos**
+**Fase 3 — Módulos SEO + Análisis on-demand de Claude**
 - Módulo Análisis de competencia (share of voice, keyword gaps)
 - Módulo Backlinks (nuevos/perdidos, DA)
-- Módulo Eventos / Timeline
+- Módulo Eventos / Timeline (con cruce de tareas y conversaciones de Cerebro)
+- **Análisis on-demand de Claude**: botón en panel que abre análisis pre-cargado con TODO el contexto del cliente (estrategia, tareas, métricas, conversaciones recientes). NO es chat full-featured.
 - RankTrackingAgent, BacklinksAgent, CompetitorAgent activados
 
-**Fase 4 — IA y diferenciadores**
+**Fase 4 — IA y reportes**
 - Módulo AI Search Visibility (ChatGPT, Perplexity, Gemini)
 - Módulo Keyword ideas
 - Módulo SEO Opportunities
 - Reporte mensual auto-generado (ReportAgent + PDF)
 - CycleCloseAgent: cierre automático de ciclo y validación de hipótesis
 
-**Fase 5 — Vista cliente**
-- Magic links para acceso de clientes finales
-- Vista limpia sin jerga interna
-- Export PDF del dashboard
-- Personalización de branding por cliente
-
-**Total estimado:** 10-12 semanas trabajando en paralelo a operación normal.
+**Total estimado:** 8-10 semanas trabajando en paralelo a operación normal.
 
 ---
 
@@ -220,7 +217,7 @@ GSC/GA4 en portada, primer audit, sync con Notion, InsightsAgent con datos reale
 
 | Servicio | Uso mensual | Costo |
 |---|---|---|
-| DataForSEO – SERP tracking | ~2,000 reqs | ~$1.20 |
+| DataForSEO – SERP tracking (Standard Queue, depth 30) | ~2,000 reqs | ~$3.90 |
 | DataForSEO – Backlinks/competencia | ~10 dominios | ~$10–15 |
 | DataForSEO – Site audits | ~1,000 reqs | ~$5 |
 | DataForSEO – Keyword research | ~200 lookups | ~$3–5 |
@@ -228,26 +225,26 @@ GSC/GA4 en portada, primer audit, sync con Notion, InsightsAgent con datos reale
 | Search Console + GA4 | Free | $0 |
 | Claude API (insights diarios + reportes + cierre) | ~310 operaciones | ~$9–12 |
 | Hosting Easypanel | Ya pagado | $0 |
-| **Total** | | **~$28–37 USD/mes** |
+| **Total** | | **~$35–50 USD/mes** |
 
-Escala lineal: 30 clientes ≈ $84–111 USD/mes.
+Escala lineal: 30 clientes ≈ $105–150 USD/mes.
+
+> **Nota costos DataForSEO (actualizada 2026-05-10):** el precio base $0.002/query es para depth:10. depth:100 cuesta $0.0155/query. Para producción se usará Standard Queue + depth:30 (~$0.00195/req), que es el escenario de la tabla.
 
 ---
 
 ## 11. Decisiones abiertas
 
-1. **Single Sign-On real** entre Cerebro y Cerebro SEO: ¿cookie compartida en dominio padre `clicksociety.mx`, o login separado con mismas credenciales? *Resolver antes de Fase 5.*
+1. **Single Sign-On real** entre Cerebro y Cerebro SEO: ¿cookie compartida en dominio padre `clicksociety.mx`, o login separado con mismas credenciales? *Resolver antes de Fase 2 en producción.*
 2. **AI Search Visibility provider:** DataForSEO LLM APIs vs Profound vs stack propio. *Resolver en Fase 4.*
+3. **Profundidad SERP en producción:** depth:10 ($0.0006/req) vs depth:30 ($0.00195/req estimado) para tracking masivo con Standard Queue. *Decidir al implementar RankTrackingAgent en Fase 2.*
 
 ---
 
 ## 12. Próximo paso concreto
 
-Completar los pendientes de **Fase 1**:
-1. `git init` local → `.gitignore` → primer commit → push a `jorgeruiz/cerebro-seo`
-2. `docker-compose.yml` con PostgreSQL 16 + Redis 7 para dev local
-3. Llenar `.env` local con credenciales reales (DataForSEO ya disponibles)
-4. `npx prisma migrate dev --name init`
-5. Implementar `DataForSeoProvider` + validar calidad datos vs GSC (3 clientes × 5 keywords)
-6. Conectar GSC y GA4 con OAuth + datos reales en portada
-7. Deploy en Easypanel + DNS para `seo.clicksociety.mx`
+Completar los pendientes de **Fase 1** (Sesión 5):
+1. Comparar `validation-report.md` contra GSC de Molino Azteca, RFN y Quicsa
+2. Implementar conexión GSC con datos reales en portada del cliente
+3. Implementar conexión GA4 con métricas reales en portada
+4. Deploy inicial en Easypanel + DNS `seo.clicksociety.mx`
