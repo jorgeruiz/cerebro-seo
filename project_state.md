@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-10
-**Fase actual:** Fase 1 — Foundation (en curso — BD funcionando, GSC/GA4 pendiente)
-**Próximo hito:** Conexión GSC y GA4 con datos reales → deploy inicial Easypanel
+**Última actualización:** 2026-05-11
+**Fase actual:** Fase 1 — Foundation (en curso — GSC/GA4 implementados, deploy pendiente)
+**Próximo hito:** Setup manual Easypanel + seed de clientes → cierre de Fase 1
 
 ---
 
@@ -35,8 +35,14 @@
 | Provider layer DataForSEO | ✅ Completo | `seo-data.ts` (interface) + `dataforseo.ts` (4 métodos reales + stubs) |
 | Script de validación DataForSEO | ✅ Ejecutado (×2) | Sesión 3: $0.228 USD sin BD. Sesión 4: $0.225 USD con BD — 15 rows en ApiUsage |
 | ApiUsage table poblada | ✅ Completo | 15 rows, $0.225 USD total — datos reales de Sesión 4 |
-| Conexión GSC y GA4 | ❌ Pendiente | OAuth Client ID creado; código pendiente |
-| Deploy inicial Easypanel | ❌ Pendiente | Después de verificar app completa |
+| Auth: scopes GSC+GA4 | ✅ Completo | `auth.ts` actualizado: `webmasters.readonly` + `analytics.readonly` + refresh token |
+| Conexión GSC | ✅ Completo | `google-search-console.ts` con caché Redis 24h. Portada usa datos reales. |
+| Conexión GA4 | ✅ Completo | `google-analytics-4.ts` con caché Redis 4h, filtro Organic. Portada KPI cards. |
+| `google-oauth.ts` | ✅ Completo | Helper OAuth2Client con auto-refresh de tokens persistido en DB |
+| Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — esperando que Jorge comparta BD Notion |
+| Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
+| Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
+| Deploy inicial Easypanel | ⚠️ Parcial | Código pusheado a GitHub. Servicio en Easypanel debe crearse manualmente (ver §10). |
 
 ---
 
@@ -109,11 +115,29 @@
 - [x] App arranca con BD real: `npm run dev` → 307 /api/auth/signin (correcto)
 - [x] ApiUsage poblada: 15 rows ($0.225 USD) de re-ejecución del script de validación
 
-**Pendiente:**
-- [ ] Comparar `validation-report.md` contra GSC de los 3 clientes
-- [ ] Conexión GSC: OAuth flow + datos reales en portada
-- [ ] Conexión GA4: OAuth flow + métricas reales
-- [ ] Deploy inicial Easypanel + DNS `seo.clicksociety.mx`
+**Completado (Sesión 5):**
+- [x] `auth.ts`: scopes GSC + GA4 con access_type offline + prompt consent para refresh token
+- [x] `env.ts`: eliminado EMAIL_SERVER/FROM, PAGESPEED y bridge opcionales
+- [x] `login/page.tsx`: simplificado a solo Google OAuth button
+- [x] `google-oauth.ts`: helper OAuth2Client con auto-refresh persistido
+- [x] `google-search-console.ts`: provider GSC con caché Redis 24h
+- [x] `google-analytics-4.ts`: provider GA4 con caché Redis 4h, filtro Organic Search
+- [x] `notion-direct.ts`: lectura directa Notion (TEMPORAL) para seed de clientes
+- [x] `scripts/seed-clients.ts`: script de siembra de clientes desde Notion
+- [x] `clientes/[id]/page.tsx`: fetch real GSC + GA4, log a ApiUsage, KPI cards GA4
+- [x] `ClientPortadaChart.tsx`: acepta datos reales, fallback si GSC no configurado
+- [x] `tailwind.config.ts`: colores shadcn/ui completos (fix build pre-existente)
+- [x] `globals.css`: fix `outline-ring/50` incompatible con Tailwind v3
+- [x] `.eslintrc.json`: `argsIgnorePattern: ^_` para stubs del DataForSEO provider
+- [x] Build de producción exitoso (`npm run build`)
+- [x] Commit + push a `jorgeruiz/cerebro-seo`
+
+**Pendiente (acciones manuales de Jorge — ver §10):**
+- [ ] Compartir BD Notion "Clientes Actuales" con integración → ejecutar `seed-clients.ts`
+- [ ] Setup Easypanel: crear servicio + Redis + BD + env vars + dominio
+- [ ] DNS: `seo.clicksociety.mx` → `76.13.121.6`
+- [ ] Google OAuth Console: agregar callback URL de producción
+- [ ] Logout + login en producción para obtener nuevos scopes GSC/GA4
 
 ---
 
@@ -148,7 +172,12 @@
 
 ## 6. Bloqueadores actuales
 
-Ninguno. El bloqueador de Docker fue resuelto con OrbStack en Sesión 4.
+| Bloqueador | Dueño | Acción requerida |
+|---|---|---|
+| Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... |
+| Easypanel sin servicio cerebro-seo | Jorge | Crear servicio App en proyecto `apps` (ver §10) |
+| Easypanel sin servicio Redis | Jorge | Crear servicio Redis en proyecto `apps` (ver §10) |
+| Jorge no ha hecho logout+login | Jorge | Después del deploy, cerrar sesión y volver a entrar para obtener scopes GSC/GA4 |
 
 ---
 
@@ -165,6 +194,28 @@ Ninguno. El bloqueador de Docker fue resuelto con OrbStack en Sesión 4.
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 5 — 2026-05-11
+**Participantes:** Jorge + Claude Code
+**Duración:** ~2h
+**Trabajo realizado:**
+- BLOQUE A: `notion-direct.ts` + `scripts/seed-clients.ts` listos; bloqueado por permisos de Notion
+- BLOQUE B: Conexión GSC completa — `auth.ts`, `google-oauth.ts`, `google-search-console.ts`; portada muestra datos reales o fallback
+- BLOQUE C: Conexión GA4 completa — `google-analytics-4.ts`; portada muestra KPI cards de Analytics orgánico
+- Login simplificado: eliminado magic link y EmailProvider
+- Build de producción corregido: `tailwind.config.ts` con colores shadcn, `globals.css` sin `outline-ring/50`
+- Commit y push: 17 archivos, 1200 inserciones → `jorgeruiz/cerebro-seo` main
+- BLOQUE D parcial: confirmado que no hay servicio cerebro-seo en Easypanel; servicio no puede crearse vía API — requiere UI de Easypanel
+
+**Hallazgos técnicos:**
+- Easypanel tRPC: rutas correctas son `services.app.xxx`, no `app.xxx`
+- Easypanel no tiene API para crear servicios — solo el wizard de la UI web
+- `@notionhq/client` v5: `databases.query` → `dataSources.query` (migración de API)
+- Cerebro-web en Easypanel usa `autoDeploy: false` — los deploys se hacen manual o vía token
+- Easypanel no permite crear proyectos nuevos en el plan actual — cerebro-seo irá en el proyecto `apps`
+
+**Pendiente al cerrar:**
+- 4 acciones manuales de Jorge (ver §10)
 
 ### Sesión 4 — 2026-05-10
 **Participantes:** Jorge + Claude Code
@@ -261,12 +312,88 @@ npm run dev
 
 ---
 
-## 10. Próximo paso concreto
+## 10. Próximos pasos concretos (acciones manuales de Jorge)
 
-1. **Comparar `validation-report.md` contra GSC** de Molino Azteca, RFN y Quicsa para validar DataForSEO.
-2. **Implementar conexión GSC**: OAuth flow con Google Search Console API + mostrar datos reales en portada del cliente.
-3. **Implementar conexión GA4**: OAuth flow + métricas reales en portada.
-4. **Deploy inicial Easypanel** + configurar DNS `seo.clicksociety.mx`.
+### 10.1 Notion — Compartir BD con integración
+1. Abrir Notion → BD "Clientes Actuales"
+2. Click en "..." → Share → Add connections → buscar integración "Claude" o "Cerebro"
+3. ID integración: `32b0a146-5e52-81f9-8509-0027c0a09cd7`
+4. Una vez compartida, ejecutar el seed:
+   ```bash
+   DATABASE_URL="postgresql://cerebro:cerebro@localhost:5432/cerebro_seo" \
+   npx tsx scripts/seed-clients.ts
+   ```
+5. Verificar que los campos GSC/GA4 se mapearon correctamente (la BD puede tener nombres de columna distintos).
+
+### 10.2 Easypanel — Setup de cerebro-seo
+
+**Entrar a:** http://76.13.121.6:3000 → proyecto `apps`
+
+**Paso 1: Crear servicio Redis** (click en + → Redis)
+- Nombre: `cerebro-seo-redis`
+- Una vez creado, anota la URL interna: `redis://cerebro-seo-redis:6379`
+
+**Paso 2: Crear base de datos** para cerebro-seo
+- Opción A: Usar el servicio `cerebro-db` existente
+  - Acceder a pgWeb: https://apps-cerebro-db-pgweb.6lk5jx.easypanel.host
+  - Crear database `cerebro_seo` (SQL: `CREATE DATABASE cerebro_seo;`)
+  - DATABASE_URL producción: `postgresql://cerebro:{PASS}@cerebro-db:5432/cerebro_seo`
+- Opción B: Crear un servicio Postgres nuevo → nombre `cerebro-seo-db`
+  - DATABASE_URL: `postgresql://{user}:{pass}@cerebro-seo-db:5432/cerebro_seo`
+
+**Paso 3: Crear servicio App** (click en + → App)
+- Nombre: `cerebro-seo`
+- Fuente: GitHub → `jorgeruiz/cerebro-seo` → branch: `main`
+- Build: Dockerfile
+- Puerto: 3000
+
+**Paso 4: Variables de entorno** del servicio `cerebro-seo`:
+```env
+DATABASE_URL=postgresql://cerebro:{PASS}@cerebro-db:5432/cerebro_seo
+REDIS_URL=redis://cerebro-seo-redis:6379
+NEXTAUTH_URL=https://seo.clicksociety.mx
+NEXTAUTH_SECRET={mismo que local o generar nuevo}
+GOOGLE_CLIENT_ID={de .env.local}
+GOOGLE_CLIENT_SECRET={de .env.local}
+DATAFORSEO_LOGIN={de .env.local}
+DATAFORSEO_PASSWORD={de .env.local}
+ANTHROPIC_API_KEY={de .env.local}
+NOTION_API_KEY={de .env.local}
+```
+
+**Paso 5: Dominio**
+- En el servicio `cerebro-seo`: Domains → Add → `seo.clicksociety.mx`
+- HTTPS se configura automáticamente via Let's Encrypt
+
+**Paso 6: Primer deploy**
+- Click "Deploy" en el servicio
+- Observar logs hasta que diga "Ready on port 3000"
+- Después del primer deploy exitoso, ejecutar la migración de Prisma en producción:
+  - En la terminal del servicio (o via SSH al VPS): `npx prisma migrate deploy`
+
+### 10.3 DNS
+Agregar en tu registrador de dominios:
+```
+Tipo: A
+Nombre: seo (o seo.clicksociety.mx)
+Valor: 76.13.121.6
+TTL: 300
+```
+
+### 10.4 Google OAuth Console
+URL: https://console.developers.google.com → credenciales → tu OAuth Client ID de Cerebro SEO
+
+Agregar en "Authorized redirect URIs":
+```
+https://seo.clicksociety.mx/api/auth/callback/google
+```
+
+### 10.5 Primera sesión en producción
+1. Abrir `https://seo.clicksociety.mx`
+2. Hacer login con Google (`jorge.arm@gmail.com`)
+3. **¡Importante!** Google pedirá autorización a GSC y GA4 — aceptar TODOS los permisos
+4. Si ya tenías sesión anterior sin esos scopes, cerrar sesión primero y volver a entrar
+5. Después del login con nuevos scopes, los datos reales de GSC/GA4 deberían aparecer en la portada de cada cliente
 
 ---
 
