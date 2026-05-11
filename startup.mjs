@@ -25,5 +25,5 @@ await client.query("CREATE DATABASE cerebro_seo").catch((e) => {
 await client.end();
 console.log("✓ BD cerebro_seo lista");
 
-execSync("npx prisma migrate deploy", { stdio: "inherit" });
+execSync("node_modules/.bin/prisma migrate deploy", { stdio: "inherit" });
 execSync("node_modules/.bin/next start", { stdio: "inherit" });

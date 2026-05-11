@@ -13,7 +13,7 @@ COPY . .
 RUN npx prisma generate
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN SKIP_ENV_VALIDATION=1 npm run build
 
 ENV NODE_ENV=production
 ENV PORT=3000

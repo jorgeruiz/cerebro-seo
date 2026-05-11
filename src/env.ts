@@ -40,6 +40,9 @@ const envSchema = z.object({
     .default("development"),
 });
 
-// Throws at startup if any required env var is missing.
-// Prevents runtime surprises in production.
-export const env = envSchema.parse(process.env);
+// Durante `npm run build` en Docker las vars de entorno no existen — skip.
+// En runtime el contenedor las inyecta y la validación corre normalmente.
+export const env =
+  process.env.SKIP_ENV_VALIDATION === "1"
+    ? (process.env as unknown as z.infer<typeof envSchema>)
+    : envSchema.parse(process.env);
