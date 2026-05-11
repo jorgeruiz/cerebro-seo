@@ -1,6 +1,5 @@
 import { NextAuthOptions, getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 import { UserRole } from "@prisma/client";
@@ -12,11 +11,17 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    // Magic link para clientes — sin password
-    EmailProvider({
-      server: process.env.EMAIL_SERVER!,
-      from: process.env.EMAIL_FROM!,
+      authorization: {
+        params: {
+          scope: [
+            "openid email profile",
+            "https://www.googleapis.com/auth/webmasters.readonly",
+            "https://www.googleapis.com/auth/analytics.readonly",
+          ].join(" "),
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     }),
   ],
 
@@ -30,8 +35,6 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    // Inyecta id y role en el session object para que el cliente no necesite
-    // una query extra para saber quién es
     async session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
@@ -42,5 +45,4 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-// Helper para server components y route handlers
 export const getSession = () => getServerSession(authOptions);

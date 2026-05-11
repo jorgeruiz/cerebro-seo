@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Plus, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { CycleStatus, ClientStatus } from "@prisma/client";
 

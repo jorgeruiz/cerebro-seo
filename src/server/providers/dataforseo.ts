@@ -141,7 +141,7 @@ export class DataForSeoProvider implements SeoDataProvider {
   }): Promise<RankingResult> {
     const { keyword, domain, country, language } = params;
 
-    const { data, durationMs, cost } = await dfsPost<DfsSerpItem>(
+    const { data, cost } = await dfsPost<DfsSerpItem>(
       "/serp/google/organic/live/regular",
       [
         {
@@ -326,7 +326,7 @@ export class DataForSeoProvider implements SeoDataProvider {
   // Backlinks API — Summary endpoint.
   // Costo: ~$0.05/req. Cache: 24 horas.
 
-  async getBacklinks(domain: string, _options?: BacklinkOptions): Promise<BacklinkResult[]> {
+  async getBacklinks(_domain: string, _options?: BacklinkOptions): Promise<BacklinkResult[]> {
     // For the summary endpoint, return an array with the summary data
     // Full backlink list (Live endpoint) is a separate higher-cost call — stub for now
     throw new Error("getBacklinks (full list): use getBacklinksSummary for overview. Full list not implemented yet.");

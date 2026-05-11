@@ -1,0 +1,115 @@
+import { google } from "googleapis";
+import { redis } from "@/lib/redis";
+import type { OAuth2Client } from "google-auth-library";
+
+export interface DailyGa4Metric {
+  date: string;     // "YYYY-MM-DD"
+  sessions: number;
+  users: number;
+  bounceRate: number; // porcentaje, ej: 45.2
+}
+
+export interface Ga4Overview {
+  totalSessions: number;
+  totalUsers: number;
+  avgBounceRate: number;
+  totalConversions: number;
+}
+
+// GA4 devuelve fechas como "20260412" — convertir a "2026-04-12"
+function parseGa4Date(raw: string): string {
+  return raw.length === 8
+    ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+    : raw;
+}
+
+export class GoogleAnalytics4Provider {
+  constructor(private auth: OAuth2Client) {}
+
+  async getDailyMetrics(
+    propertyId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<DailyGa4Metric[]> {
+    const cacheKey = `cache:ga4:${propertyId}:${startDate}:${endDate}:daily`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached) as DailyGa4Metric[];
+
+    const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
+    const { data } = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "date" }],
+        metrics: [
+          { name: "sessions" },
+          { name: "activeUsers" },
+          { name: "bounceRate" },
+        ],
+        dimensionFilter: {
+          filter: {
+            fieldName: "sessionDefaultChannelGrouping",
+            stringFilter: { value: "Organic Search" },
+          },
+        },
+        orderBys: [{ dimension: { dimensionName: "date" } }],
+      },
+    });
+
+    const metrics: DailyGa4Metric[] = (data.rows ?? []).map((row) => ({
+      date: parseGa4Date(row.dimensionValues?.[0]?.value ?? ""),
+      sessions: parseInt(row.metricValues?.[0]?.value ?? "0"),
+      users: parseInt(row.metricValues?.[1]?.value ?? "0"),
+      bounceRate: parseFloat(
+        (parseFloat(row.metricValues?.[2]?.value ?? "0") * 100).toFixed(1)
+      ),
+    }));
+
+    await redis.set(cacheKey, JSON.stringify(metrics), "EX", 14400); // 4h
+    return metrics;
+  }
+
+  async getOverview(
+    propertyId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Ga4Overview> {
+    const cacheKey = `cache:ga4:${propertyId}:${startDate}:${endDate}:overview`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached) as Ga4Overview;
+
+    const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
+    const { data } = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate, endDate }],
+        metrics: [
+          { name: "sessions" },
+          { name: "activeUsers" },
+          { name: "bounceRate" },
+          { name: "conversions" },
+        ],
+        dimensionFilter: {
+          filter: {
+            fieldName: "sessionDefaultChannelGrouping",
+            stringFilter: { value: "Organic Search" },
+          },
+        },
+        keepEmptyRows: false,
+      },
+    });
+
+    const totals = data.totals?.[0];
+    const overview: Ga4Overview = {
+      totalSessions: parseInt(totals?.metricValues?.[0]?.value ?? "0"),
+      totalUsers: parseInt(totals?.metricValues?.[1]?.value ?? "0"),
+      avgBounceRate: parseFloat(
+        (parseFloat(totals?.metricValues?.[2]?.value ?? "0") * 100).toFixed(1)
+      ),
+      totalConversions: parseInt(totals?.metricValues?.[3]?.value ?? "0"),
+    };
+
+    await redis.set(cacheKey, JSON.stringify(overview), "EX", 14400);
+    return overview;
+  }
+}

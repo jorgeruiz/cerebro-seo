@@ -11,23 +11,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn } from "@/lib/utils";
-
-// Datos de placeholder hasta conectar GSC real en Fase 2
-const MOCK_DATA = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (29 - i));
-  return {
-    date: date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }),
-    clicks: Math.floor(Math.random() * 400 + 200 + i * 8),
-    impressions: Math.floor(Math.random() * 3000 + 1500 + i * 20),
-    position: parseFloat((Math.random() * 5 + 12 - i * 0.1).toFixed(1)),
-    ctr: parseFloat((Math.random() * 2 + 3).toFixed(1)),
-  };
-});
+import type { DailyGscMetric } from "@/server/providers/google-search-console";
 
 const METRICS = [
-  { key: "clicks", label: "Clics", color: "#6366f1", format: (v: number) => v.toLocaleString() },
-  { key: "impressions", label: "Impresiones", color: "#3b82f6", format: (v: number) => v.toLocaleString() },
+  { key: "clicks", label: "Clics", color: "#6366f1", format: (v: number) => v.toLocaleString("es-MX") },
+  { key: "impressions", label: "Impresiones", color: "#3b82f6", format: (v: number) => v.toLocaleString("es-MX") },
   { key: "position", label: "Posición prom.", color: "#ec4899", format: (v: number) => `#${v}` },
   { key: "ctr", label: "CTR", color: "#10b981", format: (v: number) => `${v}%` },
 ];
@@ -35,14 +23,32 @@ const METRICS = [
 const RANGES = ["7d", "28d", "90d"] as const;
 type Range = (typeof RANGES)[number];
 
-export function ClientPortadaChart() {
+interface Props {
+  data: DailyGscMetric[] | null;
+}
+
+export function ClientPortadaChart({ data }: Props) {
   const [metric, setMetric] = useState("clicks");
   const [range, setRange] = useState<Range>("28d");
 
   const activeMetric = METRICS.find((m) => m.key === metric)!;
 
-  const data =
-    range === "7d" ? MOCK_DATA.slice(-7) : range === "28d" ? MOCK_DATA.slice(-28) : MOCK_DATA;
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-48 flex flex-col items-center justify-center gap-2 text-center">
+        <p className="text-sm font-medium text-gray-500">Google Search Console no configurado</p>
+        <p className="text-xs text-gray-400 max-w-xs">
+          Agrega el campo <code className="bg-gray-100 px-1 rounded">gscProperty</code> al site de este cliente
+          y vuelve a cargar la página.
+        </p>
+      </div>
+    );
+  }
+
+  const sliced =
+    range === "7d" ? data.slice(-7) : range === "28d" ? data.slice(-28) : data;
+
+  const chartData = sliced.map((d) => ({ ...d, date: d.label }));
 
   return (
     <div>
@@ -87,7 +93,7 @@ export function ClientPortadaChart() {
       {/* Gráfica */}
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
               dataKey="date"
@@ -111,7 +117,10 @@ export function ClientPortadaChart() {
                 border: "1px solid #e2e8f0",
                 boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)",
               }}
-              formatter={(v) => [typeof v === "number" ? activeMetric.format(v) : String(v), activeMetric.label]}
+              formatter={(v) => [
+                typeof v === "number" ? activeMetric.format(v) : String(v),
+                activeMetric.label,
+              ]}
               labelStyle={{ color: "#64748b", marginBottom: 4 }}
             />
             <Line
@@ -127,7 +136,7 @@ export function ClientPortadaChart() {
       </div>
 
       <p className="text-[10px] text-gray-400 mt-3 text-center">
-        Datos de ejemplo — se conectará a Google Search Console en la Fase 2
+        Fuente: Google Search Console · Cache 24h
       </p>
     </div>
   );

@@ -10,10 +10,6 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
 
-  // Email (magic link)
-  EMAIL_SERVER: z.string().min(1),
-  EMAIL_FROM: z.string().email(),
-
   // Redis
   REDIS_URL: z.string().min(1),
 
@@ -21,8 +17,8 @@ const envSchema = z.object({
   DATAFORSEO_LOGIN: z.string().min(1),
   DATAFORSEO_PASSWORD: z.string().min(1),
 
-  // Google APIs
-  GOOGLE_PAGESPEED_API_KEY: z.string().min(1),
+  // Google APIs (PageSpeed solo en Fase 2 crawler)
+  GOOGLE_PAGESPEED_API_KEY: z.string().optional(),
 
   // Anthropic
   ANTHROPIC_API_KEY: z.string().min(1),
@@ -30,9 +26,9 @@ const envSchema = z.object({
   // Notion
   NOTION_API_KEY: z.string().min(1),
 
-  // Cerebro Bridge
-  CEREBRO_API_URL: z.string().url(),
-  CEREBRO_INTERNAL_SECRET: z.string().min(1),
+  // Cerebro Bridge (activo en Fase 2)
+  CEREBRO_API_URL: z.string().url().optional(),
+  CEREBRO_INTERNAL_SECRET: z.string().optional(),
 
   // Storage
   STORAGE_BUCKET: z.string().optional(),

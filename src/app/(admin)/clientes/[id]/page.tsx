@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { Badge } from "@/components/ui/badge";
+import { getOAuth2Client } from "@/lib/google-oauth";
+import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
+import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,12 +17,16 @@ import {
   Zap,
   Activity,
   FileSearch,
+  Users,
+  MousePointerClick,
 } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { InsightCards } from "./InsightCards";
+import type { DailyGscMetric } from "@/server/providers/google-search-console";
+import type { Ga4Overview } from "@/server/providers/google-analytics-4";
 
 async function getClientData(id: string) {
-  const client = await prisma.client.findUnique({
+  return prisma.client.findUnique({
     where: { id },
     include: {
       sites: { take: 1 },
@@ -28,19 +34,11 @@ async function getClientData(id: string) {
         orderBy: { yearMonth: "desc" },
         take: 1,
         include: {
-          tasks: {
-            orderBy: { priority: "asc" },
-            take: 10,
-          },
-          hypotheses: {
-            where: { validation: "PENDING" },
-          },
+          tasks: { orderBy: { priority: "asc" }, take: 10 },
+          hypotheses: { where: { validation: "PENDING" } },
         },
       },
-      keywords: {
-        where: { isPriority: true },
-        take: 10,
-      },
+      keywords: { where: { isPriority: true }, take: 10 },
       insights: {
         where: { dismissed: false },
         orderBy: [{ severity: "desc" }, { generatedAt: "desc" }],
@@ -48,8 +46,15 @@ async function getClientData(id: string) {
       },
     },
   });
+}
 
-  return client;
+function getDateRange(daysBack: number) {
+  const end = new Date();
+  const start = new Date(Date.now() - (daysBack - 1) * 86400000);
+  return {
+    startDate: start.toISOString().split("T")[0],
+    endDate: end.toISOString().split("T")[0],
+  };
 }
 
 const CYCLE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -82,6 +87,55 @@ export default async function ClienteDetallePage({
   ]);
 
   if (!client) notFound();
+
+  const site = client.sites[0];
+
+  // Fetch GSC + GA4 con el token del usuario actual
+  let gscData: DailyGscMetric[] | null = null;
+  let ga4Overview: Ga4Overview | null = null;
+
+  if (session?.user?.id && site) {
+    const oauth = await getOAuth2Client(session.user.id);
+    const { startDate, endDate } = getDateRange(90);
+
+    if (oauth) {
+      // GSC
+      if (site.gscProperty) {
+        try {
+          const gsc = new GoogleSearchConsoleProvider(oauth);
+          gscData = await gsc.getDailyMetrics(site.gscProperty, startDate, endDate);
+          await prisma.apiUsage.create({
+            data: {
+              provider: "gsc",
+              endpoint: "searchanalytics.query",
+              cost: 0,
+              clientId: client.id,
+            },
+          });
+        } catch (err) {
+          console.error("[GSC] Error fetching metrics:", err);
+        }
+      }
+
+      // GA4
+      if (site.ga4Property) {
+        try {
+          const ga4 = new GoogleAnalytics4Provider(oauth);
+          ga4Overview = await ga4.getOverview(site.ga4Property, startDate, endDate);
+          await prisma.apiUsage.create({
+            data: {
+              provider: "ga4",
+              endpoint: "properties.runReport",
+              cost: 0,
+              clientId: client.id,
+            },
+          });
+        } catch (err) {
+          console.error("[GA4] Error fetching overview:", err);
+        }
+      }
+    }
+  }
 
   const cycle = client.cycles[0];
   const cycleStatus = cycle ? CYCLE_STATUS_LABEL[cycle.status] : null;
@@ -141,7 +195,7 @@ export default async function ClienteDetallePage({
       </div>
 
       <div className="p-8 space-y-8">
-        {/* Gráfica principal */}
+        {/* Gráfica principal GSC */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
@@ -149,9 +203,56 @@ export default async function ClienteDetallePage({
             </h2>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-            <ClientPortadaChart />
+            <ClientPortadaChart data={gscData} />
           </div>
         </section>
+
+        {/* GA4 KPIs — solo si hay datos */}
+        {ga4Overview && (
+          <section>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              Analytics (90d · Orgánico)
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="h-4 w-4 text-indigo-500" />
+                  <span className="text-xs text-gray-500">Sesiones</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {ga4Overview.totalSessions.toLocaleString("es-MX")}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-gray-500">Usuarios activos</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {ga4Overview.totalUsers.toLocaleString("es-MX")}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-pink-500" />
+                  <span className="text-xs text-gray-500">Tasa de rebote</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {ga4Overview.avgBounceRate}%
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MousePointerClick className="h-4 w-4 text-green-500" />
+                  <span className="text-xs text-gray-500">Conversiones</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {ga4Overview.totalConversions.toLocaleString("es-MX")}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Insights proactivos */}
         {client.insights.length > 0 && (
