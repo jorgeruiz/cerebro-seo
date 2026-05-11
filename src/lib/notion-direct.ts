@@ -50,8 +50,6 @@ export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
   // Nota v5: databases.query → dataSources.query, database_id → data_source_id
   const response = await notion.dataSources.query({
     data_source_id: DB_ID,
-    // TODO: ajustar el nombre y valor del filtro si el campo se llama diferente en tu BD
-    // Comentar el filter si quieres traer TODOS los clientes sin filtrar por estado
     filter: {
       property: "Estado",
       select: { equals: "Activo" },
@@ -63,30 +61,26 @@ export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
     .map((page) => {
       const props = page.properties;
 
-      // TODO: verificar que los nombres de propiedad coincidan con tu base de datos
-      const name =
-        extractText(props["Nombre"]) ||
-        extractText(props["Name"]) ||
-        extractText(props["Cliente"]) ||
-        "Sin nombre";
+      const name = extractText(props["Name"]) || "Sin nombre";
 
-      const domain =
-        extractText(props["Dominio"]) ||
-        extractText(props["Domain"]) ||
-        extractText(props["URL"]) ||
-        "";
+      // Derivar dominio desde la URL de Search Console
+      const gscRaw = extractText(props["Search Console URL"]);
+      let domain = "";
+      if (gscRaw) {
+        if (gscRaw.startsWith("sc-domain:")) {
+          domain = gscRaw.replace("sc-domain:", "");
+        } else {
+          try {
+            domain = new URL(gscRaw).hostname;
+          } catch {
+            domain = gscRaw;
+          }
+        }
+      }
 
-      const gscProperty =
-        extractText(props["GSC Property"]) ||
-        extractText(props["Search Console"]) ||
-        extractText(props["GSC"]) ||
-        null;
+      const gscProperty = gscRaw || null;
 
-      const ga4PropertyId =
-        extractText(props["GA4 Property ID"]) ||
-        extractText(props["GA4 ID"]) ||
-        extractText(props["GA4"]) ||
-        null;
+      const ga4PropertyId = extractText(props["GA4 Property ID"]) || null;
 
       return {
         notionPageId: page.id.replace(/-/g, ""),
