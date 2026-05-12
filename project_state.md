@@ -197,6 +197,24 @@
 
 ## 8. Bitácora de sesiones
 
+### Sesión 7 — 2026-05-12
+**Participantes:** Jorge + Claude Code
+**Trabajo realizado:**
+- Fix: `src/app/api/auth/[...nextauth]/route.ts` — tipo `Function` en `wrappedHandler` temporal causaba ESLint error `@typescript-eslint/no-unsafe-function-type` que rompía el build de producción. Revertido al patrón estándar `export { handler as GET, handler as POST }`.
+- `npm run build` local: pasa sin errores.
+- Push a main → deploy en Easypanel.
+- `META_ACCESS_TOKEN` en env del servicio: no existe, nada que borrar.
+- Estado del login en producción (`seo.clicksociety.com.mx`): en investigación — error `OAuthCallbackError: State cookie was missing` con cuenta `jorge@clicksociety.com.mx`. Cookies de OAuth se setean correctamente desde el servidor (confirmado vía curl). Causa raíz pendiente de confirmar en ventana incógnita.
+
+**Fixes previos de Sesión 7 (parte del diagnóstico de login):**
+- `src/lib/auth.ts`: `sameSite: "none"` para cookies state/pkce (hipótesis POST redirect de Google Workspace)
+- `NEXTAUTH_URL_INTERNAL=http://localhost:3000` agregado al env de Easypanel
+- Dominio corregido: `seo.clicksociety.mx` → `seo.clicksociety.com.mx` en Easypanel y Google Console
+- `NEXTAUTH_URL` actualizado a `https://seo.clicksociety.com.mx`
+
+**Pendiente:**
+- Confirmar login exitoso en ventana incógnita con jorge@clicksociety.com.mx
+
 ### Sesión 6 — 2026-05-12
 **Participantes:** Jorge + Claude Code
 **Duración:** ~3h
