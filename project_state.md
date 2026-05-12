@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-11
-**Fase actual:** Fase 1 — Foundation (en curso — GSC/GA4 implementados, deploy pendiente)
-**Próximo hito:** Setup manual Easypanel + seed de clientes → cierre de Fase 1
+**Última actualización:** 2026-05-12
+**Fase actual:** Fase 1 — Foundation (✅ COMPLETA — app en producción)
+**Próximo hito:** Fase 2 — Datos reales fluyendo (Términos de búsqueda, Tráfico, Site audit, Notion sync)
 
 ---
 
@@ -42,7 +42,9 @@
 | Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — esperando que Jorge comparta BD Notion |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
-| Deploy inicial Easypanel | ⚠️ Parcial | Código pusheado a GitHub. Servicio en Easypanel debe crearse manualmente (ver §10). |
+| Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 200 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
+| URL producción (interna) | ✅ Activo | `https://apps-cerebro-seo.6lk5jx.easypanel.host` → HTTP 307 → `/api/auth/signin` |
+| URL producción (custom) | ⚠️ DNS pendiente | `https://seo.clicksociety.mx` — requiere registro A `76.13.121.6` en registrador |
 
 ---
 
@@ -175,9 +177,9 @@
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... |
-| Easypanel sin servicio cerebro-seo | Jorge | Crear servicio App en proyecto `apps` (ver §10) |
-| Easypanel sin servicio Redis | Jorge | Crear servicio Redis en proyecto `apps` (ver §10) |
-| Jorge no ha hecho logout+login | Jorge | Después del deploy, cerrar sesión y volver a entrar para obtener scopes GSC/GA4 |
+| DNS `seo.clicksociety.mx` | Jorge | Registro A: `seo.clicksociety.mx` → `76.13.121.6` en el registrador de dominio |
+| Google OAuth redirect URI | Jorge | Agregar `https://seo.clicksociety.mx/api/auth/callback/google` en Google Console |
+| Jorge no ha hecho logout+login en prod | Jorge | Cerrar sesión y volver a entrar en `apps-cerebro-seo.6lk5jx.easypanel.host` para activar scopes GSC/GA4 |
 
 ---
 
@@ -194,6 +196,42 @@
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 6 — 2026-05-12
+**Participantes:** Jorge + Claude Code
+**Duración:** ~3h
+**Trabajo realizado:**
+- Reporte de estado post-saturación del VPS (Playwright consumía demasiada RAM)
+- Setup Easypanel completado 100% vía API tRPC (sin Playwright):
+  - Servicios `cerebro-seo-redis` y `cerebro-seo` (App) creados
+  - Variables de entorno aplicadas (DATABASE_URL con password real CerebroClick2026#)
+  - Dominio `apps-cerebro-seo.6lk5jx.easypanel.host` puerto corregido 80→3000 vía `domains.updateDomain`
+  - Dominio `seo.clicksociety.mx` agregado vía `domains.createDomain`
+  - Build type `dockerfile` configurado vía `services.app.updateBuild` con payload `{build:{type:"dockerfile"}}`
+  - Source GitHub configurado vía `services.app.updateSourceGithub` con campo `path:"/"`
+- Fix build Docker: `src/env.ts` agrega guard `SKIP_ENV_VALIDATION=1` — `envSchema.parse` fallaba en build time sin env vars
+- Fix Dockerfile: `RUN SKIP_ENV_VALIDATION=1 npm run build` (var solo en ese RUN, no en imagen)
+- Fix `startup.mjs`: `node_modules/.bin/prisma` en vez de `npx prisma` (más robusto en producción)
+- Deploy exitoso: HTTP 200 en `https://apps-cerebro-seo.6lk5jx.easypanel.host`
+- BD `cerebro_seo` creada automáticamente por `startup.mjs`, migraciones aplicadas
+
+**Verificación final:**
+- `curl -I https://apps-cerebro-seo.6lk5jx.easypanel.host` → `HTTP/2 307` (NextAuth redirect a /signin — correcto)
+- `curl /api/auth/providers` → `{"google":{"id":"google",...,"callbackUrl":"https://seo.clicksociety.mx/api/auth/callback/google"}}`
+
+**Hallazgos técnicos (nuevos):**
+- `domains.updateDomain` y `domains.createDomain` requieren `composeService: ""` (no `null`) en el payload
+- `services.app.updateBuild` requiere payload `{build:{type:"dockerfile"}}` (objeto anidado), NO `{type:"dockerfile"}` al nivel raíz
+- `services.app.updateSourceGithub` requiere campo `path:"/"` obligatorio
+- `services.app.updateBuild` requiere que la fuente ya esté configurada (`updateSourceGithub` primero)
+- `inspectProject` (no `inspectService`) es el endpoint correcto para verificar `build` y `source`
+- Node.js fetch en procesos background del sandbox no tiene acceso de red al VPS — usar curl o scripts en foreground
+
+**Pendiente al cerrar:**
+- DNS `seo.clicksociety.mx` → `76.13.121.6` (acción de Jorge)
+- Google OAuth redirect URI en Google Console (acción de Jorge)
+- Logout+login en producción para scopes GSC/GA4 (acción de Jorge)
+- Seed de clientes desde Notion (compartir BD primero)
 
 ### Sesión 5 — 2026-05-11
 **Participantes:** Jorge + Claude Code

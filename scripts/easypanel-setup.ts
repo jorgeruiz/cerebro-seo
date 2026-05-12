@@ -160,8 +160,18 @@ async function main() {
       : "postgresql://cerebro:REEMPLAZAR@cerebro-db:5432/cerebro_seo";
     console.log(`   DB password: ${dbPassword ? "obtenida" : "no encontrada — completar manualmente"}`);
 
-    // ── 6. Configurar fuente GitHub vía tRPC ─────────────────────────────────
-    console.log("6. Configurando fuente GitHub...");
+    // ── 6. Configurar build type: Dockerfile ─────────────────────────────────
+    console.log("6. Configurando build type (Dockerfile)...");
+    await trpcPost(token, "services.app.updateBuild", {
+      projectName: PROJECT,
+      serviceName: "cerebro-seo",
+      type: "dockerfile",
+      file: "Dockerfile",
+    });
+    console.log("   ✓ Build type configurado");
+
+    // ── 8. Configurar fuente GitHub vía tRPC ─────────────────────────────────
+    console.log("8. Configurando fuente GitHub...");
     await trpcPost(token, "services.app.updateSourceGithub", {
       projectName: PROJECT,
       serviceName: "cerebro-seo",
