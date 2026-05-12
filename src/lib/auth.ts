@@ -29,6 +29,19 @@ export const authOptions: NextAuthOptions = {
     strategy: "database",
   },
 
+  // Google Workspace usa POST redirect en el consent screen.
+  // SameSite=lax bloquea cookies en POST cross-site — cambiamos a "none" para state y pkce.
+  cookies: {
+    pkceCodeVerifier: {
+      name: "__Secure-next-auth.pkce.code_verifier",
+      options: { httpOnly: true, sameSite: "none", path: "/", secure: true },
+    },
+    state: {
+      name: "__Secure-next-auth.state",
+      options: { httpOnly: true, sameSite: "none", path: "/", secure: true, maxAge: 900 },
+    },
+  },
+
   pages: {
     signIn: "/login",
     error: "/login",
