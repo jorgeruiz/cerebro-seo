@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-12
-**Fase actual:** Fase 1 — Foundation ✅ COMPLETA — app en producción con login operativo
-**Próximo hito:** Fase 2 — Datos reales fluyendo (seed clientes Notion → módulos GSC/GA4/audit)
+**Última actualización:** 2026-05-13
+**Fase actual:** Fase 2 — Datos reales fluyendo (en curso — portada GSC implementada, validación pendiente)
+**Próximo hito:** Validar GSC con Molino Azteca en producción → conectar GA4 snapshot → Sesión 9
 
 ---
 
@@ -31,7 +31,7 @@
 | Sistema de multiagentes | ✅ Completo | 3 queues BullMQ, base-worker, InsightsAgent con prompt caching |
 | Listado de clientes | ✅ Completo | Grid con alertas, tareas, estado del ciclo |
 | Wizard de alta de cliente | ✅ Completo | 3 pasos: datos, propiedades GSC/GA4, keywords/competidores |
-| Vista detalle del cliente | ✅ Completo | Portada con gráfica mock, InsightCards, operativa, 9 módulos placeholder |
+| Vista detalle del cliente | ✅ Completo | Portada con GSC real (snapshot 28d + gráfica 365d), CTA conectar, InsightCards mock |
 | Provider layer DataForSEO | ✅ Completo | `seo-data.ts` (interface) + `dataforseo.ts` (4 métodos reales + stubs) |
 | Script de validación DataForSEO | ✅ Ejecutado (×2) | Sesión 3: $0.228 USD sin BD. Sesión 4: $0.225 USD con BD — 15 rows en ApiUsage |
 | ApiUsage table poblada | ✅ Completo | 15 rows, $0.225 USD total — datos reales de Sesión 4 |
@@ -193,7 +193,8 @@
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... para poder correr `seed-clients.ts` |
-| Tokens GSC/GA4 en producción | Jorge | Hacer logout + login en `seo.clicksociety.com.mx` para que la app guarde access/refresh tokens de la cuenta workspace |
+| Validación GSC con datos reales | Jorge | Entrar a producción con jorge@clicksociety.com.mx, ir a Molino Azteca y confirmar que el snapshot y la gráfica muestran datos coherentes vs GSC directo |
+| Tokens GSC/GA4 en producción | Jorge | Si la portada de Molino Azteca muestra CTA en lugar de datos, hacer logout + re-login para regenerar tokens con scope webmasters |
 
 ---
 
@@ -210,6 +211,40 @@
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 8 — 2026-05-13
+**Participantes:** Claude Code (sesión nocturna autónoma)
+**Resultado:** ✅ Portada GSC implementada. Validación con datos reales pendiente (sin tokens OAuth locales).
+
+**Commits realizados:**
+- `87d36bf` chore: agregar vitest como test runner con alias @/
+- `41e22ef` feat: server actions para gestión de propiedad GSC del cliente
+- `da55751` feat: componentes GscConnectSection y GscSnapshotCards
+- `c3fa170` feat: portada del cliente con GSC real — snapshot 28d + gráfica 365d + CTA conectar
+- `c22bd51` test: 4 casos para GoogleSearchConsoleProvider con vitest
+
+**Trabajo realizado:**
+- `actions.ts`: server actions `listGscSites()`, `setClientGscProperty()`, `getGscSnapshot()`. El snapshot calcula deltas 28d vs 28d anterior usando dos llamadas a `getOverview` con claves de caché independientes.
+- `GscConnectSection.tsx`: componente client que carga propiedades GSC disponibles del usuario y persiste la selección. Usa `router.refresh()` para recargar el server component con datos reales tras conectar.
+- `GscSnapshotCards.tsx`: 4 KPI cards (clics, impresiones, posición, CTR) con deltas vs período anterior. Indicadores verde/rojo con `TrendingUp`/`TrendingDown`.
+- `page.tsx`: fetch de 365 días de datos diarios (para soportar 12m en el chart sin llamadas adicionales). Fetch paralelo de snapshot 28d. CTA de conexión cuando `site.gscProperty` está vacío.
+- `ClientPortadaChart.tsx`: rangos 28d/90d/12m (removido 7d). Default 90d.
+- Tests vitest: 4 casos (happy path getDailyMetrics, happy path getOverview, ceros sin datos, caché hit).
+- `npm run build`: pasa limpio. `npm test`: 4/4 pasan.
+
+**Hallazgos técnicos:**
+- `gscProperty` ya estaba en la BD local (Molino Azteca: `http://www.molinoazteca.com`). El seed de Sesión 5 funcionó correctamente.
+- Sin `Account` en BD local → sin tokens OAuth → la validación con datos reales no fue posible en este entorno.
+- La validación debe hacerse en producción donde Jorge tiene sesión activa.
+
+**Validación con Molino Azteca:** BLOQUEADA. Sin Account/tokens OAuth en BD local. El código es correcto y los tests lo verifican. Pendiente validación en producción por Jorge.
+
+**Costo de APIs en esta sesión:** $0 (sin llamadas reales a GSC — BD local sin tokens).
+
+**Próximo paso recomendado (Sesión 9):**
+1. Jorge entra a producción → navega a un cliente con `gscProperty` → confirma datos vs GSC directo
+2. Si el CTA aparece en lugar de datos: logout + re-login para regenerar tokens con scope webmasters
+3. Claude Code: conectar GA4 en la misma portada (snapshot + KPIs análogos a GSC)
 
 ### Sesión 7 — 2026-05-12
 **Participantes:** Jorge + Claude Code
@@ -389,12 +424,11 @@ npm run dev
 2. **Validar DataForSEO:** Revisar `validation-report.md` en la raíz del proyecto. Comparar posiciones de Molino Azteca, RFN y Quicsa vs lo que muestra Google Search Console para esas mismas keywords. Confirmar si los datos son confiables antes de Fase 2.
 3. **Notion:** Compartir BD "Clientes Actuales" con la integración (ID: `32b0a146-5e52-81f9-8509-0027c0a09cd7`) para poder correr el seed.
 
-### Para Claude Code (Sesión 8)
-1. Ejecutar `seed-clients.ts` una vez Notion esté compartido
-2. Implementar módulo Términos de búsqueda (GSC) en vista detalle del cliente
-3. Implementar módulo Tráfico de páginas (GA4 + GSC)
-4. Migrar `POST /api/clientes` → tRPC router `clientesRouter`
-5. Decidir alcance completo de Fase 2 con Jorge
+### Para Claude Code (Sesión 9)
+1. Validación GSC con datos reales de Molino Azteca (una vez Jorge confirme que la portada muestra datos)
+2. GA4 snapshot en la misma portada (28d con delta vs período anterior, análogo a GscSnapshotCards)
+3. Refinar UX de la portada según feedback de Jorge con datos reales
+4. Decidir si Sesión 9 incluye Módulo Términos de búsqueda (GSC) o foco en validación
 
 ---
 
