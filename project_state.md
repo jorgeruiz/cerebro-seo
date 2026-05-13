@@ -212,6 +212,14 @@
 - Dominio corregido: `seo.clicksociety.mx` → `seo.clicksociety.com.mx` en Easypanel y Google Console
 - `NEXTAUTH_URL` actualizado a `https://seo.clicksociety.com.mx`
 
+**Fix adicional (mismo día):**
+- Build fallaba en "Collecting page data" — Prisma y Redis se evaluaban en build time
+- `clientes/page.tsx` y `clientes/[id]/page.tsx`: `export const dynamic = "force-dynamic"`
+- `src/lib/redis.ts`: `lazyConnect: true` — evita ECONNREFUSED al importar módulo en build
+- `Dockerfile`: ARG/ENV placeholder para DATABASE_URL, REDIS_URL, NEXTAUTH_URL, NEXTAUTH_SECRET durante build, limpiados antes de runtime
+- Build local con `SKIP_ENV_VALIDATION=1 npm run build`: pasa sin Redis ni BD accesibles
+- Commit `8699bfc` pusheado y redeploy ejecutado
+
 **Pendiente:**
 - Confirmar login exitoso en ventana incógnita con jorge@clicksociety.com.mx
 
