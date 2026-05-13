@@ -96,10 +96,11 @@ La vista central del producto. Estructura jerárquica:
 
 | Rol | Acceso | Notas |
 |---|---|---|
-| ADMIN (Jorge) | Todo. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
-| EDITOR (Félix, Cindy) | Todos los clientes asignados. Sin visibilidad de costos. | Google OAuth |
+| ADMIN (Jorge) | Todo. Ve **todos** los clientes activos sin necesidad de asignación. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
+| EDITOR (Félix, Cindy) | Solo los clientes que tenga asignados vía `ClientUser.email`. Sin visibilidad de costos. Acceso a cliente no asignado devuelve 404. | Google OAuth |
 
-> `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales. Si en el futuro se construye acceso de cliente, se reabre el debate.
+> La asignación EDITOR ↔ Cliente se gestiona en la tabla `ClientUser` por email. No hay UI de asignación en v1 — se hace directamente en BD o via seed.
+> `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales.
 
 ---
 

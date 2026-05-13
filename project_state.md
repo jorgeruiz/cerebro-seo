@@ -39,14 +39,14 @@
 | Conexión GSC | ✅ Completo | `google-search-console.ts` con caché Redis 24h. Portada usa datos reales. |
 | Conexión GA4 | ✅ Completo | `google-analytics-4.ts` con caché Redis 4h, filtro Organic. Portada KPI cards. |
 | `google-oauth.ts` | ✅ Completo | Helper OAuth2Client con auto-refresh de tokens persistido en DB |
-| Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — esperando que Jorge comparta BD Notion |
+| Seed de clientes | ✅ Completo | 42 clientes + 42 sites sembrados en producción desde Notion (via consola del contenedor) |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
 | Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1` en build |
 | Login en producción | ✅ Operativo | `jorge@clicksociety.com.mx` entra a `/clientes` con sesión activa. JWT strategy confirmada. |
-| Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — BD Notion no compartida con integración |
+| Seed de clientes | ✅ Completo | 42 clientes + 42 sites en producción. Seed corrido desde consola del contenedor via npx tsx |
 
 ---
 
@@ -83,6 +83,7 @@
 | 2026-05-12 | **Páginas server con Prisma/Redis requieren `export const dynamic = "force-dynamic"`.** Next.js intenta pre-renderizarlas en `npm run build`. Como BD y Redis no son accesibles en build time, el build falla. Páginas afectadas: `clientes/page.tsx`, `clientes/[id]/page.tsx`. |
 | 2026-05-12 | **Dockerfile: ARG → ENV antes del `npm run build`.** Los ARGs de Docker no son visibles en el entorno de ejecución de `RUN` a menos que se exporten como ENV. Placeholders necesarios para que el build no falle aunque BD/Redis no estén disponibles. Redis además requiere `lazyConnect: true` en ioredis para no intentar conexión al importar el módulo. |
 | 2026-05-12 | **Dominio de producción:** `seo.clicksociety.com.mx` (no `seo.clicksociety.mx`). El dominio de Click Society es `clicksociety.com.mx`, no el TLD `.mx`. DNS A record apuntando a `76.13.121.6`. |
+| 2026-05-13 | **ADMINs ven todos los clientes sin necesidad de ClientUser.** `ClientUser` limita visibilidad solo para EDITORs. El modelo `ClientUser` usa `email` (no `userId`) como clave de asignación. Acceso EDITOR a cliente no asignado devuelve 404, no 403. |
 
 ---
 
