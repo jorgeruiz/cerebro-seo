@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { UserRole } from "@prisma/client";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
@@ -93,6 +94,14 @@ export default async function ClienteDetallePage({
   ]);
 
   if (!client) notFound();
+
+  // EDITOR solo puede ver clientes asignados via ClientUser (por email) — 404 si no tiene acceso.
+  if (session?.user?.role !== UserRole.ADMIN) {
+    const assigned = await prisma.clientUser.findFirst({
+      where: { clientId: client.id, email: session?.user?.email ?? "" },
+    });
+    if (!assigned) notFound();
+  }
 
   const site = client.sites[0];
 

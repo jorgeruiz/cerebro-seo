@@ -5,11 +5,18 @@ import { Plus, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { buttonVariants } from "@/components/ui/button";
-import { CycleStatus, ClientStatus } from "@prisma/client";
+import { CycleStatus, ClientStatus, UserRole } from "@prisma/client";
 
-async function getClients() {
+async function getClients(role: UserRole, userEmail: string) {
+  // ADMIN ve todos los clientes activos.
+  // EDITOR solo ve los que tiene asignados vía ClientUser (por email).
+  const where =
+    role === UserRole.ADMIN
+      ? { status: ClientStatus.ACTIVE }
+      : { status: ClientStatus.ACTIVE, clientUsers: { some: { email: userEmail } } };
+
   return prisma.client.findMany({
-    where: { status: ClientStatus.ACTIVE },
+    where,
     orderBy: { name: "asc" },
     include: {
       cycles: {
@@ -49,8 +56,11 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
 }
 
 export default async function ClientesPage() {
-  const [clients, session] = await Promise.all([getClients(), getSession()]);
-  const isAdmin = session?.user?.role === "ADMIN";
+  const session = await getSession();
+  const role = session?.user?.role ?? UserRole.EDITOR;
+  const userEmail = session?.user?.email ?? "";
+  const [clients] = await Promise.all([getClients(role, userEmail)]);
+  const isAdmin = role === UserRole.ADMIN;
 
   return (
     <div className="p-8">
