@@ -20,7 +20,7 @@ const METRICS = [
   { key: "ctr", label: "CTR", color: "#10b981", format: (v: number) => `${v}%` },
 ];
 
-const RANGES = ["7d", "28d", "90d"] as const;
+const RANGES = ["28d", "90d", "12m"] as const;
 type Range = (typeof RANGES)[number];
 
 interface Props {
@@ -29,7 +29,7 @@ interface Props {
 
 export function ClientPortadaChart({ data }: Props) {
   const [metric, setMetric] = useState("clicks");
-  const [range, setRange] = useState<Range>("28d");
+  const [range, setRange] = useState<Range>("90d");
 
   const activeMetric = METRICS.find((m) => m.key === metric)!;
 
@@ -46,7 +46,7 @@ export function ClientPortadaChart({ data }: Props) {
   }
 
   const sliced =
-    range === "7d" ? data.slice(-7) : range === "28d" ? data.slice(-28) : data;
+    range === "28d" ? data.slice(-28) : range === "90d" ? data.slice(-90) : data;
 
   const chartData = sliced.map((d) => ({ ...d, date: d.label }));
 
@@ -100,7 +100,7 @@ export function ClientPortadaChart({ data }: Props) {
               tick={{ fontSize: 10, fill: "#94a3b8" }}
               tickLine={false}
               axisLine={false}
-              interval={range === "7d" ? 0 : range === "28d" ? 3 : 6}
+              interval={range === "28d" ? 3 : range === "90d" ? 6 : 30}
             />
             <YAxis
               tick={{ fontSize: 10, fill: "#94a3b8" }}

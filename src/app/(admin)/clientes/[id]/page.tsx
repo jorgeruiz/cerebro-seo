@@ -23,9 +23,13 @@ import {
   MousePointerClick,
 } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
+import { GscConnectSection } from "./GscConnectSection";
+import { GscSnapshotCards } from "./GscSnapshotCards";
 import { InsightCards } from "./InsightCards";
+import { getGscSnapshot } from "./actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { Ga4Overview } from "@/server/providers/google-analytics-4";
+import type { GscSnapshot } from "./actions";
 
 async function getClientData(id: string) {
   return prisma.client.findUnique({
@@ -94,18 +98,22 @@ export default async function ClienteDetallePage({
 
   // Fetch GSC + GA4 con el token del usuario actual
   let gscData: DailyGscMetric[] | null = null;
+  let gscSnapshot: GscSnapshot | null = null;
   let ga4Overview: Ga4Overview | null = null;
 
   if (session?.user?.id && site) {
     const oauth = await getOAuth2Client(session.user.id);
-    const { startDate, endDate } = getDateRange(90);
 
     if (oauth) {
-      // GSC
+      // GSC — siempre pedimos 365 días para que el selector 12m funcione sin nueva llamada
       if (site.gscProperty) {
+        const { startDate, endDate } = getDateRange(365);
         try {
           const gsc = new GoogleSearchConsoleProvider(oauth);
-          gscData = await gsc.getDailyMetrics(site.gscProperty, startDate, endDate);
+          [gscData, gscSnapshot] = await Promise.all([
+            gsc.getDailyMetrics(site.gscProperty, startDate, endDate),
+            getGscSnapshot(client.id),
+          ]);
           await prisma.apiUsage.create({
             data: {
               provider: "gsc",
@@ -121,6 +129,7 @@ export default async function ClienteDetallePage({
 
       // GA4
       if (site.ga4Property) {
+        const { startDate, endDate } = getDateRange(90);
         try {
           const ga4 = new GoogleAnalytics4Provider(oauth);
           ga4Overview = await ga4.getOverview(site.ga4Property, startDate, endDate);
@@ -197,6 +206,16 @@ export default async function ClienteDetallePage({
       </div>
 
       <div className="p-8 space-y-8">
+        {/* Snapshot GSC 28d — solo si hay propiedad configurada y datos */}
+        {gscSnapshot && (
+          <section>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              Orgánico · últimos 28 días
+            </h2>
+            <GscSnapshotCards snapshot={gscSnapshot} />
+          </section>
+        )}
+
         {/* Gráfica principal GSC */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -205,7 +224,11 @@ export default async function ClienteDetallePage({
             </h2>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-            <ClientPortadaChart data={gscData} />
+            {site?.gscProperty ? (
+              <ClientPortadaChart data={gscData} />
+            ) : (
+              <GscConnectSection clientId={client.id} />
+            )}
           </div>
         </section>
 
