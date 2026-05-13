@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-12
-**Fase actual:** Fase 1 — Foundation (✅ COMPLETA — app en producción)
-**Próximo hito:** Fase 2 — Datos reales fluyendo (Términos de búsqueda, Tráfico, Site audit, Notion sync)
+**Fase actual:** Fase 1 — Foundation (✅ infraestructura completa, ⚠️ login bloqueado)
+**Próximo hito:** Resolver OAuthCallbackError "State cookie was missing" → login exitoso → seed clientes → Fase 2
 
 ---
 
@@ -42,9 +42,11 @@
 | Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — esperando que Jorge comparta BD Notion |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
-| Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 200 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
-| URL producción (interna) | ✅ Activo | `https://apps-cerebro-seo.6lk5jx.easypanel.host` → HTTP 307 → `/api/auth/signin` |
-| URL producción (custom) | ⚠️ DNS pendiente | `https://seo.clicksociety.mx` — requiere registro A `76.13.121.6` en registrador |
+| Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
+| URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
+| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1` en build |
+| Login en producción | ❌ Bloqueado | `OAuthCallbackError: State cookie was missing` con `jorge@clicksociety.com.mx`. Causa raíz sin confirmar. |
+| Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — BD Notion no compartida con integración |
 
 ---
 
@@ -176,10 +178,8 @@
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
+| Login producción — State cookie missing | Claude+Jorge | `OAuthCallbackError: State cookie was missing` en callback Google OAuth. Cookies se setean OK (Secure, SameSite=None) pero no llegan al callback. Requiere diagnóstico adicional (incógnito, otro browser, revisar cabeceras Traefik). |
 | Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... |
-| DNS `seo.clicksociety.mx` | Jorge | Registro A: `seo.clicksociety.mx` → `76.13.121.6` en el registrador de dominio |
-| Google OAuth redirect URI | Jorge | Agregar `https://seo.clicksociety.mx/api/auth/callback/google` en Google Console |
-| Jorge no ha hecho logout+login en prod | Jorge | Cerrar sesión y volver a entrar en `apps-cerebro-seo.6lk5jx.easypanel.host` para activar scopes GSC/GA4 |
 
 ---
 
