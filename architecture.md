@@ -434,7 +434,8 @@ Implementación pendiente en `src/lib/cerebro-bridge.ts` (Fase 2). Ver `integrat
 ## 9. Seguridad
 
 - **Auth:** NextAuth v4. Google OAuth únicamente — herramienta 100% interna, sin acceso de clientes finales.
-- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR). `CLIENT` existe en el enum del schema pero no se usa — reservado si en el futuro se construye vista cliente.
+- **Session strategy: JWT obligatorio en producción.** `session.strategy: "jwt"` es requerido cuando se usa `next-auth/middleware` en Next.js App Router. Con `strategy: "database"` (default de PrismaAdapter), la cookie `session-token` contiene un UUID opaco. El middleware llama `getToken()` internamente, que solo decodifica JWTs — al recibir un UUID falla silenciosamente y redirige al login aunque la sesión exista en Postgres. PrismaAdapter sigue activo y persiste `User` y `Account` correctamente.
+- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR). El rol se incluye en el JWT y se propaga a `session.user.role` vía el callback `jwt`.
 - **Autorización server-side:** Admin layout verifica rol ADMIN o EDITOR.
 - **Row-level security:** toda query Prisma filtrada por `clientId` derivado de la sesión. Nunca confiar en `clientId` del request.
 - **Bridge Cerebro:** shared secret en header `x-internal-secret`, validado en ambos servicios.

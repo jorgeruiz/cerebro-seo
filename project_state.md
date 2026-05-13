@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-12
-**Fase actual:** Fase 1 — Foundation (✅ infraestructura + fix JWT strategy aplicado, pendiente confirmar login)
-**Próximo hito:** Login exitoso confirmado → seed clientes desde Notion → Fase 2
+**Fase actual:** Fase 1 — Foundation ✅ COMPLETA — app en producción con login operativo
+**Próximo hito:** Fase 2 — Datos reales fluyendo (seed clientes Notion → módulos GSC/GA4/audit)
 
 ---
 
@@ -25,7 +25,7 @@
 | Prisma migrations | ✅ Completo | `20260510075453_init` aplicada — 21 tablas creadas |
 | Next.js + TypeScript | ✅ Completo | App Router, Tailwind, shadcn base-nova |
 | Prisma schema | ✅ Completo | Todos los modelos + NextAuth (ADMIN/EDITOR) + JobLog |
-| Auth (NextAuth) | ✅ Completo | Google OAuth + roles ADMIN/EDITOR inyectados en sesión |
+| Auth (NextAuth) | ✅ Completo | Google OAuth + JWT strategy + roles. Validado en producción: `https://seo.clicksociety.com.mx` |
 | Layout + branding | ✅ Completo | Sidebar, gradiente Click Society |
 | App arranca con BD real | ✅ Verificado | `npm run dev` → 307 redirect a `/api/auth/signin` (correcto) |
 | Sistema de multiagentes | ✅ Completo | 3 queues BullMQ, base-worker, InsightsAgent con prompt caching |
@@ -45,7 +45,7 @@
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
 | Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1` en build |
-| Login en producción | ⚠️ Pendiente verificar | Fix aplicado: JWT strategy. Cookie UUID → JWT. Redeploy `b8c1cf6` en producción. Pendiente confirmar login exitoso. |
+| Login en producción | ✅ Operativo | `jorge@clicksociety.com.mx` entra a `/clientes` con sesión activa. JWT strategy confirmada. |
 | Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — BD Notion no compartida con integración |
 
 ---
@@ -79,6 +79,10 @@
 | 2026-05-08 | **Costo real DataForSEO SERP Live**: $0.0155/query (depth:100), no $0.002 (eso es depth:10). Para producción con Standard Queue y depth:30 el costo baja sustancialmente. |
 | 2026-05-10 | **OrbStack como reemplazo de Docker Desktop** para desarrollo local. Docker Desktop no arranca en MacBook Air M4 / macOS Tahoe 26.2. OrbStack es compatible 100% con `docker-compose.yml`. |
 | 2026-05-10 | **Prisma requiere DATABASE_URL en el entorno del proceso** (no solo en `.env.local`). Comandos `prisma migrate dev` y `prisma studio` necesitan `DATABASE_URL=... npx prisma ...` o equivalente. Next.js carga `.env.local` automáticamente pero Prisma CLI no. |
+| 2026-05-12 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en Next.js 14 App Router: el middleware llama `getToken()` que solo decodifica JWTs — con database strategy la cookie tiene un UUID opaco y `getToken()` falla silenciosamente redirigiendo a `/login`. PrismaAdapter sigue activo para persistir User y Account. |
+| 2026-05-12 | **Páginas server con Prisma/Redis requieren `export const dynamic = "force-dynamic"`.** Next.js intenta pre-renderizarlas en `npm run build`. Como BD y Redis no son accesibles en build time, el build falla. Páginas afectadas: `clientes/page.tsx`, `clientes/[id]/page.tsx`. |
+| 2026-05-12 | **Dockerfile: ARG → ENV antes del `npm run build`.** Los ARGs de Docker no son visibles en el entorno de ejecución de `RUN` a menos que se exporten como ENV. Placeholders necesarios para que el build no falle aunque BD/Redis no estén disponibles. Redis además requiere `lazyConnect: true` en ioredis para no intentar conexión al importar el módulo. |
+| 2026-05-12 | **Dominio de producción:** `seo.clicksociety.com.mx` (no `seo.clicksociety.mx`). El dominio de Click Society es `clicksociety.com.mx`, no el TLD `.mx`. DNS A record apuntando a `76.13.121.6`. |
 
 ---
 
@@ -119,6 +123,18 @@
 - [x] App arranca con BD real: `npm run dev` → 307 /api/auth/signin (correcto)
 - [x] ApiUsage poblada: 15 rows ($0.225 USD) de re-ejecución del script de validación
 
+**Completado (Sesiones 6 y 7 — deploy y login producción):**
+- [x] Setup Easypanel completo vía API tRPC: servicios Redis + App, env vars, dominios, build type
+- [x] `Dockerfile` + `startup.mjs`: build multi-stage, crea BD `cerebro_seo`, corre migraciones, arranca Next.js
+- [x] `src/env.ts`: guard `SKIP_ENV_VALIDATION=1` para build Docker
+- [x] `src/lib/redis.ts`: `lazyConnect: true` — evita ECONNREFUSED en build time
+- [x] `export const dynamic = "force-dynamic"` en `clientes/page.tsx` y `clientes/[id]/page.tsx`
+- [x] `src/lib/auth.ts`: `session.strategy: "jwt"` — fix crítico para que el middleware funcione en App Router
+- [x] `src/types/next-auth.d.ts`: extensión JWT con `id` y `role`
+- [x] Login en producción verificado: `jorge@clicksociety.com.mx` → `/clientes` con sesión activa
+- [x] DNS `seo.clicksociety.com.mx` → `76.13.121.6` activo
+- [x] Google OAuth redirect URI `https://seo.clicksociety.com.mx/api/auth/callback/google` registrado
+
 **Completado (Sesión 5):**
 - [x] `auth.ts`: scopes GSC + GA4 con access_type offline + prompt consent para refresh token
 - [x] `env.ts`: eliminado EMAIL_SERVER/FROM, PAGESPEED y bridge opcionales
@@ -136,12 +152,10 @@
 - [x] Build de producción exitoso (`npm run build`)
 - [x] Commit + push a `jorgeruiz/cerebro-seo`
 
-**Pendiente (acciones manuales de Jorge — ver §10):**
-- [ ] Compartir BD Notion "Clientes Actuales" con integración → ejecutar `seed-clients.ts`
-- [ ] Setup Easypanel: crear servicio + Redis + BD + env vars + dominio
-- [ ] DNS: `seo.clicksociety.mx` → `76.13.121.6`
-- [ ] Google OAuth Console: agregar callback URL de producción
-- [ ] Logout + login en producción para obtener nuevos scopes GSC/GA4
+**Pendiente:**
+- [ ] Compartir BD Notion "Clientes Actuales" con integración → ejecutar `seed-clients.ts` (acción de Jorge)
+- [ ] Validar `validation-report.md` vs GSC de Molino Azteca, RFN y Quicsa (acción de Jorge)
+- [ ] Jorge hace logout + login en producción para que la app guarde sus tokens GSC/GA4
 
 ---
 
@@ -178,8 +192,8 @@
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| Login en producción — pendiente confirmar | Jorge | Probar login en ventana incógnita en `https://seo.clicksociety.com.mx`. Debe aterrizar en `/clientes`. |
-| Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... |
+| Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... para poder correr `seed-clients.ts` |
+| Tokens GSC/GA4 en producción | Jorge | Hacer logout + login en `seo.clicksociety.com.mx` para que la app guarde access/refresh tokens de la cuenta workspace |
 
 ---
 
@@ -199,31 +213,21 @@
 
 ### Sesión 7 — 2026-05-12
 **Participantes:** Jorge + Claude Code
-**Trabajo realizado:**
-- Fix: `src/app/api/auth/[...nextauth]/route.ts` — tipo `Function` en `wrappedHandler` temporal causaba ESLint error `@typescript-eslint/no-unsafe-function-type` que rompía el build de producción. Revertido al patrón estándar `export { handler as GET, handler as POST }`.
-- `npm run build` local: pasa sin errores.
-- Push a main → deploy en Easypanel.
-- `META_ACCESS_TOKEN` en env del servicio: no existe, nada que borrar.
-- Estado del login en producción (`seo.clicksociety.com.mx`): en investigación — error `OAuthCallbackError: State cookie was missing` con cuenta `jorge@clicksociety.com.mx`. Cookies de OAuth se setean correctamente desde el servidor (confirmado vía curl). Causa raíz pendiente de confirmar en ventana incógnita.
+**Resultado:** ✅ Login en producción operativo. Fase 1 completa.
 
-**Fixes previos de Sesión 7 (parte del diagnóstico de login):**
-- `src/lib/auth.ts`: `sameSite: "none"` para cookies state/pkce (hipótesis POST redirect de Google Workspace)
-- `NEXTAUTH_URL_INTERNAL=http://localhost:3000` agregado al env de Easypanel
-- Dominio corregido: `seo.clicksociety.mx` → `seo.clicksociety.com.mx` en Easypanel y Google Console
-- `NEXTAUTH_URL` actualizado a `https://seo.clicksociety.com.mx`
+**Cronología de bugs resueltos:**
 
-**Fix adicional (mismo día):**
-- Build fallaba en "Collecting page data" — Prisma y Redis se evaluaban en build time
-- `clientes/page.tsx` y `clientes/[id]/page.tsx`: `export const dynamic = "force-dynamic"`
-- `src/lib/redis.ts`: `lazyConnect: true` — evita ECONNREFUSED al importar módulo en build
-- `Dockerfile`: ARG/ENV placeholder para DATABASE_URL, REDIS_URL, NEXTAUTH_URL, NEXTAUTH_SECRET durante build, limpiados antes de runtime
-- Build local con `SKIP_ENV_VALIDATION=1 npm run build`: pasa sin Redis ni BD accesibles
-- Commit `8699bfc` pusheado y redeploy ejecutado
+1. **ESLint: tipo `Function` en route handler** — El debug wrapper temporal `wrappedHandler` usaba `as Function`, rechazado por `@typescript-eslint/no-unsafe-function-type`. Revertido al patrón estándar `export { handler as GET, handler as POST }`.
 
-**Decisión técnica 2026-05-12:** NextAuth en producción usa `session.strategy: "jwt"`. Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs — con strategy database la cookie tiene un UUID opaco y getToken() falla silenciosamente redirigiendo al login.
+2. **Build falla en "Collecting page data"** — `clientes/page.tsx` y `clientes/[id]/page.tsx` llaman Prisma en Server Components. Next.js las pre-renderiza en build time cuando BD no está accesible. Fix: `export const dynamic = "force-dynamic"`. Adicionalmente, `redis.ts` se importa transitivamente desde los providers de GSC/GA4, causando ECONNREFUSED en build. Fix: `lazyConnect: true` en ioredis. Dockerfile actualizado con ARG → ENV placeholders antes del `npm run build`.
 
-**Pendiente:**
-- Confirmar login exitoso en ventana incógnita con jorge@clicksociety.com.mx
+3. **OAuthCallbackError: "State cookie was missing"** — Diagnóstico inicial apuntaba a SameSite/cookies, pero el bug real era diferente. Con `session.strategy: "database"` (default con PrismaAdapter), la cookie `session-token` contiene un UUID opaco, no un JWT. `next-auth/middleware` llama internamente a `getToken()` que solo sabe decodificar JWTs — al recibir un UUID falla silenciosamente y redirige a `/login` aunque la sesión esté válida en la tabla Session de Postgres. Fix definitivo: `session.strategy: "jwt"` en authOptions. El callback `jwt` persiste `id` y `role` en el token; el callback `session` los lee desde el token (no desde BD). PrismaAdapter se mantiene para persistir User y Account.
+
+**Aprendizajes para futuras sesiones:**
+- `next-auth/middleware` en Next.js App Router requiere siempre `strategy: "jwt"` aunque se use PrismaAdapter
+- Páginas server que tocan Prisma o Redis siempre necesitan `export const dynamic = "force-dynamic"` para builds Docker
+- El dominio es `clicksociety.com.mx`, no `clicksociety.mx`
+- Easypanel: `updateBuild` payload correcto es `{ build: { type: "dockerfile" } }` (no `{ type: "... "}` al nivel raíz)
 
 ### Sesión 6 — 2026-05-12
 **Participantes:** Jorge + Claude Code
@@ -346,7 +350,7 @@
 
 - **Easypanel VPS:** http://76.13.121.6:3000 — `jorge.arm@gmail.com` / `ClickSociety12#`
 - **GitHub repo:** https://github.com/jorgeruiz/cerebro-seo (privado)
-- **Subdominio destino:** `seo.clicksociety.mx`
+- **URL producción:** `https://seo.clicksociety.com.mx` (activo, login verificado)
 
 ### Credenciales disponibles (en `.env.local`)
 - ✅ DataForSEO: cuenta activa, $50 depositados, ~$49.55 restantes (−$0.228 Sesión 3 −$0.225 Sesión 4)
@@ -378,9 +382,23 @@ npm run dev
 
 ---
 
-## 10. Próximos pasos concretos (acciones manuales de Jorge)
+## 10. Próximos pasos — Sesión 8
 
-### 10.1 Notion — Compartir BD con integración
+### Para Jorge (antes de la próxima sesión de Code)
+1. **Tokens GSC/GA4:** Hacer logout y volver a entrar en `https://seo.clicksociety.com.mx` para que la app guarde los access/refresh tokens de `jorge@clicksociety.com.mx`. Sin esto, la portada de cada cliente mostrará fallback en lugar de datos reales.
+2. **Validar DataForSEO:** Revisar `validation-report.md` en la raíz del proyecto. Comparar posiciones de Molino Azteca, RFN y Quicsa vs lo que muestra Google Search Console para esas mismas keywords. Confirmar si los datos son confiables antes de Fase 2.
+3. **Notion:** Compartir BD "Clientes Actuales" con la integración (ID: `32b0a146-5e52-81f9-8509-0027c0a09cd7`) para poder correr el seed.
+
+### Para Claude Code (Sesión 8)
+1. Ejecutar `seed-clients.ts` una vez Notion esté compartido
+2. Implementar módulo Términos de búsqueda (GSC) en vista detalle del cliente
+3. Implementar módulo Tráfico de páginas (GA4 + GSC)
+4. Migrar `POST /api/clientes` → tRPC router `clientesRouter`
+5. Decidir alcance completo de Fase 2 con Jorge
+
+---
+
+## 10.1 Notion — Compartir BD con integración (referencia)
 1. Abrir Notion → BD "Clientes Actuales"
 2. Click en "..." → Share → Add connections → buscar integración "Claude" o "Cerebro"
 3. ID integración: `32b0a146-5e52-81f9-8509-0027c0a09cd7`
