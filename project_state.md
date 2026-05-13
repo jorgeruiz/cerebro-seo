@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-12
-**Fase actual:** Fase 1 — Foundation (✅ infraestructura completa, ⚠️ login bloqueado)
-**Próximo hito:** Resolver OAuthCallbackError "State cookie was missing" → login exitoso → seed clientes → Fase 2
+**Fase actual:** Fase 1 — Foundation (✅ infraestructura + fix JWT strategy aplicado, pendiente confirmar login)
+**Próximo hito:** Login exitoso confirmado → seed clientes desde Notion → Fase 2
 
 ---
 
@@ -45,7 +45,7 @@
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
 | Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1` en build |
-| Login en producción | ❌ Bloqueado | `OAuthCallbackError: State cookie was missing` con `jorge@clicksociety.com.mx`. Causa raíz sin confirmar. |
+| Login en producción | ⚠️ Pendiente verificar | Fix aplicado: JWT strategy. Cookie UUID → JWT. Redeploy `b8c1cf6` en producción. Pendiente confirmar login exitoso. |
 | Seed de clientes | ⚠️ Bloqueado | `notion-direct.ts` + `scripts/seed-clients.ts` listos — BD Notion no compartida con integración |
 
 ---
@@ -178,7 +178,7 @@
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| Login producción — State cookie missing | Claude+Jorge | `OAuthCallbackError: State cookie was missing` en callback Google OAuth. Cookies se setean OK (Secure, SameSite=None) pero no llegan al callback. Requiere diagnóstico adicional (incógnito, otro browser, revisar cabeceras Traefik). |
+| Login en producción — pendiente confirmar | Jorge | Probar login en ventana incógnita en `https://seo.clicksociety.com.mx`. Debe aterrizar en `/clientes`. |
 | Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... |
 
 ---
@@ -219,6 +219,8 @@
 - `Dockerfile`: ARG/ENV placeholder para DATABASE_URL, REDIS_URL, NEXTAUTH_URL, NEXTAUTH_SECRET durante build, limpiados antes de runtime
 - Build local con `SKIP_ENV_VALIDATION=1 npm run build`: pasa sin Redis ni BD accesibles
 - Commit `8699bfc` pusheado y redeploy ejecutado
+
+**Decisión técnica 2026-05-12:** NextAuth en producción usa `session.strategy: "jwt"`. Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs — con strategy database la cookie tiene un UUID opaco y getToken() falla silenciosamente redirigiendo al login.
 
 **Pendiente:**
 - Confirmar login exitoso en ventana incógnita con jorge@clicksociety.com.mx
