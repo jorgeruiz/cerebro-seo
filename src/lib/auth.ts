@@ -25,8 +25,10 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
+  // JWT strategy: el middleware de next-auth llama a getToken() que solo decodifica JWTs.
+  // Con database strategy la cookie tiene un UUID opaco → getToken() falla → redirect a /login.
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
 
   // Google Workspace usa POST redirect en el consent screen.
@@ -48,10 +50,18 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      // user solo existe en el primer login — persistir id y role en el token
+      if (user) {
+        token.id = user.id;
+        token.role = (user as unknown as { role: UserRole }).role;
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.role = (user as unknown as { role: UserRole }).role;
+        session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
       }
       return session;
     },
