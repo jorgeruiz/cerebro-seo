@@ -84,6 +84,11 @@
 | 2026-05-12 | **Dockerfile: ARG → ENV antes del `npm run build`.** Los ARGs de Docker no son visibles en el entorno de ejecución de `RUN` a menos que se exporten como ENV. Placeholders necesarios para que el build no falle aunque BD/Redis no estén disponibles. Redis además requiere `lazyConnect: true` en ioredis para no intentar conexión al importar el módulo. |
 | 2026-05-12 | **Dominio de producción:** `seo.clicksociety.com.mx` (no `seo.clicksociety.mx`). El dominio de Click Society es `clicksociety.com.mx`, no el TLD `.mx`. DNS A record apuntando a `76.13.121.6`. |
 | 2026-05-13 | **ADMINs ven todos los clientes sin necesidad de ClientUser.** `ClientUser` limita visibilidad solo para EDITORs. El modelo `ClientUser` usa `email` (no `userId`) como clave de asignación. Acceso EDITOR a cliente no asignado devuelve 404, no 403. |
+| 2026-05-14 | **Cerebro SEO maneja todos los clientes activos (42), no solo SEO.** Vista default filtra a clientes con `services` incluyendo `"seo"` (~12). Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO, Claude) solo aplica a clientes con `"seo"` en services. |
+| 2026-05-14 | **Campo `services String[]` en Client** (migración `add_client_services`). Valores normalizados: `seo`, `google_ads`, `meta_ads`, `contenidos`. Campo "Servicio" en Notion (multi_select). 12 clientes con SEO, 38 con Google Ads, 8 Meta Ads, 6 Contenidos. |
+| 2026-05-14 | **Workers BullMQ**: jobs de tracking/insights/backlinks/competitors/ai-search solo se encolan para clientes con `services.includes("seo")`. Audit y sync aplican a todos los activos. |
+| 2026-05-14 | **Módulos SEO de vista detalle**: muestran lock icon + tooltip para clientes sin servicio SEO. Módulos sin lock: Términos de búsqueda, Tráfico de páginas, Eventos, Site Audit. |
+| 2026-05-14 | **Build cacheado en Easypanel**: deploys repetidos pueden reutilizar capas Docker antiguas. Workaround: parchear schema.prisma con sed + `prisma generate` en el contenedor vía console, y ejecutar SQL raw via `pg` client para migraciones urgentes. |
 
 ---
 
