@@ -12,13 +12,15 @@ import { prisma } from "@/lib/db";
 export async function initSchedulers(): Promise<void> {
   const clients = await prisma.client.findMany({
     where: { status: "ACTIVE" },
-    select: { id: true, domain: true },
+    select: { id: true, domain: true, services: true },
   });
 
-  console.log(`[schedulers] Registering jobs for ${clients.length} active clients`);
+  const seoClients = clients.filter((c) => c.services.includes("seo"));
+  const skipped = clients.length - seoClients.length;
+  console.log(`[schedulers] ${clients.length} clientes activos | ${seoClients.length} con SEO | ${skipped} skipped (sin servicio SEO)`);
 
   for (const client of clients) {
-    await registerClientJobs(client.id);
+    await registerClientJobs(client.id, client.services);
   }
 
   // Jobs globales (no por cliente)
@@ -29,85 +31,74 @@ export async function initSchedulers(): Promise<void> {
  * Registra los jobs de un cliente específico.
  * Llamar también al crear un nuevo cliente activo.
  */
-export async function registerClientJobs(clientId: string): Promise<void> {
-  // Rankings priority — diario 3 AM
-  await dataCollectionQueue.add(
-    "tracking:rankings-priority",
-    { clientId, mode: "priority" },
-    {
-      repeat: { pattern: "0 3 * * *" },
-      jobId: `rankings-priority:${clientId}`,
-    }
-  );
+/**
+ * @param services - array de slugs del cliente (ej: ["seo", "google_ads"])
+ * Jobs con costo variable (DataForSEO/Claude) solo se encolan si el cliente tiene "seo".
+ * Site Audit y sync aplican a todos los clientes activos.
+ */
+export async function registerClientJobs(clientId: string, services: string[] = []): Promise<void> {
+  const hasSeo = services.includes("seo");
 
-  // Rankings bulk — lunes 4 AM
-  await dataCollectionQueue.add(
-    "tracking:rankings-bulk",
-    { clientId, mode: "bulk" },
-    {
-      repeat: { pattern: "0 4 * * 1" },
-      jobId: `rankings-bulk:${clientId}`,
-    }
-  );
+  // ── Jobs exclusivos de clientes con servicio SEO ──────────────────────────
 
-  // Audit rápido — miércoles 2 AM
+  if (hasSeo) {
+    // Rankings priority — diario 3 AM
+    await dataCollectionQueue.add(
+      "tracking:rankings-priority",
+      { clientId, mode: "priority" },
+      { repeat: { pattern: "0 3 * * *" }, jobId: `rankings-priority:${clientId}` }
+    );
+
+    // Rankings bulk — lunes 4 AM
+    await dataCollectionQueue.add(
+      "tracking:rankings-bulk",
+      { clientId, mode: "bulk" },
+      { repeat: { pattern: "0 4 * * 1" }, jobId: `rankings-bulk:${clientId}` }
+    );
+
+    // Insights — diario 6 AM
+    await aiAnalysisQueue.add(
+      "insights:generate",
+      { clientId, trigger: "scheduled", priority: "normal" },
+      { repeat: { pattern: "0 6 * * *" }, jobId: `insights:${clientId}` }
+    );
+
+    // Backlinks — jueves 5 AM
+    await dataCollectionQueue.add(
+      "analysis:backlinks",
+      { clientId },
+      { repeat: { pattern: "0 5 * * 4" }, jobId: `backlinks:${clientId}` }
+    );
+
+    // Competidores — días 1 y 15 del mes, 7 AM
+    await dataCollectionQueue.add(
+      "analysis:competitors",
+      { clientId },
+      { repeat: { pattern: "0 7 1,15 * *" }, jobId: `competitors:${clientId}` }
+    );
+
+    // AI Search Visibility — viernes 6 AM
+    await dataCollectionQueue.add(
+      "analysis:ai-search",
+      { clientId },
+      { repeat: { pattern: "0 6 * * 5" }, jobId: `ai-search:${clientId}` }
+    );
+  }
+
+  // ── Jobs disponibles para todos los clientes activos (sin costo DataForSEO/Claude) ──
+
+  // Audit rápido — miércoles 2 AM (gratis para todos)
   await dataCollectionQueue.add(
     "crawler:audit-quick",
     { clientId, mode: "quick" },
-    {
-      repeat: { pattern: "0 2 * * 3" },
-      jobId: `audit-quick:${clientId}`,
-    }
+    { repeat: { pattern: "0 2 * * 3" }, jobId: `audit-quick:${clientId}` }
   );
 
-  // Audit completo — 1ro de cada mes, 1 AM
+  // Audit completo — 1ro de cada mes, 1 AM (gratis para todos)
   await dataCollectionQueue.add(
     "crawler:audit",
     { clientId, mode: "full" },
-    {
-      repeat: { pattern: "0 1 1 * *" },
-      jobId: `audit-full:${clientId}`,
-    }
-  );
-
-  // Insights — diario 6 AM (después de rankings priority)
-  await aiAnalysisQueue.add(
-    "insights:generate",
-    { clientId, trigger: "scheduled", priority: "normal" },
-    {
-      repeat: { pattern: "0 6 * * *" },
-      jobId: `insights:${clientId}`,
-    }
-  );
-
-  // Backlinks — jueves 5 AM
-  await dataCollectionQueue.add(
-    "analysis:backlinks",
-    { clientId },
-    {
-      repeat: { pattern: "0 5 * * 4" },
-      jobId: `backlinks:${clientId}`,
-    }
-  );
-
-  // Competidores — días 1 y 15 del mes, 7 AM
-  await dataCollectionQueue.add(
-    "analysis:competitors",
-    { clientId },
-    {
-      repeat: { pattern: "0 7 1,15 * *" },
-      jobId: `competitors:${clientId}`,
-    }
-  );
-
-  // AI Search Visibility — viernes 6 AM
-  await dataCollectionQueue.add(
-    "analysis:ai-search",
-    { clientId },
-    {
-      repeat: { pattern: "0 6 * * 5" },
-      jobId: `ai-search:${clientId}`,
-    }
+    { repeat: { pattern: "0 1 1 * *" }, jobId: `audit-full:${clientId}` }
   );
 }
 

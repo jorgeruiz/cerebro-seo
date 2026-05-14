@@ -37,10 +37,12 @@ async function main() {
         domain: client.domain,
         plan: SeoPlan.PRO,
         status: ClientStatus.ACTIVE,
+        services: client.services,
       },
       update: {
         name: client.name,
         domain: client.domain,
+        services: client.services,
       },
     });
 
@@ -74,6 +76,7 @@ async function main() {
     }
 
     console.log(`   ✓ Client ID: ${upserted.id}`);
+    console.log(`   ✓ Servicios: ${client.services.length > 0 ? client.services.join(", ") : "ninguno"}`);
     console.log(`   ✓ GSC: ${client.gscProperty ?? "no configurado"}`);
     console.log(`   ✓ GA4: ${client.ga4PropertyId ?? "no configurado"}`);
   }

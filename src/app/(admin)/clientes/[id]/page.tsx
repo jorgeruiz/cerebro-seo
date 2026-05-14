@@ -23,6 +23,7 @@ import {
   Users,
   MousePointerClick,
 } from "lucide-react";
+import { Lock } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
 import { GscSnapshotCards } from "./GscSnapshotCards";
@@ -35,6 +36,7 @@ import type { GscSnapshot } from "./actions";
 async function getClientData(id: string) {
   return prisma.client.findUnique({
     where: { id },
+    // services: incluido implícitamente (campo escalar, no relación)
     include: {
       sites: { take: 1 },
       cycles: {
@@ -72,15 +74,17 @@ const CYCLE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const MODULES = [
-  { label: "Términos de búsqueda", icon: Search, href: "terminos", color: "text-blue-500" },
-  { label: "AI Search Visibility", icon: Zap, href: "ai-search", color: "text-purple-500" },
-  { label: "SEO Opportunities", icon: TrendingUp, href: "oportunidades", color: "text-green-500" },
-  { label: "Keyword Ideas", icon: Globe, href: "keywords", color: "text-indigo-500" },
-  { label: "Tráfico de páginas", icon: Activity, href: "trafico", color: "text-cyan-500" },
-  { label: "Eventos", icon: Calendar, href: "eventos", color: "text-orange-500" },
-  { label: "Site Audit", icon: FileSearch, href: "audit", color: "text-red-500" },
-  { label: "Competencia", icon: BarChart3, href: "competencia", color: "text-yellow-500" },
-  { label: "Backlinks", icon: Link2, href: "backlinks", color: "text-pink-500" },
+  // requiresSeo: false = disponible para todos los clientes activos (feature gratis)
+  // requiresSeo: true  = solo clientes con servicio SEO contratado
+  { label: "Términos de búsqueda", icon: Search,     href: "terminos",     color: "text-blue-500",   requiresSeo: false },
+  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",    color: "text-purple-500", requiresSeo: true  },
+  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",color: "text-green-500",  requiresSeo: true  },
+  { label: "Keyword Ideas",        icon: Globe,        href: "keywords",     color: "text-indigo-500", requiresSeo: true  },
+  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico",      color: "text-cyan-500",   requiresSeo: false },
+  { label: "Eventos",              icon: Calendar,    href: "eventos",      color: "text-orange-500", requiresSeo: false },
+  { label: "Site Audit",           icon: FileSearch,  href: "audit",        color: "text-red-500",    requiresSeo: false },
+  { label: "Competencia",          icon: BarChart3,   href: "competencia",  color: "text-yellow-500", requiresSeo: true  },
+  { label: "Backlinks",            icon: Link2,        href: "backlinks",    color: "text-pink-500",   requiresSeo: true  },
 ];
 
 export default async function ClienteDetallePage({
@@ -157,6 +161,7 @@ export default async function ClienteDetallePage({
     }
   }
 
+  const hasSeo = client.services.includes("seo");
   const cycle = client.cycles[0];
   const cycleStatus = cycle ? CYCLE_STATUS_LABEL[cycle.status] : null;
   const pendingTasks = cycle?.tasks.filter((t) => t.status !== "DONE") ?? [];
@@ -340,19 +345,30 @@ export default async function ClienteDetallePage({
             Módulos de análisis
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {MODULES.map(({ label, icon: Icon, href, color }) => (
-              <button
-                key={href}
-                className="flex flex-col items-start gap-3 rounded-xl border border-gray-100 bg-white p-4 text-left shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-150 cursor-not-allowed opacity-60"
-                disabled
-                title="Disponible en Fase 2"
-              >
-                <div className={`h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center ${color}`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-xs font-medium text-gray-700 leading-tight">{label}</span>
-              </button>
-            ))}
+            {MODULES.map(({ label, icon: Icon, href, color, requiresSeo }) => {
+              const locked = requiresSeo && !hasSeo;
+              return (
+                <button
+                  key={href}
+                  className={[
+                    "flex flex-col items-start gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition-all duration-150",
+                    locked
+                      ? "border-gray-100 cursor-not-allowed opacity-50"
+                      : "border-gray-100 cursor-not-allowed opacity-60 hover:shadow-md hover:border-indigo-200",
+                  ].join(" ")}
+                  disabled
+                  title={locked ? "Este cliente no tiene servicio SEO contratado. Para activarlo, agrégalo desde Notion → Servicio." : "Disponible en Fase 2"}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className={`h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center ${locked ? "text-gray-300" : color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    {locked && <Lock className="h-3 w-3 text-gray-300 shrink-0" />}
+                  </div>
+                  <span className={`text-xs font-medium leading-tight ${locked ? "text-gray-400" : "text-gray-700"}`}>{label}</span>
+                </button>
+              );
+            })}
           </div>
           <p className="text-xs text-gray-400 mt-3 text-center">
             Los módulos se activarán conforme se implemente la Fase 2 del proyecto.

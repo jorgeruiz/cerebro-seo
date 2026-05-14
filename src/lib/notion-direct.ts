@@ -23,12 +23,31 @@ const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
 // ID de integración: 32b0a146-5e52-81f9-8509-0027c0a09cd7
 const DB_ID = "e489c63e-4edf-4820-aa73-1e59f6f99944";
 
+// Mapeo de valores de Notion al slug normalizado que va en Client.services
+const SERVICE_SLUG_MAP: Record<string, string> = {
+  "SEO":          "seo",
+  "Google Ads":   "google_ads",
+  "Meta Ads":     "meta_ads",
+  "Contenidos":   "contenidos",
+};
+
+function toServiceSlug(notionValue: string): string {
+  const mapped = SERVICE_SLUG_MAP[notionValue];
+  if (!mapped) {
+    const auto = notionValue.toLowerCase().replace(/\s+/g, "_");
+    console.warn(`[notion-direct] Valor de servicio sin mapeo: "${notionValue}" → slug automático: "${auto}"`);
+    return auto;
+  }
+  return mapped;
+}
+
 export interface SeededClient {
   notionPageId: string;
   name: string;
   domain: string;
   gscProperty: string | null;    // ej: "sc-domain:ejemplo.mx" o "https://www.ejemplo.mx/"
   ga4PropertyId: string | null;  // ej: "123456789" (solo el número)
+  services: string[];            // slugs normalizados: ["seo", "google_ads", ...]
 }
 
 type NotionPropertyValue = PageObjectResponse["properties"][string];
@@ -82,12 +101,20 @@ export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
 
       const ga4PropertyId = extractText(props["GA4 Property ID"]) || null;
 
+      // Servicios contratados — campo "Servicio" (multi_select) en Notion
+      const serviceProp = props["Servicio"];
+      const services: string[] =
+        serviceProp?.type === "multi_select"
+          ? serviceProp.multi_select.map((s) => toServiceSlug(s.name))
+          : [];
+
       return {
         notionPageId: page.id.replace(/-/g, ""),
         name,
         domain,
         gscProperty: gscProperty || null,
         ga4PropertyId: ga4PropertyId || null,
+        services,
       };
     });
 }

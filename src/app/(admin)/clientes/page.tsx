@@ -1,19 +1,31 @@
 export const dynamic = "force-dynamic";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { Plus, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { buttonVariants } from "@/components/ui/button";
 import { CycleStatus, ClientStatus, UserRole } from "@prisma/client";
+import { ServiceToggle } from "./ServiceToggle";
 
-async function getClients(role: UserRole, userEmail: string) {
-  // ADMIN ve todos los clientes activos.
+const SERVICE_LABEL: Record<string, { label: string; color: string }> = {
+  seo:        { label: "SEO",       color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  google_ads: { label: "Ads",       color: "bg-blue-50 text-blue-700 border-blue-200" },
+  meta_ads:   { label: "Meta",      color: "bg-pink-50 text-pink-700 border-pink-200" },
+  contenidos: { label: "Contenido", color: "bg-green-50 text-green-700 border-green-200" },
+};
+
+async function getClients(role: UserRole, userEmail: string, filterSeo: boolean) {
+  // ADMIN ve todos los clientes activos (filtrados por SEO si el toggle está en SEO).
   // EDITOR solo ve los que tiene asignados vía ClientUser (por email).
-  const where =
-    role === UserRole.ADMIN
-      ? { status: ClientStatus.ACTIVE }
-      : { status: ClientStatus.ACTIVE, clientUsers: { some: { email: userEmail } } };
+  const baseWhere = role === UserRole.ADMIN
+    ? { status: ClientStatus.ACTIVE }
+    : { status: ClientStatus.ACTIVE, clientUsers: { some: { email: userEmail } } };
+
+  const where = filterSeo
+    ? { ...baseWhere, services: { has: "seo" } }
+    : baseWhere;
 
   return prisma.client.findMany({
     where,
@@ -40,6 +52,13 @@ async function getClients(role: UserRole, userEmail: string) {
   });
 }
 
+// La página necesita searchParams para el toggle SEO/Todos
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams: { filter?: string };
+}) {
+
 function CycleStatusBadge({ status }: { status: CycleStatus }) {
   const config = {
     ACTIVE: { label: "Activo", class: "bg-green-50 text-green-700 border-green-200" },
@@ -55,11 +74,11 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
   );
 }
 
-export default async function ClientesPage() {
   const session = await getSession();
   const role = session?.user?.role ?? UserRole.EDITOR;
   const userEmail = session?.user?.email ?? "";
-  const [clients] = await Promise.all([getClients(role, userEmail)]);
+  const filterSeo = searchParams.filter !== "all"; // default SEO
+  const clients = await getClients(role, userEmail, filterSeo);
   const isAdmin = role === UserRole.ADMIN;
 
   return (
@@ -69,18 +88,22 @@ export default async function ClientesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Clientes</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {clients.length} {clients.length === 1 ? "cliente activo" : "clientes activos"}
+            {clients.length} {clients.length === 1 ? "cliente" : "clientes"}
+            {filterSeo ? " con SEO" : " activos"}
           </p>
         </div>
-        {isAdmin && (
-          <Link
-            href="/clientes/nuevo"
-            className={buttonVariants({ variant: "default" }) + " bg-[#6366f1] hover:bg-[#4f52d4] text-white gap-2"}
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo cliente
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          <Suspense><ServiceToggle /></Suspense>
+          {isAdmin && (
+            <Link
+              href="/clientes/nuevo"
+              className={buttonVariants({ variant: "default" }) + " bg-[#6366f1] hover:bg-[#4f52d4] text-white gap-2"}
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo cliente
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Grid de clientes */}
@@ -133,6 +156,20 @@ export default async function ClientesPage() {
                   {client.name}
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">{client.domain}</p>
+
+                {/* Badges de servicios */}
+                {client.services.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {client.services.map((slug) => {
+                      const cfg = SERVICE_LABEL[slug] ?? { label: slug, color: "bg-gray-50 text-gray-500 border-gray-200" };
+                      return (
+                        <span key={slug} className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${cfg.color}`}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* Indicators */}
                 <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-50">

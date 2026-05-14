@@ -75,6 +75,7 @@ model Client {
   domain          String
   plan            SeoPlan
   status          ClientStatus
+  services        String[] @default([])  // slugs: "seo", "google_ads", "meta_ads", "contenidos"
   brandColor      String?
   createdAt       DateTime @default(now())
 
