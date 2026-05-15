@@ -92,15 +92,35 @@ La vista central del producto. Estructura jerárquica:
 
 ---
 
-## 5. Roles y permisos
+## 5. Roles, permisos y modelo de servicios
+
+### 5.1 Roles y acceso
 
 | Rol | Acceso | Notas |
 |---|---|---|
-| ADMIN (Jorge) | Todo. Ve **todos** los clientes activos sin necesidad de asignación. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
-| EDITOR (Félix, Cindy) | Solo los clientes que tenga asignados vía `ClientUser.email`. Sin visibilidad de costos. Acceso a cliente no asignado devuelve 404. | Google OAuth |
+| ADMIN (Jorge) | Todo. Ve **todos** los clientes activos sin filtrar por asignación. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
+| EDITOR (Félix, Cindy) | Solo los clientes que tenga asignados vía `ClientUser.email`. Sin visibilidad de costos. Acceso a cliente no asignado devuelve 404 (no 403 — no revelar existencia). | Google OAuth |
 
-> La asignación EDITOR ↔ Cliente se gestiona en la tabla `ClientUser` por email. No hay UI de asignación en v1 — se hace directamente en BD o via seed.
+> La asignación EDITOR ↔ Cliente se gestiona en la tabla `ClientUser` por email (no por userId). No hay UI de asignación en v1 — se hace directamente en BD o via seed.
 > `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales.
+
+### 5.2 Modelo de servicios por cliente
+
+El campo `services String[]` en `Client` determina qué módulos y jobs se activan para cada cliente. Valores normalizados:
+
+| Slug | Servicio | Fuente Notion |
+|---|---|---|
+| `seo` | SEO orgánico | "SEO" en campo multi_select "Servicio" |
+| `google_ads` | Google Ads | "Google Ads" |
+| `meta_ads` | Meta Ads | "Meta Ads" |
+| `contenidos` | Marketing de contenidos | "Contenidos" |
+
+**Impacto en el sistema:**
+- **Vista `/clientes`:** filtro default muestra solo clientes con `services.has("seo")`. Toggle "Todos los activos" muestra los 42.
+- **Vista `/clientes/[id]`:** módulos SEO (AI Search Visibility, SEO Opportunities, Keyword Ideas, Competencia, Backlinks) muestran lock icon con tooltip para clientes sin `"seo"` en services.
+- **BullMQ schedulers:** jobs de costo variable (ranking tracking, insights, backlinks, competitors, ai-search) **solo** se encolan para clientes con `services.includes("seo")`. Audit y sync aplican a todos los activos.
+
+> Distribución real (2026-05-14): ~12 clientes con `seo`, ~38 con `google_ads`, ~8 con `meta_ads`, ~6 con `contenidos`. El seed lee el campo "Servicio" (multi_select) desde Notion via `notion-direct.ts`.
 
 ---
 

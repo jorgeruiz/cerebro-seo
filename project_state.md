@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-13
-**Fase actual:** Fase 2 — Datos reales fluyendo (en curso — portada GSC implementada, validación pendiente)
-**Próximo hito:** Validar GSC con Molino Azteca en producción → conectar GA4 snapshot → Sesión 9
+**Última actualización:** 2026-05-15
+**Fase actual:** Fase 2 — Datos reales fluyendo (en curso — GSC implementado en portada, GA4 pendiente)
+**Próximo hito:** Sesión 10 — Conectar GA4 snapshot en portada + validar datos reales con Molino Azteca
 
 ---
 
@@ -22,7 +22,7 @@
 | `docker-compose.yml` | ✅ Completo | postgres:16-alpine + redis:7-alpine — ambos servicios corriendo via OrbStack |
 | Docker / OrbStack | ✅ Completo | OrbStack instalado y corriendo — resuelve el bloqueador de Docker Desktop |
 | BD local (Postgres + Redis) | ✅ Completo | Ambos servicios healthy, conectados, verificados |
-| Prisma migrations | ✅ Completo | `20260510075453_init` aplicada — 21 tablas creadas |
+| Prisma migrations | ✅ Completo | `init` (21 tablas) + `add_client_services` (TEXT[] services). Ambas en `_prisma_migrations` de producción. |
 | Next.js + TypeScript | ✅ Completo | App Router, Tailwind, shadcn base-nova |
 | Prisma schema | ✅ Completo | Todos los modelos + NextAuth (ADMIN/EDITOR) + JobLog |
 | Auth (NextAuth) | ✅ Completo | Google OAuth + JWT strategy + roles. Validado en producción: `https://seo.clicksociety.com.mx` |
@@ -31,20 +31,21 @@
 | Sistema de multiagentes | ✅ Completo | 3 queues BullMQ, base-worker, InsightsAgent con prompt caching |
 | Listado de clientes | ✅ Completo | Grid con alertas, tareas, estado del ciclo |
 | Wizard de alta de cliente | ✅ Completo | 3 pasos: datos, propiedades GSC/GA4, keywords/competidores |
-| Vista detalle del cliente | ✅ Completo | Portada con GSC real (snapshot 28d + gráfica 365d), CTA conectar, InsightCards mock |
+| Vista detalle del cliente | ✅ Completo | Portada con GSC real (snapshot 28d + gráfica 365d), CTA conectar, lock icons módulos no-SEO |
 | Provider layer DataForSEO | ✅ Completo | `seo-data.ts` (interface) + `dataforseo.ts` (4 métodos reales + stubs) |
 | Script de validación DataForSEO | ✅ Ejecutado (×2) | Sesión 3: $0.228 USD sin BD. Sesión 4: $0.225 USD con BD — 15 rows en ApiUsage |
 | ApiUsage table poblada | ✅ Completo | 15 rows, $0.225 USD total — datos reales de Sesión 4 |
 | Auth: scopes GSC+GA4 | ✅ Completo | `auth.ts` actualizado: `webmasters.readonly` + `analytics.readonly` + refresh token |
 | Conexión GSC | ✅ Completo | `google-search-console.ts` con caché Redis 24h. Portada usa datos reales. |
-| Conexión GA4 | ✅ Completo | `google-analytics-4.ts` con caché Redis 4h, filtro Organic. Portada KPI cards. |
+| Conexión GA4 | ❌ Pendiente | Provider `google-analytics-4.ts` existe. Falta snapshot 28d + KPIs en portada (análogo a GSC). Sesión 10. |
 | `google-oauth.ts` | ✅ Completo | Helper OAuth2Client con auto-refresh de tokens persistido en DB |
 | Seed de clientes | ✅ Completo | 42 clientes + 42 sites sembrados en producción desde Notion (via consola del contenedor) |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
-| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1` en build |
+| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado para invalidar caché correctamente. |
+| Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
 | Login en producción | ✅ Operativo | `jorge@clicksociety.com.mx` entra a `/clientes` con sesión activa. JWT strategy confirmada. |
 | Seed de clientes | ✅ Completo | 42 clientes + 42 sites en producción. Seed corrido desde consola del contenedor via npx tsx |
 
@@ -83,7 +84,12 @@
 | 2026-05-12 | **Páginas server con Prisma/Redis requieren `export const dynamic = "force-dynamic"`.** Next.js intenta pre-renderizarlas en `npm run build`. Como BD y Redis no son accesibles en build time, el build falla. Páginas afectadas: `clientes/page.tsx`, `clientes/[id]/page.tsx`. |
 | 2026-05-12 | **Dockerfile: ARG → ENV antes del `npm run build`.** Los ARGs de Docker no son visibles en el entorno de ejecución de `RUN` a menos que se exporten como ENV. Placeholders necesarios para que el build no falle aunque BD/Redis no estén disponibles. Redis además requiere `lazyConnect: true` en ioredis para no intentar conexión al importar el módulo. |
 | 2026-05-12 | **Dominio de producción:** `seo.clicksociety.com.mx` (no `seo.clicksociety.mx`). El dominio de Click Society es `clicksociety.com.mx`, no el TLD `.mx`. DNS A record apuntando a `76.13.121.6`. |
-| 2026-05-13 | **ADMINs ven todos los clientes sin necesidad de ClientUser.** `ClientUser` limita visibilidad solo para EDITORs. El modelo `ClientUser` usa `email` (no `userId`) como clave de asignación. Acceso EDITOR a cliente no asignado devuelve 404, no 403. |
+| 2026-05-13 | **ADMIN ve todos los clientes sin filtrar por ClientUser.** `ClientUser` limita visibilidad solo para EDITORs (por email, no userId). Acceso EDITOR a cliente no asignado devuelve 404, no 403. |
+| 2026-05-13 | **NextAuth en producción usa `session.strategy: "jwt"`.** Database strategy es incompatible con `next-auth/middleware` en App Router. PrismaAdapter sigue activo para persistir User y Account. |
+| 2026-05-13 | **Páginas server que tocan Prisma o BullMQ requieren `export const dynamic = "force-dynamic"`.** Evita pre-render en build cuando BD/Redis no están accesibles. Páginas afectadas: `clientes/page.tsx`, `clientes/[id]/page.tsx`. |
+| 2026-05-13 | **Cerebro SEO maneja todos los clientes activos (42), no solo SEO.** Vista default filtra `services.has("seo")`. Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO, Claude) solo aplica a clientes con `"seo"` en services. |
+| 2026-05-13 | **Toggle SEO/Todos en `/clientes` con persistencia en localStorage via URL searchParam.** Default: filtro SEO activo. |
+| 2026-05-13 | **Migraciones SIEMPRE con `prisma migrate dev` en local y `prisma migrate deploy` en producción.** Nunca SQL raw sin sincronizar `_prisma_migrations`. Si se aplicó SQL raw de emergencia, usar `prisma migrate resolve --applied <nombre>` antes del próximo deploy. |
 | 2026-05-14 | **Cerebro SEO maneja todos los clientes activos (42), no solo SEO.** Vista default filtra a clientes con `services` incluyendo `"seo"` (~12). Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO, Claude) solo aplica a clientes con `"seo"` en services. |
 | 2026-05-14 | **Campo `services String[]` en Client** (migración `add_client_services`). Valores normalizados: `seo`, `google_ads`, `meta_ads`, `contenidos`. Campo "Servicio" en Notion (multi_select). 12 clientes con SEO, 38 con Google Ads, 8 Meta Ads, 6 Contenidos. |
 | 2026-05-14 | **Workers BullMQ**: jobs de tracking/insights/backlinks/competitors/ai-search solo se encolan para clientes con `services.includes("seo")`. Audit y sync aplican a todos los activos. |
@@ -160,10 +166,25 @@
 - [x] Build de producción exitoso (`npm run build`)
 - [x] Commit + push a `jorgeruiz/cerebro-seo`
 
+**Completado (Sesiones 8 y 9 — 2026-05-13/14):**
+- [x] `actions.ts`: server actions `listGscSites()`, `setClientGscProperty()`, `getGscSnapshot()` (snapshot 28d con deltas vs período anterior)
+- [x] `GscConnectSection.tsx`: CTA para conectar GSC cuando `site.gscProperty` no está configurado
+- [x] `GscSnapshotCards.tsx`: 4 KPI cards (clics, impresiones, posición, CTR) con TrendingUp/TrendingDown
+- [x] `ClientPortadaChart.tsx`: rangos 28d/90d/12m (removido 7d), default 90d, fetch de 365d para soportar 12m sin extra calls
+- [x] Tests vitest: `google-search-console.test.ts` — 4 casos (happy path, ceros, caché hit)
+- [x] `services String[]` en Client — migración `add_client_services` + seed desde Notion (42 clientes, 12 con SEO)
+- [x] `ServiceToggle.tsx`: filtro SEO/Todos persistido en localStorage + URL searchParam
+- [x] Lock icons en módulos SEO de portada para clientes sin servicio SEO contratado
+- [x] BullMQ schedulers: jobs de costo variable solo para clientes con `services.includes("seo")`
+- [x] Dockerfile reestructurado: capa Prisma independiente del código fuente
+- [x] Migración `add_client_services` registrada en `_prisma_migrations` via `prisma migrate resolve --applied`
+- [x] Seed de clientes corrido en producción: 42 clientes + servicios desde Notion
+
 **Pendiente:**
-- [ ] Compartir BD Notion "Clientes Actuales" con integración → ejecutar `seed-clients.ts` (acción de Jorge)
+- [ ] Validar portada de Molino Azteca en producción: confirmar que snapshot GSC 28d y gráfica 365d muestran datos reales coherentes vs GSC directo (acción de Jorge)
+- [ ] Si CTA aparece en lugar de datos: logout + re-login para regenerar tokens OAuth con scope `webmasters.readonly` (acción de Jorge)
 - [ ] Validar `validation-report.md` vs GSC de Molino Azteca, RFN y Quicsa (acción de Jorge)
-- [ ] Jorge hace logout + login en producción para que la app guarde sus tokens GSC/GA4
+- [ ] Conectar GA4 snapshot en portada: snapshot 28d + 4 KPI cards, análogo a GSC (Sesión 10 — Claude Code)
 
 ---
 
@@ -200,9 +221,9 @@
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| Notion BD no compartida | Jorge | Compartir "Clientes Actuales" (e489c63e...) con integración ID 32b0a146... para poder correr `seed-clients.ts` |
 | Validación GSC con datos reales | Jorge | Entrar a producción con jorge@clicksociety.com.mx, ir a Molino Azteca y confirmar que el snapshot y la gráfica muestran datos coherentes vs GSC directo |
 | Tokens GSC/GA4 en producción | Jorge | Si la portada de Molino Azteca muestra CTA en lugar de datos, hacer logout + re-login para regenerar tokens con scope webmasters |
+| GA4 en portada | Sesión 10 | Implementar snapshot 28d + KPIs de GA4 análogos a los de GSC |
 
 ---
 
@@ -219,6 +240,47 @@
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 9 — 2026-05-13/14
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Campo `services`, filtrado SEO/Todos, Docker reestructurado, 42 clientes sembrados en producción con servicios correctos. Fase 1 cerrada (salvo GA4 en portada).
+
+**Commits realizados:**
+- `feat: campo services en Client — migración, seed desde Notion, toggle SEO/Todos en /clientes`
+- `feat: lock icons para módulos SEO en portada del cliente`
+- `fix: reestructurar Dockerfile para invalidar caché de Docker correctamente`
+- `fix: registrar migración add_client_services en _prisma_migrations vía resolve --applied`
+
+**Trabajo realizado:**
+- `prisma/schema.prisma`: campo `services String[] @default([])` en `Client` con slugs normalizados.
+- `prisma/migrations/20260514021440_add_client_services/migration.sql`: `ALTER TABLE "Client" ADD COLUMN "services" TEXT[] DEFAULT ARRAY[]::TEXT[]`.
+- `src/lib/notion-direct.ts`: mapeo `SERVICE_SLUG_MAP` de valores Notion (`"SEO"`, `"Google Ads"`, etc.) a slugs internos. Lee campo `"Servicio"` (multi_select) de la página de Notion.
+- `scripts/seed-clients.ts`: upsert actualizado para incluir `services` en create y update.
+- `src/app/(admin)/clientes/page.tsx`: filtro por `services.has("seo")`, toggle SEO/Todos, badges de servicios en tarjetas, `CycleStatusBadge` inlined.
+- `src/app/(admin)/clientes/ServiceToggle.tsx`: componente "use client" con persistencia en localStorage (`cerebroseo:clientFilter`) y sincronización con URL searchParam `?filter=seo|all`.
+- `src/app/(admin)/clientes/[id]/page.tsx`: constante `hasSeo = client.services.includes("seo")`, lock icon en módulos SEO para clientes sin ese servicio, guard EDITOR via `ClientUser`.
+- `src/server/jobs/schedulers.ts`: `initSchedulers` pasa `services` a `registerClientJobs`. Jobs de costo variable (tracking, insights, backlinks, competitors, ai-search) solo se encolan para clientes con `"seo"` en services.
+- `Dockerfile`: reestructurado — `COPY prisma ./prisma` + `RUN npx prisma generate` ANTES de `COPY . .` para que la capa Prisma sea independiente del código fuente.
+
+**Trabajo de producción (emergencia):**
+- BD de producción estaba vacía (seed no se había corrido). Seed ejecutado desde Easypanel Console (Service Console → Sh) via `npx tsx scripts/seed-clients.ts`. 42 clientes + 42 sites sembrados.
+- Migration `add_client_services` fue aplicada con SQL raw antes de que existiera el archivo `migration.sql`. Registrada correctamente via `prisma migrate resolve --applied 20260514021440_add_client_services` (con el archivo SQL real para checksum correcto).
+- Services actualizados en los 42 clientes: 12 con `seo`, distribución real desde Notion.
+
+**Hallazgos técnicos:**
+- `prisma migrate resolve --applied` requiere que `migration.sql` exista en `prisma/migrations/<nombre>/` — Prisma calcula el checksum del archivo para registrarlo correctamente. Un INSERT manual a `_prisma_migrations` falla por checksum incorrecto.
+- Parches manuales en contenedor (sed, SQL raw, prisma generate en vivo) son ephemeros — cualquier restart del servicio los pierde. El flujo correcto es siempre: local → commit → push → `startup.mjs` corre `prisma migrate deploy`.
+- Alpine Linux usa `sh` (no bash). Single quotes no pueden contener single quotes. Para commands complejos en Easypanel Console, usar variables temporales o heredocs.
+- El campo `services String[]` de Prisma usa `has` para filtros: `{ services: { has: "seo" } }`.
+
+**Costo de APIs en esta sesión:** $0 (sin llamadas DataForSEO ni Claude — trabajo de infraestructura y datos).
+
+**Próximo paso recomendado (Sesión 10):**
+1. Jorge entra a producción → navega a Molino Azteca → confirma snapshot GSC 28d y gráfica 365d con datos reales
+2. Si la portada muestra CTA en lugar de datos: logout + re-login para regenerar tokens OAuth con scope `webmasters.readonly`
+3. Claude Code: conectar GA4 snapshot + KPIs en portada (análogo a GSC — `getGscSnapshot` ya existe como referencia)
+
+---
 
 ### Sesión 8 — 2026-05-13
 **Participantes:** Claude Code (sesión nocturna autónoma)

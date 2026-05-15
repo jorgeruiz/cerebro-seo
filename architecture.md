@@ -248,6 +248,66 @@ model JobLog {
 
 ---
 
+## 4. Dockerfile y estrategia de migraciones
+
+### Estructura del Dockerfile (capas independientes)
+
+```dockerfile
+# Capa 1: dependencias npm (invalidada solo si package.json cambia)
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Capa 2: Prisma (invalidada solo si prisma/schema.prisma cambia)
+# SEPARADA del código fuente para evitar regenerar cliente en cada cambio de src/
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Capa 3: código fuente (invalidada en cada cambio)
+COPY . .
+RUN SKIP_ENV_VALIDATION=1 npm run build
+```
+
+La separación de la capa Prisma antes del `COPY . .` es crítica. Sin ella, cualquier cambio en `src/` invalida `prisma generate` y el build completo — costoso en Easypanel donde cada capa se sube.
+
+### Variables de entorno en build
+
+Las variables de producción (DATABASE_URL, NEXTAUTH_SECRET, etc.) **no están disponibles en build time** — Easypanel las inyecta solo en runtime. El Dockerfile usa ARG + ENV con placeholders solo para que `npm run build` no falle por validación de env:
+
+```dockerfile
+ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+ENV DATABASE_URL=$DATABASE_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN SKIP_ENV_VALIDATION=1 npm run build
+# Limpiar vars placeholder — las reales vienen de Easypanel en runtime
+ENV DATABASE_URL=""
+```
+
+`SKIP_ENV_VALIDATION=1` hace bypass de `envSchema.parse` en `src/env.ts`. En runtime la validación corre normalmente.
+
+### Estrategia de migraciones
+
+**Flujo correcto:**
+1. Local: `DATABASE_URL="..." npx prisma migrate dev --name nombre_descriptivo`
+2. Commit del archivo `prisma/migrations/<timestamp>_<nombre>/migration.sql`
+3. Push → Easypanel hace nuevo build → `startup.mjs` corre `node_modules/.bin/prisma migrate deploy`
+4. `migrate deploy` es idempotente: aplica solo migraciones pendientes según `_prisma_migrations`
+
+**Si se aplicó SQL raw de emergencia en producción:**
+```bash
+# 1. Crear el archivo migration.sql con el SQL exacto que se aplicó
+mkdir -p prisma/migrations/20YYMMDDHHMMSS_nombre
+echo "ALTER TABLE ..." > prisma/migrations/20YYMMDDHHMMSS_nombre/migration.sql
+
+# 2. Registrar con prisma migrate resolve (calcula checksum real del archivo)
+DATABASE_URL="..." npx prisma migrate resolve --applied 20YYMMDDHHMMSS_nombre
+
+# 3. Verificar
+DATABASE_URL="..." npx prisma migrate status
+```
+Nunca hacer INSERT manual a `_prisma_migrations` — Prisma verifica el checksum SHA-256 y falla si no coincide con el archivo SQL real.
+
+---
+
 ## 4. Provider Layer
 
 Toda integración con APIs externas de SEO se abstrae detrás de `SeoDataProvider`. Permite cambiar/agregar proveedores sin tocar lógica de negocio ni frontend.
