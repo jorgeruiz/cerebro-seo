@@ -36,10 +36,10 @@ export function ClientPortadaChart({ data }: Props) {
   if (!data || data.length === 0) {
     return (
       <div className="h-48 flex flex-col items-center justify-center gap-2 text-center">
-        <p className="text-sm font-medium text-gray-500">Google Search Console no configurado</p>
+        <p className="text-sm font-medium text-gray-500">Sin datos de tráfico orgánico</p>
         <p className="text-xs text-gray-400 max-w-xs">
-          Agrega el campo <code className="bg-gray-100 px-1 rounded">gscProperty</code> al site de este cliente
-          y vuelve a cargar la página.
+          No hay datos GSC disponibles para este período. Si acabas de conectar la propiedad,
+          vuelve a cargar la página.
         </p>
       </div>
     );
