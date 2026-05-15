@@ -88,7 +88,9 @@
 | 2026-05-14 | **Campo `services String[]` en Client** (migración `add_client_services`). Valores normalizados: `seo`, `google_ads`, `meta_ads`, `contenidos`. Campo "Servicio" en Notion (multi_select). 12 clientes con SEO, 38 con Google Ads, 8 Meta Ads, 6 Contenidos. |
 | 2026-05-14 | **Workers BullMQ**: jobs de tracking/insights/backlinks/competitors/ai-search solo se encolan para clientes con `services.includes("seo")`. Audit y sync aplican a todos los activos. |
 | 2026-05-14 | **Módulos SEO de vista detalle**: muestran lock icon + tooltip para clientes sin servicio SEO. Módulos sin lock: Términos de búsqueda, Tráfico de páginas, Eventos, Site Audit. |
-| 2026-05-14 | **Build cacheado en Easypanel**: deploys repetidos pueden reutilizar capas Docker antiguas. Workaround: parchear schema.prisma con sed + `prisma generate` en el contenedor vía console, y ejecutar SQL raw via `pg` client para migraciones urgentes. |
+| 2026-05-14 | **Dockerfile estructurado para invalidar caché correctamente**: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` para que la capa Prisma sea independiente del código fuente. Cualquier cambio en `src/` invalida solo las capas posteriores. |
+| 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
+| 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
 
 ---
 
