@@ -97,6 +97,9 @@
 | 2026-05-14 | **Dockerfile estructurado para invalidar caché correctamente**: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` para que la capa Prisma sea independiente del código fuente. Cualquier cambio en `src/` invalida solo las capas posteriores. |
 | 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
 | 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
+| 2026-05-15 | **Build de Next.js requiere mínimo 4GB de heap.** Configurado en Dockerfile: `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN npm run build`. El default de Node (~1.5GB) agota el heap a los ~270s durante `next build`. |
+| 2026-05-15 | **REDIS_URL en producción debe usar hostname interno con guiones (`apps-cerebro-seo-redis`), no underscores.** Underscores no son válidos en DNS; `ioredis` no puede resolver el hostname y la conexión falla silenciosamente. |
+| 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
 
 ---
 
@@ -236,10 +239,36 @@
 | Sync con Cerebro más complejo de lo previsto | Media | Medio | REST simple ya decidido; `cerebro-bridge.ts` pendiente |
 | Sitios bloquean al crawler | Media | Bajo | User agent custom, respeto robots.txt, fallback Playwright |
 | Bug de autorización entre clientes | Baja | Crítico | Toda query Prisma filtra por `clientId` de sesión |
+| Credenciales pendientes de rotación | Alta | Crítico | Meta Access Token, NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. Rotar antes de la próxima sesión con código. |
 
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 10 — 2026-05-15
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Build de producción operativo. App respondiendo en `https://seo.clicksociety.com.mx`.
+
+**Bugs resueltos:**
+
+1. **OOM durante `next build` en Easypanel** — `next build` agota el heap default de Node (~1.5GB) después de ~270s. Fix: `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN` del Dockerfile. Build completado exitosamente tras el fix.
+
+2. **Fallback incorrecto en `ClientPortadaChart`** — cuando `gscData` era `null` (OAuth sin tokens), el componente mostraba "Google Search Console no configurado. Agrega el campo gscProperty..." — mensaje residual de antes de que existiera `GscConnectSection`. Fix: actualizado al mensaje correcto "Sin datos de tráfico orgánico · vuelve a cargar la página."
+
+3. **REDIS_URL con hostname inválido** — hostname `apps_cerebro_seo_redis` (con underscores) no es válido en DNS. Fix: cambiado a `apps-cerebro-seo-redis` (guiones). `ioredis` no puede resolver hostnames con underscores.
+
+**Commits realizados:**
+- `fix: fallback correcto en ClientPortadaChart cuando gscData es null`
+- `fix: aumentar heap de Node a 4GB durante build para evitar OOM`
+
+**Costo de APIs:** $0 (solo infraestructura).
+
+**Pendiente para próxima sesión:**
+- Rotar credenciales pendientes: Meta Access Token, NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET
+- Jorge validar portada de Molino Azteca con datos GSC reales (logout + re-login si CTA aparece)
+- Conectar GA4 snapshot en portada (Sesión 11)
+
+---
 
 ### Sesión 9 — 2026-05-13/14
 **Participantes:** Jorge + Claude Code

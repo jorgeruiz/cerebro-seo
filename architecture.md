@@ -264,10 +264,12 @@ RUN npx prisma generate
 
 # Capa 3: código fuente (invalidada en cada cambio)
 COPY . .
-RUN SKIP_ENV_VALIDATION=1 npm run build
+RUN SKIP_ENV_VALIDATION=1 NODE_OPTIONS="--max-old-space-size=4096" npm run build
 ```
 
 La separación de la capa Prisma antes del `COPY . .` es crítica. Sin ella, cualquier cambio en `src/` invalida `prisma generate` y el build completo — costoso en Easypanel donde cada capa se sube.
+
+> **Heap de Node en build:** `next build` requiere mínimo ~4GB de heap. El default de Node (~1.5GB) agota el heap a los ~270s en Easypanel y falla con OOM. `NODE_OPTIONS` es local al `RUN` — no queda en la imagen ni afecta el runtime.
 
 ### Variables de entorno en build
 
@@ -277,7 +279,7 @@ Las variables de producción (DATABASE_URL, NEXTAUTH_SECRET, etc.) **no están d
 ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ENV DATABASE_URL=$DATABASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN SKIP_ENV_VALIDATION=1 npm run build
+RUN SKIP_ENV_VALIDATION=1 NODE_OPTIONS="--max-old-space-size=4096" npm run build
 # Limpiar vars placeholder — las reales vienen de Easypanel en runtime
 ENV DATABASE_URL=""
 ```
