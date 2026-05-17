@@ -34,8 +34,11 @@ export class GoogleSearchConsoleProvider {
     endDate: string
   ): Promise<DailyGscMetric[]> {
     const cacheKey = `cache:gsc:${encodeURIComponent(siteUrl)}:${startDate}:${endDate}:daily`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return JSON.parse(cached) as DailyGscMetric[];
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as DailyGscMetric[];
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const sc = google.webmasters({ version: "v3", auth: this.auth });
     const { data } = await sc.searchanalytics.query({
@@ -60,7 +63,10 @@ export class GoogleSearchConsoleProvider {
       };
     });
 
-    await redis.set(cacheKey, JSON.stringify(metrics), "EX", 86400);
+    try {
+      await redis.set(cacheKey, JSON.stringify(metrics), "EX", 86400);
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
     return metrics;
   }
 
@@ -70,8 +76,11 @@ export class GoogleSearchConsoleProvider {
     endDate: string
   ): Promise<GscOverview> {
     const cacheKey = `cache:gsc:${encodeURIComponent(siteUrl)}:${startDate}:${endDate}:overview`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return JSON.parse(cached) as GscOverview;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as GscOverview;
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const sc = google.webmasters({ version: "v3", auth: this.auth });
     const { data } = await sc.searchanalytics.query({
@@ -87,7 +96,10 @@ export class GoogleSearchConsoleProvider {
       avgPosition: parseFloat((row?.position ?? 0).toFixed(1)),
     };
 
-    await redis.set(cacheKey, JSON.stringify(overview), "EX", 86400);
+    try {
+      await redis.set(cacheKey, JSON.stringify(overview), "EX", 86400);
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
     return overview;
   }
 }

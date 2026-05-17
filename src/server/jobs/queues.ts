@@ -1,7 +1,7 @@
 import { Queue } from "bullmq";
-import { redis } from "@/lib/redis";
+import { redisBullMQ } from "@/lib/redis";
 
-const connection = { connection: redis };
+const connection = { connection: redisBullMQ };
 
 // Jobs de recolección de datos (sin Claude)
 // crawls, rankings, backlinks, competidores, AI search

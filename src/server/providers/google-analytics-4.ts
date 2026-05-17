@@ -32,8 +32,11 @@ export class GoogleAnalytics4Provider {
     endDate: string
   ): Promise<DailyGa4Metric[]> {
     const cacheKey = `cache:ga4:${propertyId}:${startDate}:${endDate}:daily`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return JSON.parse(cached) as DailyGa4Metric[];
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as DailyGa4Metric[];
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
     const { data } = await analyticsData.properties.runReport({
@@ -65,7 +68,10 @@ export class GoogleAnalytics4Provider {
       ),
     }));
 
-    await redis.set(cacheKey, JSON.stringify(metrics), "EX", 14400); // 4h
+    try {
+      await redis.set(cacheKey, JSON.stringify(metrics), "EX", 14400); // 4h
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
     return metrics;
   }
 
@@ -75,8 +81,11 @@ export class GoogleAnalytics4Provider {
     endDate: string
   ): Promise<Ga4Overview> {
     const cacheKey = `cache:ga4:${propertyId}:${startDate}:${endDate}:overview`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return JSON.parse(cached) as Ga4Overview;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as Ga4Overview;
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
     const { data } = await analyticsData.properties.runReport({
@@ -109,7 +118,10 @@ export class GoogleAnalytics4Provider {
       totalConversions: parseInt(totals?.metricValues?.[3]?.value ?? "0"),
     };
 
-    await redis.set(cacheKey, JSON.stringify(overview), "EX", 14400);
+    try {
+      await redis.set(cacheKey, JSON.stringify(overview), "EX", 14400);
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
     return overview;
   }
 }

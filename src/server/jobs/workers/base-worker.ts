@@ -1,6 +1,6 @@
 import { Worker, Job, WorkerOptions } from "bullmq";
 import { Decimal } from "@prisma/client/runtime/library";
-import { redis } from "@/lib/redis";
+import { redisBullMQ } from "@/lib/redis";
 import { prisma } from "@/lib/db";
 
 // Jobs críticos que disparan alerta inmediata al fallar permanentemente
@@ -163,7 +163,7 @@ export function createWorker<TData = unknown, TResult = unknown>(
       }
     },
     {
-      connection: redis,
+      connection: redisBullMQ,
       concurrency: 2,
       ...options,
     }

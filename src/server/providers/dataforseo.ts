@@ -302,8 +302,11 @@ export class DataForSeoProvider implements SeoDataProvider {
 
   async getDomainAuthority(domain: string): Promise<number | null> {
     const cacheKey = `cache:dataforseo:domain:${domain}:rank`;
-    const cached = await redis.get(cacheKey);
-    if (cached !== null) return parseInt(cached, 10);
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return parseInt(cached, 10);
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const { data, cost } = await dfsPost<DfsDomainRankResult>(
       "/dataforseo_labs/google/domain_rank_overview/live",
@@ -316,7 +319,9 @@ export class DataForSeoProvider implements SeoDataProvider {
       data.tasks?.[0]?.result?.[0]?.items?.[0]?.rank_group ?? null;
 
     if (rank !== null) {
-      await redis.setex(cacheKey, TTL.domainAuthority, String(rank));
+      try {
+        await redis.setex(cacheKey, TTL.domainAuthority, String(rank));
+      } catch { /* Redis caído — devolver datos sin cachear */ }
     }
 
     return rank;
@@ -334,8 +339,11 @@ export class DataForSeoProvider implements SeoDataProvider {
 
   async getBacklinksSummary(domain: string): Promise<BacklinksSummary> {
     const cacheKey = `cache:dataforseo:backlinks:${domain}:summary`;
-    const cached = await redis.get(cacheKey);
-    if (cached !== null) return JSON.parse(cached) as BacklinksSummary;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as BacklinksSummary;
+    } catch { /* Redis caído — continuar sin caché */ }
 
     const { data, cost } = await dfsPost<DfsBacklinkSummaryResult>(
       "/backlinks/summary/live",
@@ -354,7 +362,10 @@ export class DataForSeoProvider implements SeoDataProvider {
       checkedAt: new Date(),
     };
 
-    await redis.setex(cacheKey, TTL.backlinksSummary, JSON.stringify(summary));
+    try {
+      await redis.setex(cacheKey, TTL.backlinksSummary, JSON.stringify(summary));
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
     return summary;
   }
 
