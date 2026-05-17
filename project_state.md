@@ -245,9 +245,9 @@
 
 ## 8. Bitácora de sesiones
 
-### Sesión 10 — 2026-05-15
+### Sesión 10 — 2026-05-15/16
 **Participantes:** Jorge + Claude Code
-**Resultado:** ✅ Build de producción operativo. App respondiendo en `https://seo.clicksociety.com.mx`.
+**Resultado:** ✅ Build de producción operativo. Redis desacoplado de providers. App resiliente a fallos de Redis.
 
 **Bugs resueltos:**
 
@@ -255,11 +255,19 @@
 
 2. **Fallback incorrecto en `ClientPortadaChart`** — cuando `gscData` era `null` (OAuth sin tokens), el componente mostraba "Google Search Console no configurado. Agrega el campo gscProperty..." — mensaje residual de antes de que existiera `GscConnectSection`. Fix: actualizado al mensaje correcto "Sin datos de tráfico orgánico · vuelve a cargar la página."
 
-3. **REDIS_URL con hostname inválido** — hostname `apps_cerebro_seo_redis` (con underscores) no es válido en DNS. Fix: cambiado a `apps-cerebro-seo-redis` (guiones). `ioredis` no puede resolver hostnames con underscores.
+3. **REDIS_URL con hostname inválido** — hostname `apps_cerebro_seo_redis` (con underscores) no es válido en DNS. Fix: cambiado a `apps-cerebro-seo-redis` (guiones) en Easypanel. `ioredis` no puede resolver hostnames con underscores.
+
+4. **"Unhandled error event" de ioredis crasheaba la app** — el cliente Redis no tenía listener `.on('error', ...)`. Cuando Redis tenía un error de conexión en background, Node.js lo trataba como excepción no manejada y crasheaba el proceso. Fix: error listener en ambos clientes Redis.
+
+5. **Un solo cliente Redis para BullMQ y cache** — `maxRetriesPerRequest: null` (requerido por BullMQ) hacía que `redis.get()` en los providers colgara indefinidamente si Redis estaba caído. Fix: dos clientes separados — `redis` (cache, `maxRetriesPerRequest: 0`, fail-fast) y `redisBullMQ` (BullMQ, `maxRetriesPerRequest: null`).
+
+6. **Providers sin manejo de fallos de Redis** — si Redis estaba caído, los providers lanzaban el error al caller (page.tsx) y `gscData` quedaba `null` (sin datos de GSC en lugar de solo sin caché). Fix: `try/catch` alrededor de `redis.get()` y `redis.set()` en los tres providers — si Redis falla, van directo a la API externa.
 
 **Commits realizados:**
 - `fix: fallback correcto en ClientPortadaChart cuando gscData es null`
 - `fix: aumentar heap de Node a 4GB durante build para evitar OOM`
+- `docs: cierre sesión 2026-05-15 — OOM resuelto, Redis configurado, credenciales rotadas`
+- `fix: eliminar fallback hardcodeado de Redis y desacoplar providers de Redis`
 
 **Costo de APIs:** $0 (solo infraestructura).
 
