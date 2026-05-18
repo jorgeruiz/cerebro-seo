@@ -6,7 +6,6 @@ import { getSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
-import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
 import {
   AlertCircle,
   CheckCircle2,
@@ -20,18 +19,16 @@ import {
   Zap,
   Activity,
   FileSearch,
-  Users,
-  MousePointerClick,
 } from "lucide-react";
 import { Lock } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
 import { GscSnapshotCards } from "./GscSnapshotCards";
+import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
-import { getGscSnapshot } from "./actions";
+import { getGscSnapshot, getGa4Snapshot } from "./actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
-import type { Ga4Overview } from "@/server/providers/google-analytics-4";
-import type { GscSnapshot } from "./actions";
+import type { GscSnapshot, Ga4Snapshot } from "./actions";
 
 async function getClientData(id: string) {
   return prisma.client.findUnique({
@@ -112,7 +109,7 @@ export default async function ClienteDetallePage({
   // Fetch GSC + GA4 con el token del usuario actual
   let gscData: DailyGscMetric[] | null = null;
   let gscSnapshot: GscSnapshot | null = null;
-  let ga4Overview: Ga4Overview | null = null;
+  let ga4Snapshot: Ga4Snapshot | null = null;
 
   if (session?.user?.id && site) {
     const oauth = await getOAuth2Client(session.user.id);
@@ -140,12 +137,10 @@ export default async function ClienteDetallePage({
         }
       }
 
-      // GA4
-      if (site.ga4Property) {
-        const { startDate, endDate } = getDateRange(90);
-        try {
-          const ga4 = new GoogleAnalytics4Provider(oauth);
-          ga4Overview = await ga4.getOverview(site.ga4Property, startDate, endDate);
+      // GA4 — snapshot 28d con deltas vs 28d anteriores
+      try {
+        ga4Snapshot = await getGa4Snapshot(client.id);
+        if (ga4Snapshot) {
           await prisma.apiUsage.create({
             data: {
               provider: "ga4",
@@ -154,9 +149,9 @@ export default async function ClienteDetallePage({
               clientId: client.id,
             },
           });
-        } catch (err) {
-          console.error("[GA4] Error fetching overview:", err);
         }
+      } catch (err) {
+        console.error("[GA4] Error fetching snapshot:", err);
       }
     }
   }
@@ -246,52 +241,32 @@ export default async function ClienteDetallePage({
           </div>
         </section>
 
-        {/* GA4 KPIs — solo si hay datos */}
-        {ga4Overview && (
-          <section>
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-              Analytics (90d · Orgánico)
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="h-4 w-4 text-indigo-500" />
-                  <span className="text-xs text-gray-500">Sesiones</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {ga4Overview.totalSessions.toLocaleString("es-MX")}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="h-4 w-4 text-blue-500" />
-                  <span className="text-xs text-gray-500">Usuarios activos</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {ga4Overview.totalUsers.toLocaleString("es-MX")}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="h-4 w-4 text-pink-500" />
-                  <span className="text-xs text-gray-500">Tasa de rebote</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {ga4Overview.avgBounceRate}%
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <MousePointerClick className="h-4 w-4 text-green-500" />
-                  <span className="text-xs text-gray-500">Conversiones</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {ga4Overview.totalConversions.toLocaleString("es-MX")}
-                </p>
-              </div>
+        {/* GA4 snapshot 28d con deltas */}
+        <section>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+            Analytics · últimos 28 días
+          </h2>
+          {ga4Snapshot ? (
+            <Ga4SnapshotCards snapshot={ga4Snapshot} />
+          ) : site?.ga4Property ? (
+            // Property configurada pero sin datos (token sin scope o error API)
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-gray-500">Sin datos de Analytics disponibles</p>
+              <p className="text-xs text-gray-400 max-w-xs">
+                No se pudieron cargar los datos de GA4. Si acabas de reconectar, vuelve a cargar.
+              </p>
             </div>
-          </section>
-        )}
+          ) : (
+            // Sin ga4Property configurado
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
+              <Activity className="h-6 w-6 text-gray-300" />
+              <p className="text-sm font-medium text-gray-500">Google Analytics no configurado</p>
+              <p className="text-xs text-gray-400 max-w-xs">
+                Agrega el ID de propiedad GA4 en los ajustes del cliente para ver datos de Analytics.
+              </p>
+            </div>
+          )}
+        </section>
 
         {/* Insights proactivos */}
         {client.insights.length > 0 && (

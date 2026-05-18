@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
+import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,17 @@ export interface GscSite {
 }
 
 export type GscRange = "28d" | "90d" | "12m";
+
+export interface Ga4Snapshot {
+  sessions: number;
+  users: number;
+  bounceRate: number;
+  conversions: number;
+  sessionsDelta: number;
+  usersDelta: number;
+  bounceRateDelta: number;
+  conversionsDelta: number;
+}
 
 export interface GscSnapshot {
   clicks: number;
@@ -129,5 +141,45 @@ export async function getGscSnapshot(
     impressionsDelta: current.totalImpressions - prev.totalImpressions,
     ctrDelta: parseFloat((current.avgCtr - prev.avgCtr).toFixed(2)),
     positionDelta: parseFloat((current.avgPosition - prev.avgPosition).toFixed(1)),
+  };
+}
+
+/**
+ * Snapshot GA4 de 28 días con comparativa vs los 28 días anteriores.
+ * Filtra por canal Organic Search. Caché Redis 4h.
+ */
+export async function getGa4Snapshot(
+  clientId: string
+): Promise<Ga4Snapshot | null> {
+  const session = await getSession();
+  if (!session?.user?.id) return null;
+
+  const site = await prisma.site.findFirst({ where: { clientId } });
+  if (!site?.ga4Property) return null;
+
+  const oauth = await getOAuth2Client(session.user.id);
+  if (!oauth) return null;
+
+  const ga4 = new GoogleAnalytics4Provider(oauth);
+
+  const endCurrent = today();
+  const startCurrent = daysBack(28);
+  const endPrev = daysBack(29);
+  const startPrev = daysBack(57);
+
+  const [current, prev] = await Promise.all([
+    ga4.getOverview(site.ga4Property, startCurrent, endCurrent),
+    ga4.getOverview(site.ga4Property, startPrev, endPrev),
+  ]);
+
+  return {
+    sessions: current.totalSessions,
+    users: current.totalUsers,
+    bounceRate: current.avgBounceRate,
+    conversions: current.totalConversions,
+    sessionsDelta: current.totalSessions - prev.totalSessions,
+    usersDelta: current.totalUsers - prev.totalUsers,
+    bounceRateDelta: parseFloat((current.avgBounceRate - prev.avgBounceRate).toFixed(1)),
+    conversionsDelta: current.totalConversions - prev.totalConversions,
   };
 }
