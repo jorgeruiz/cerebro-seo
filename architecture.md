@@ -308,6 +308,17 @@ DATABASE_URL="..." npx prisma migrate status
 ```
 Nunca hacer INSERT manual a `_prisma_migrations` — Prisma verifica el checksum SHA-256 y falla si no coincide con el archivo SQL real.
 
+### Variables de entorno críticas en producción (Easypanel)
+
+| Variable | Valor en Easypanel | Notas |
+|---|---|---|
+| `REDIS_URL` | `redis://default:[pwd]@apps-cerebro-seo-redis:6379` | Hostname con **guiones** (no underscores). Password embebido. |
+| `NEXTAUTH_URL` | `https://seo.clicksociety.com.mx` | URL pública. NO `localhost`. |
+| `NEXTAUTH_URL_INTERNAL` | `https://seo.clicksociety.com.mx` | Igual que `NEXTAUTH_URL`. Si apunta a `localhost`, el middleware falla en el contenedor. |
+| `DATABASE_URL` | `postgresql://cerebro:[pwd]@apps-cerebro-db:5432/cerebro_seo` | BD interna Easypanel. |
+
+> **Nota Redis**: `ioredis` usa dos clientes en el código. `redis` (cache) tiene `maxRetriesPerRequest: 0` + `enableOfflineQueue: false` para fallar rápido. `redisBullMQ` tiene `maxRetriesPerRequest: null` como requiere BullMQ. Ambos tienen `.on('error', ...)` listener para evitar crash por excepción no manejada.
+
 ---
 
 ## 4. Provider Layer

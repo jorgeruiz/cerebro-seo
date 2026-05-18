@@ -193,6 +193,10 @@ Cerebro ya resolvió varios problemas. Antes de inventar, revisar cómo se hizo 
 - **Standard Queue por default**, Live solo si el usuario lo pidió explícitamente.
 - **Nota de costos DataForSEO:** el precio base $0.002/query es para depth:10 (10 resultados). depth:100 cuesta $0.0155/query. Usar la profundidad adecuada al caso de uso.
 
+### Roles y acceso
+- **El schema tiene `role UserRole @default(EDITOR)`.** Todo usuario nuevo que haga login via Google OAuth queda como `EDITOR` automáticamente. Si ves que un usuario con acceso legítimo ve la lista de clientes vacía, probablemente su rol es `EDITOR` y `ClientUser` no tiene entradas para ese email. Para promover a ADMIN: `UPDATE "User" SET role='ADMIN' WHERE email='...'` directamente en BD de producción (via Easypanel Console → Sh → node con PrismaClient). No hay UI de gestión de roles en v1.
+- **`ClientUser` vacío = EDITOR ve lista vacía.** La tabla `ClientUser` asocia EDITORs con clientes por email. Si está vacía y el usuario es EDITOR, verá cero clientes. Resolver antes de dar acceso al equipo (Félix, Cindy).
+
 ### Producción y migraciones
 - **Nunca aplicar parches manuales en producción (sed en contenedor, SQL raw sin migración, `prisma generate` en vivo, UPDATE directo a tablas de negocio).** Los parches manuales son efímeros — cualquier restart del servicio los pierde. Si hay urgencia, documentar el parche y regularizarlo vía migración en el siguiente commit.
 - **Toda modificación de `schema.prisma` pasa por `prisma migrate dev --name <nombre>` en local** antes de commitearse. Si se aplicó un cambio de schema con SQL raw de emergencia en producción, crear el archivo `migration.sql` con el SQL exacto y registrarlo con `prisma migrate resolve --applied <nombre>` ANTES del siguiente deploy. `startup.mjs` corre `prisma migrate deploy` que es idempotente — si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL.

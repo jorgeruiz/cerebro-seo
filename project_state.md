@@ -2,9 +2,45 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-15
-**Fase actual:** Fase 2 — Datos reales fluyendo (en curso — GSC implementado en portada, GA4 pendiente)
-**Próximo hito:** Sesión 10 — Conectar GA4 snapshot en portada + validar datos reales con Molino Azteca
+**Última actualización:** 2026-05-18
+**Fase actual:** Fase 1 — Cerrada salvo GA4 en portada y validaciones de calidad de datos
+**Próximo hito:** Sesión 11 — GA4 en portada + validar GSC vs Search Console directo + resolver estrategia de roles
+
+---
+
+## ⚠ DEUDAS ACTIVAS — LEER ANTES DE CONTINUAR
+
+> Esta sección se escribe al inicio de cada contexto para que no se pierda entre el historial.
+
+### 🔴 Deuda crítica: Estrategia de roles (bloquea onboarding del equipo)
+
+El schema de Prisma tiene `role UserRole @default(EDITOR)`. Todo login nuevo queda automáticamente como EDITOR. La tabla `ClientUser` está vacía (no hay asignaciones). Esto significa que **Félix y Cindy**, al hacer su primer login, verán la lista de clientes **VACÍA** exactamente igual que le ocurrió a Jorge.
+
+Jorge fue promovido manualmente a ADMIN en producción (2026-05-17). Pero eso no es escalable.
+
+**Resolver antes de dar acceso al equipo.** Opciones a evaluar — sin implementar aún:
+- (a) `ADMIN_EMAILS` en env var → el callback `jwt` promueve si el email está en la lista
+- (b) Poblar `ClientUser` por email para cada EDITOR
+- (c) UI de asignación en el panel de admin
+
+### 🔴 Deuda de seguridad: Credenciales pendientes de rotación
+
+Ya rotadas: Anthropic, Notion Integration Token, Google OAuth Client Secret, DataForSEO.
+
+**Pendientes (rotar esta semana):**
+- `NEXTAUTH_SECRET` — verificar que sea robusto; rotar si fue generado en chat
+- Postgres password (`CerebroClick2026#`)
+- Redis password
+- `SEO_INTERNAL_SECRET`
+- Meta Access Token (si aplica al proyecto)
+
+### 🟡 Deuda operativa: Auto-deploy de Easypanel
+
+El auto-deploy tras `git push` no siempre se dispara. Varias veces en la saga requirió redeploy manual vía API tRPC. Investigar configuración webhook GitHub → Easypanel.
+
+### 🟡 Deuda de seguridad: Secrets en imagen Docker
+
+El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel logs y capas de imagen pueden exponer metadata de los ARGs. Refactorizar a runtime-only vars en sesión futura (no urgente, los placeholders no son los secrets reales).
 
 ---
 
@@ -36,18 +72,20 @@
 | Script de validación DataForSEO | ✅ Ejecutado (×2) | Sesión 3: $0.228 USD sin BD. Sesión 4: $0.225 USD con BD — 15 rows en ApiUsage |
 | ApiUsage table poblada | ✅ Completo | 15 rows, $0.225 USD total — datos reales de Sesión 4 |
 | Auth: scopes GSC+GA4 | ✅ Completo | `auth.ts` actualizado: `webmasters.readonly` + `analytics.readonly` + refresh token |
-| Conexión GSC | ✅ Completo | `google-search-console.ts` con caché Redis 24h. Portada usa datos reales. |
-| Conexión GA4 | ❌ Pendiente | Provider `google-analytics-4.ts` existe. Falta snapshot 28d + KPIs en portada (análogo a GSC). Sesión 10. |
+| Conexión GSC | ✅ Completo + validado | Provider con caché Redis 24h. Snapshot 28d + gráfica 365d en portada. Datos confirmados en producción con Molino Azteca. |
+| Conexión GA4 | ❌ Pendiente | Provider `google-analytics-4.ts` existe. Falta snapshot 28d + KPIs en portada. Scope `analytics.readonly` ya en OAuth. Sesión 11. |
 | `google-oauth.ts` | ✅ Completo | Helper OAuth2Client con auto-refresh de tokens persistido en DB |
 | Seed de clientes | ✅ Completo | 42 clientes + 42 sites sembrados en producción desde Notion (via consola del contenedor) |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
-| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado para invalidar caché correctamente. |
+| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=4096` para evitar OOM. |
+| Redis producción | ✅ Completo | `apps-cerebro-seo-redis:6379` (hostname con guiones). Dos clientes separados: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ). Error listeners activos. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
-| Login en producción | ✅ Operativo | `jorge@clicksociety.com.mx` entra a `/clientes` con sesión activa. JWT strategy confirmada. |
-| Seed de clientes | ✅ Completo | 42 clientes + 42 sites en producción. Seed corrido desde consola del contenedor via npx tsx |
+| Roles ADMIN/EDITOR | ✅ Operativo (con deuda) | Jorge = ADMIN en producción (promovido manualmente 2026-05-17). `@default(EDITOR)` requiere estrategia para futuros usuarios. Ver §DEUDAS. |
+| Validación GSC datos | ❌ Pendiente | Confirmar coherencia snapshot vs GSC directo para Molino Azteca, RFN, Quicsa. |
+| Validación calidad datos DataForSEO | ❌ Pendiente | Comparar `validation-report.md` vs GSC real de los 3 clientes. |
 
 ---
 
@@ -100,6 +138,13 @@
 | 2026-05-15 | **Build de Next.js requiere mínimo 4GB de heap.** Configurado en Dockerfile: `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN npm run build`. El default de Node (~1.5GB) agota el heap a los ~270s durante `next build`. |
 | 2026-05-15 | **REDIS_URL en producción debe usar hostname interno con guiones (`apps-cerebro-seo-redis`), no underscores.** Underscores no son válidos en DNS; `ioredis` no puede resolver el hostname y la conexión falla silenciosamente. |
 | 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
+| 2026-05-16 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs, con database strategy recibe un UUID opaco y falla silenciosamente. PrismaAdapter sigue activo para persistir User y Account. |
+| 2026-05-16 | **`NEXTAUTH_URL_INTERNAL` debe ser el dominio público en producción**, no `http://localhost:3000`. Next.js usa esta variable para llamadas internas del middleware — si apunta a localhost, el middleware falla en el contenedor. |
+| 2026-05-16 | **ADMIN ve todos los clientes activos; EDITOR solo los asignados vía `ClientUser` por email.** La tabla `ClientUser` está actualmente vacía — EDITORs sin asignaciones ven lista vacía. Requiere estrategia de roles resuelta antes de dar acceso al equipo. |
+| 2026-05-16 | **El schema tiene `role UserRole @default(EDITOR)`**: todo login nuevo queda como EDITOR. Jorge promovido a ADMIN vía `UPDATE "User" SET role='ADMIN'` directamente en BD de producción (2026-05-17). No es escalable sin mecanismo automático. |
+| 2026-05-16 | **Cerebro SEO maneja 42 clientes activos**. Vista default filtra a los 12 con servicio `seo`. Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO/Claude) solo para clientes con `services.includes("seo")`. |
+| 2026-05-16 | **`REDIS_URL` en producción**: `redis://default:[password]@apps-cerebro-seo-redis:6379`. Hostname con guiones (no underscores — no válidos en DNS). Password embebido en la URL. Dos clientes en el código: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ, `maxRetriesPerRequest: null`). |
+| 2026-05-16 | **Providers (GSC, GA4, DataForSEO) tienen `try/catch` en operaciones Redis.** Si Redis está caído, los providers van directo a la API externa (sin caché, pero con datos). Redis caído no bloquea el render de páginas. |
 
 ---
 
@@ -183,11 +228,34 @@
 - [x] Migración `add_client_services` registrada en `_prisma_migrations` via `prisma migrate resolve --applied`
 - [x] Seed de clientes corrido en producción: 42 clientes + servicios desde Notion
 
-**Pendiente:**
-- [ ] Validar portada de Molino Azteca en producción: confirmar que snapshot GSC 28d y gráfica 365d muestran datos reales coherentes vs GSC directo (acción de Jorge)
-- [ ] Si CTA aparece en lugar de datos: logout + re-login para regenerar tokens OAuth con scope `webmasters.readonly` (acción de Jorge)
-- [ ] Validar `validation-report.md` vs GSC de Molino Azteca, RFN y Quicsa (acción de Jorge)
-- [ ] Conectar GA4 snapshot en portada: snapshot 28d + 4 KPI cards, análogo a GSC (Sesión 10 — Claude Code)
+**Completado (Sesiones 10/11 — 2026-05-15/16/17/18):**
+- [x] `fix: fallback correcto en ClientPortadaChart cuando gscData es null`
+- [x] `fix: aumentar heap de Node a 4GB durante build para evitar OOM`
+- [x] `fix: eliminar fallback hardcodeado de Redis y desacoplar providers de Redis`
+- [x] `fix: dos clientes Redis separados (cache fail-fast + BullMQ)`
+- [x] Rol de Jorge promovido a ADMIN en producción vía UPDATE directo en BD
+
+**Pendiente (Sesión 11 — próxima sesión de código):**
+- [ ] **GA4 en portada**: snapshot 28d + 4 KPI cards análogos a GSC — `getGa4Snapshot()` server action + `Ga4SnapshotCards.tsx` component (Claude Code)
+- [ ] **Validar GSC datos reales**: ir a Molino Azteca en producción, comparar snapshot vs Search Console directo (Jorge)
+- [ ] **Estrategia de roles**: Jorge decide entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación; Claude Code implementa
+- [ ] **Rotar credenciales**: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Token (Jorge)
+
+---
+
+## 5b. Próximo paso concreto para el chat nuevo
+
+**LEER ESTO PRIMERO** — estado al 2026-05-18:
+
+1. **GA4 en portada** (último deliverable de Fase 1): implementar `getGa4Snapshot(clientId)` en `actions.ts` análogo a `getGscSnapshot()`, y `Ga4SnapshotCards.tsx` análogo a `GscSnapshotCards.tsx`. El provider `GoogleAnalytics4Provider.getOverview()` ya existe en `src/server/providers/google-analytics-4.ts`. El scope `analytics.readonly` ya está en OAuth. Jorge tiene tokens GA4 en producción (los solicitó al hacer login con scope offline).
+
+2. **Verificar estado GA4**: algunos clientes tienen `ga4Property` en `Site` (los que Jorge configuró en el wizard). Los que no, mostrarán el bloque GA4 vacío o con CTA.
+
+3. **Validar GSC**: Jorge debe entrar a `https://seo.clicksociety.com.mx`, abrir Molino Azteca y confirmar que la gráfica y snapshot son coherentes con Search Console directo.
+
+4. **Resolver estrategia de roles** antes de dar acceso a Félix/Cindy.
+
+5. Tras GA4 + validaciones + roles: **Fase 1 oficialmente cerrada**, arrancar planificación de Fase 2.
 
 ---
 
@@ -224,9 +292,10 @@
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| Validación GSC con datos reales | Jorge | Entrar a producción con jorge@clicksociety.com.mx, ir a Molino Azteca y confirmar que el snapshot y la gráfica muestran datos coherentes vs GSC directo |
-| Tokens GSC/GA4 en producción | Jorge | Si la portada de Molino Azteca muestra CTA en lugar de datos, hacer logout + re-login para regenerar tokens con scope webmasters |
-| GA4 en portada | Sesión 10 | Implementar snapshot 28d + KPIs de GA4 análogos a los de GSC |
+| GA4 en portada | Sesión 11 — Claude Code | Implementar snapshot 28d + 4 KPI cards en portada. El provider `google-analytics-4.ts` ya existe. Scope `analytics.readonly` ya en OAuth. Análogo a lo hecho con GSC. |
+| Validación GSC vs Search Console directo | Jorge | Ir a Molino Azteca, RFN y Quicsa en producción; comparar snapshot 28d y gráfica contra Search Console directo. |
+| Estrategia de roles | Jorge debe decidir | Elegir entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación. Sin resolver, Félix y Cindy verán lista vacía al hacer su primer login. |
+| Credenciales pendientes | Jorge | Rotar: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Access Token. |
 
 ---
 
@@ -239,11 +308,38 @@
 | Sync con Cerebro más complejo de lo previsto | Media | Medio | REST simple ya decidido; `cerebro-bridge.ts` pendiente |
 | Sitios bloquean al crawler | Media | Bajo | User agent custom, respeto robots.txt, fallback Playwright |
 | Bug de autorización entre clientes | Baja | Crítico | Toda query Prisma filtra por `clientId` de sesión |
-| Credenciales pendientes de rotación | Alta | Crítico | Meta Access Token, NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. Rotar antes de la próxima sesión con código. |
+| Estrategia de roles sin resolver | Alta | Crítico (bloquea equipo) | `@default(EDITOR)` + `ClientUser` vacío → nuevo login = lista vacía. Resolver antes de dar acceso a Félix/Cindy. |
+| Credenciales pendientes de rotación | Alta | Alto | NEXTAUTH_SECRET, Postgres pwd, Redis pwd, SEO_INTERNAL_SECRET, Meta Token. Plazo: esta semana. |
 
 ---
 
 ## 8. Bitácora de sesiones
+
+### SAGA 2026-05-12/16 — Resumen consolidado de bugs y decisiones
+**Participantes:** Jorge + Claude Code (sesiones 6 a 10 + cierre 11)
+**Resultado final:** ✅ App en producción con datos GSC reales. 42 clientes importados. Infraestructura estable. Fase 1 cerrada salvo GA4.
+
+**Cadena completa de bugs resueltos (en orden cronológico):**
+
+| # | Síntoma | Causa raíz | Fix |
+|---|---|---|---|
+| 1 | ESLint falla: tipo `Function` en route handler | `as Function` rechazado por `@typescript-eslint/no-unsafe-function-type` | Revertir al patrón `export { handler as GET, handler as POST }` |
+| 2 | `npm run build` falla en "Collecting page data" | Páginas con Prisma/Redis se pre-renderizan en build sin BD disponible | `export const dynamic = "force-dynamic"` + `lazyConnect: true` en Redis + ARG→ENV placeholders en Dockerfile |
+| 3 | `OAuthCallbackError: State cookie was missing` | `session.strategy: "database"` (default con PrismaAdapter) — middleware llama `getToken()` que solo entiende JWTs, no el UUID opaco de las cookies de database strategy | `session.strategy: "jwt"` en authOptions |
+| 4 | Docker cache: contenedor usaba código viejo tras push | `COPY . .` invalidaba capas incluyendo `prisma generate` en cada cambio de código | Reestructurar Dockerfile: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` |
+| 5 | `NEXTAUTH_URL_INTERNAL` causaba loops de redirect | Estaba en `http://localhost:3000` — Next.js usaba esa URL para llamadas internas del middleware en el contenedor | Cambiar a `https://seo.clicksociety.com.mx` (dominio público) |
+| 6 | Seed fallaba: `SEO_INTERNAL_SECRET` y `META_ACCESS_TOKEN` no definidas en env vars del build | Variables opcionales en schema Zod pero Easypanel las requería definidas | Agregar ambas a Easypanel con valores placeholder o vacíos |
+| 7 | `/clientes` mostraba lista vacía para Jorge | Jorge tenía `role: EDITOR` (default) y `ClientUser` vacío → query filtraba por asignaciones (0 resultados) | Promover Jorge a ADMIN vía UPDATE en BD de producción |
+| 8 | BD de producción vacía (0 clientes tras deploy) | `seed-clients.ts` nunca se había corrido en producción | Correr seed desde Easypanel Console via `npx tsx scripts/seed-clients.ts` |
+| 9 | Migración `add_client_services` no en `_prisma_migrations` | SQL raw aplicado directamente sin pasar por Prisma migrate | Escribir `migration.sql` real y `prisma migrate resolve --applied` para registrar con checksum correcto |
+| 10 | Portada mostraba "Google Search Console no configurado" cuando `gscData = null` | Fallback residual en `ClientPortadaChart` pre-`GscConnectSection`; `gscProperty` estaba en DB pero tokens OAuth faltaban → `gscData = null` | Actualizar fallback a "Sin datos de tráfico orgánico · vuelve a cargar la página" |
+| 11 | Redis sin password: `ENOTFOUND cerebro-seo-redis` | `REDIS_URL` apuntaba a `redis://cerebro-seo-redis:6379` (sin `apps-` prefix, sin password) — hostname antiguo inválido en DNS | Corregir `REDIS_URL` en Easypanel a `redis://default:[pwd]@apps-cerebro-seo-redis:6379` |
+| 12 | Redis: "Unhandled error event" crasheaba la app | Ningún listener `.on('error', ...)` en el cliente ioredis — error de reconexión lanzado como excepción no manejada | Agregar error listener + split en dos clientes: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ) |
+| 13 | Build falla con OOM a los ~270s en Easypanel | `next build` supera el heap default de Node (~1.5GB) con las dependencias actuales | `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN` del Dockerfile |
+| 14 | Redis hardcodeado: `redis.get()` colgaba indefinidamente si Redis caído | `maxRetriesPerRequest: null` (requerido por BullMQ) hacía que comandos de cache esperaran forever | Dos clientes: cache con `maxRetriesPerRequest: 0` + `try/catch` en providers |
+| 15 | Bug raíz lista vacía: rol EDITOR en lugar de ADMIN | `role @default(EDITOR)` — todo login nuevo queda como EDITOR; no había mecanismo de promoción automática | UPDATE manual en BD + documentar como deuda de arquitectura de roles |
+
+---
 
 ### Sesión 10 — 2026-05-15/16
 **Participantes:** Jorge + Claude Code
