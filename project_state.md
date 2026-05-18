@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-18
-**Fase actual:** Fase 1 — Cerrada salvo GA4 en portada y validaciones de calidad de datos
-**Próximo hito:** Sesión 11 — GA4 en portada + validar GSC vs Search Console directo + resolver estrategia de roles
+**Fase actual:** Fase 1 — Cerrada. GA4 implementado. Pendiente: validaciones de calidad de datos con Jorge.
+**Próximo hito:** Jorge valida GSC + GA4 en producción con Molino Azteca; luego planear Fase 2
 
 ---
 
@@ -73,7 +73,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | ApiUsage table poblada | ✅ Completo | 15 rows, $0.225 USD total — datos reales de Sesión 4 |
 | Auth: scopes GSC+GA4 | ✅ Completo | `auth.ts` actualizado: `webmasters.readonly` + `analytics.readonly` + refresh token |
 | Conexión GSC | ✅ Completo + validado | Provider con caché Redis 24h. Snapshot 28d + gráfica 365d en portada. Datos confirmados en producción con Molino Azteca. |
-| Conexión GA4 | ❌ Pendiente | Provider `google-analytics-4.ts` existe. Falta snapshot 28d + KPIs en portada. Scope `analytics.readonly` ya en OAuth. Sesión 11. |
+| Conexión GA4 | ✅ Completo | Snapshot 28d con deltas vs período anterior. Ga4SnapshotCards en portada. CTA si ga4Property vacío. Sesión 11. |
 | `google-oauth.ts` | ✅ Completo | Helper OAuth2Client con auto-refresh de tokens persistido en DB |
 | Seed de clientes | ✅ Completo | 42 clientes + 42 sites sembrados en producción desde Notion (via consola del contenedor) |
 | Login simplificado | ✅ Completo | Solo Google OAuth (sin magic link eliminado) |
@@ -228,18 +228,20 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Migración `add_client_services` registrada en `_prisma_migrations` via `prisma migrate resolve --applied`
 - [x] Seed de clientes corrido en producción: 42 clientes + servicios desde Notion
 
-**Completado (Sesiones 10/11 — 2026-05-15/16/17/18):**
+**Completado (Sesiones 10/11 — 2026-05-15 a 2026-05-18):**
 - [x] `fix: fallback correcto en ClientPortadaChart cuando gscData es null`
 - [x] `fix: aumentar heap de Node a 4GB durante build para evitar OOM`
 - [x] `fix: eliminar fallback hardcodeado de Redis y desacoplar providers de Redis`
 - [x] `fix: dos clientes Redis separados (cache fail-fast + BullMQ)`
 - [x] Rol de Jorge promovido a ADMIN en producción vía UPDATE directo en BD
+- [x] `feat: GA4 snapshot 28d con deltas en portada del cliente` (Ga4SnapshotCards, getGa4Snapshot, CTA)
+- [x] `feat: infraestructura tRPC + clientesRouter en paralelo a /api/clientes`
 
-**Pendiente (Sesión 11 — próxima sesión de código):**
-- [ ] **GA4 en portada**: snapshot 28d + 4 KPI cards análogos a GSC — `getGa4Snapshot()` server action + `Ga4SnapshotCards.tsx` component (Claude Code)
-- [ ] **Validar GSC datos reales**: ir a Molino Azteca en producción, comparar snapshot vs Search Console directo (Jorge)
+**Pendiente (Sesión 12 — con supervisión de Jorge):**
+- [ ] **Validar GSC + GA4 en producción**: Jorge abre Molino Azteca, confirma snapshot vs GSC/GA4 directo; si GA4 muestra "sin datos" → logout+login para activar scope
 - [ ] **Estrategia de roles**: Jorge decide entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación; Claude Code implementa
 - [ ] **Rotar credenciales**: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Token (Jorge)
+- [ ] **Migrar wizard /api/clientes → tRPC**: llamar `api.clientes.crear` desde el wizard Next.js (requiere `@trpc/client` + `@trpc/react-query` en frontend)
 
 ---
 
@@ -292,7 +294,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| GA4 en portada | Sesión 11 — Claude Code | Implementar snapshot 28d + 4 KPI cards en portada. El provider `google-analytics-4.ts` ya existe. Scope `analytics.readonly` ya en OAuth. Análogo a lo hecho con GSC. |
+| GA4 en portada | ✅ Implementado (Sesión 11) | `Ga4SnapshotCards` con deltas 28d vs 28d anterior. Jorge debe validar datos en producción. |
 | Validación GSC vs Search Console directo | Jorge | Ir a Molino Azteca, RFN y Quicsa en producción; comparar snapshot 28d y gráfica contra Search Console directo. |
 | Estrategia de roles | Jorge debe decidir | Elegir entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación. Sin resolver, Félix y Cindy verán lista vacía al hacer su primer login. |
 | Credenciales pendientes | Jorge | Rotar: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Access Token. |
@@ -314,6 +316,45 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 11 — 2026-05-18 (autónoma)
+**Participantes:** Claude Code (Jorge no disponible en tiempo real)
+**Resultado:** ✅ GA4 en portada implementado. tRPC base creada en paralelo. Build limpio.
+
+**Diagnóstico inicial (antes de codear):**
+- Scope `analytics.readonly`: ✅ ya estaba en `auth.ts` desde Sesión 5
+- Provider `google-analytics-4.ts`: ✅ completo y resiliente (try/catch Redis, TTL 4h)
+- `ga4Property` en BD: ✅ poblado por seed desde Notion
+- Gap real: código de portada tenía fetch de 90d sin deltas, sin CTA, sin snapshot 28d comparativo
+
+**TAREA 1 — GA4 en portada:**
+- `actions.ts`: nuevo tipo `Ga4Snapshot` + `getGa4Snapshot()` server action (28d actual vs 28d anterior, filtro Organic Search, análogo exacto a `getGscSnapshot()`)
+- `Ga4SnapshotCards.tsx`: 4 KPI cards con `DeltaBadge` (sesiones, usuarios, tasa de rebote, conversiones)
+- `page.tsx`: reemplaza bloque 90d sin deltas por `Ga4SnapshotCards`; muestra CTA cuando `ga4Property` vacío; mensaje de error cuando property existe pero sin datos; desacopla GA4 del `oauth` directo del page (usa server action que maneja auth internamente)
+
+**TAREA 2 — Infraestructura tRPC:**
+- Instaló `@trpc/server v11`
+- `src/server/trpc/index.ts`: contexto con sesión, `publicProcedure`, `protectedProcedure`, `adminProcedure`
+- `src/server/trpc/routers/clientes.ts`: `clientes.crear` (adminProcedure, equivale a POST /api/clientes) + `clientes.listar` (protectedProcedure, ADMIN/EDITOR con lógica de ClientUser)
+- `src/server/trpc/router.ts`: `appRouter` raíz
+- `src/app/api/trpc/[trpc]/route.ts`: handler App Router
+- `/api/clientes` REST sigue activo en paralelo (NO eliminado)
+
+**Commits realizados:**
+- `feat: GA4 snapshot 28d con deltas en portada del cliente` (0bffaab)
+- `feat: infraestructura tRPC + clientesRouter en paralelo a /api/clientes` (a9d1e9c)
+
+**⚠ Acción REQUERIDA de Jorge:**
+GA4 puede no mostrar datos si los tokens OAuth de Jorge fueron generados ANTES de que `analytics.readonly` estuviera en el scope (Session 5, 2026-05-11). Para verificar: ir a `https://seo.clicksociety.com.mx`, abrir cualquier cliente con `ga4Property` configurado. Si aparece "Sin datos de Analytics disponibles" → hacer **logout + login** para regenerar tokens con todos los scopes. Si aparece `Ga4SnapshotCards` con números → funciona.
+
+**Costo de APIs:** $0 (no se llamó a DataForSEO ni Claude).
+
+**Bloqueadores restantes:**
+- Validación GSC + GA4 con datos reales (Jorge, manual en producción)
+- Estrategia de roles (Jorge debe decidir antes de onboarding de equipo)
+- Credenciales pendientes de rotación (Jorge)
+
+---
 
 ### SAGA 2026-05-12/16 — Resumen consolidado de bugs y decisiones
 **Participantes:** Jorge + Claude Code (sesiones 6 a 10 + cierre 11)
