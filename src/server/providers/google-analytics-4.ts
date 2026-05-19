@@ -104,11 +104,15 @@ export class GoogleAnalytics4Provider {
             stringFilter: { value: "Organic Search" },
           },
         },
+        // TOTAL para que data.totals[0] contenga el agregado — sin esto devuelve undefined
+        metricAggregations: ["TOTAL"],
         keepEmptyRows: false,
       },
     });
 
-    const totals = data.totals?.[0];
+    // data.totals[0] tiene el agregado cuando se solicita TOTAL
+    // data.rows[0] es fallback cuando GA4 no devuelve totals (sin dimensiones)
+    const totals = data.totals?.[0] ?? data.rows?.[0];
     const overview: Ga4Overview = {
       totalSessions: parseInt(totals?.metricValues?.[0]?.value ?? "0"),
       totalUsers: parseInt(totals?.metricValues?.[1]?.value ?? "0"),
