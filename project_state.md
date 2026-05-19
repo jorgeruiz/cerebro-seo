@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-18
-**Fase actual:** Fase 1 — Cerrada. GA4 implementado. Pendiente: validaciones de calidad de datos con Jorge.
-**Próximo hito:** Jorge valida GSC + GA4 en producción con Molino Azteca; luego planear Fase 2
+**Última actualización:** 2026-05-19
+**Fase actual:** Fase 1 — ✅ COMPLETA. GSC y GA4 con datos reales validados en producción.
+**Próximo hito:** Sesión 12 — Planear Fase 2 (resolver estrategia de roles + rotar credenciales pendientes primero)
 
 ---
 
@@ -84,8 +84,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Redis producción | ✅ Completo | `apps-cerebro-seo-redis:6379` (hostname con guiones). Dos clientes separados: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ). Error listeners activos. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
 | Roles ADMIN/EDITOR | ✅ Operativo (con deuda) | Jorge = ADMIN en producción (promovido manualmente 2026-05-17). `@default(EDITOR)` requiere estrategia para futuros usuarios. Ver §DEUDAS. |
-| Validación GSC datos | ❌ Pendiente | Confirmar coherencia snapshot vs GSC directo para Molino Azteca, RFN, Quicsa. |
-| Validación calidad datos DataForSEO | ❌ Pendiente | Comparar `validation-report.md` vs GSC real de los 3 clientes. |
+| Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
+| Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
+| Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
 
 ---
 
@@ -145,6 +146,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-16 | **Cerebro SEO maneja 42 clientes activos**. Vista default filtra a los 12 con servicio `seo`. Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO/Claude) solo para clientes con `services.includes("seo")`. |
 | 2026-05-16 | **`REDIS_URL` en producción**: `redis://default:[password]@apps-cerebro-seo-redis:6379`. Hostname con guiones (no underscores — no válidos en DNS). Password embebido en la URL. Dos clientes en el código: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ, `maxRetriesPerRequest: null`). |
 | 2026-05-16 | **Providers (GSC, GA4, DataForSEO) tienen `try/catch` en operaciones Redis.** Si Redis está caído, los providers van directo a la API externa (sin caché, pero con datos). Redis caído no bloquea el render de páginas. |
+| 2026-05-19 | **GA4 validado en producción: el provider filtra a tráfico orgánico (`sessionDefaultChannelGrouping = "Organic Search"`)**, no tráfico total. Al validar los números del panel contra GA4 directo, ir a **Reports → Traffic Acquisition → Organic Search**, NO al Home/Overview de GA4 (que suma todos los canales). Comparar contra el total es falso negativo. |
+| 2026-05-19 | **GSC y GA4 con datos reales validados en producción. Fase 1 COMPLETA.** |
 
 ---
 
