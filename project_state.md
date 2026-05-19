@@ -12,16 +12,9 @@
 
 > Esta sección se escribe al inicio de cada contexto para que no se pierda entre el historial.
 
-### 🔴 Deuda crítica: Estrategia de roles (bloquea onboarding del equipo)
+### ~~🔴 Deuda crítica: Estrategia de roles~~ ✅ RESUELTA (2026-05-19)
 
-El schema de Prisma tiene `role UserRole @default(EDITOR)`. Todo login nuevo queda automáticamente como EDITOR. La tabla `ClientUser` está vacía (no hay asignaciones). Esto significa que **Félix y Cindy**, al hacer su primer login, verán la lista de clientes **VACÍA** exactamente igual que le ocurrió a Jorge.
-
-Jorge fue promovido manualmente a ADMIN en producción (2026-05-17). Pero eso no es escalable.
-
-**Resolver antes de dar acceso al equipo.** Opciones a evaluar — sin implementar aún:
-- (a) `ADMIN_EMAILS` en env var → el callback `jwt` promueve si el email está en la lista
-- (b) Poblar `ClientUser` por email para cada EDITOR
-- (c) UI de asignación en el panel de admin
+`ADMIN_EMAILS` env var en Easypanel promueve a ADMIN automáticamente en el jwt callback, sin tocar la BD. EDITORs (cualquier login no en la lista) ven todos los clientes activos — `ClientUser` granular dormido. Confirmar emails con Jorge antes del deploy.
 
 ### 🔴 Deuda de seguridad: Credenciales pendientes de rotación
 
@@ -148,6 +141,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-16 | **Providers (GSC, GA4, DataForSEO) tienen `try/catch` en operaciones Redis.** Si Redis está caído, los providers van directo a la API externa (sin caché, pero con datos). Redis caído no bloquea el render de páginas. |
 | 2026-05-19 | **GA4 validado en producción: el provider filtra a tráfico orgánico (`sessionDefaultChannelGrouping = "Organic Search"`)**, no tráfico total. Al validar los números del panel contra GA4 directo, ir a **Reports → Traffic Acquisition → Organic Search**, NO al Home/Overview de GA4 (que suma todos los canales). Comparar contra el total es falso negativo. |
 | 2026-05-19 | **GSC y GA4 con datos reales validados en producción. Fase 1 COMPLETA.** |
+| 2026-05-19 | **Estrategia de roles: `ADMIN_EMAILS` env var.** Lista de emails separados por coma en Easypanel → jwt callback promueve a ADMIN en cada login sin tocar la BD. Retrocompatible: si la var no está definida, el rol viene de la BD. `@default(EDITOR)` en schema sigue activo — todo login nuevo que no esté en ADMIN_EMAILS entra como EDITOR. |
+| 2026-05-19 | **ClientUser granular dormido.** Todos los usuarios autenticados (ADMIN y EDITOR) ven todos los clientes activos. ClientUser se activará en Fase 2+ si se necesita restricción por cuenta. EDITOR no ve costos de API (no hay UI de costos expuesta). |
 
 ---
 
@@ -242,7 +237,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 **Pendiente (Sesión 12 — con supervisión de Jorge):**
 - [ ] **Validar GSC + GA4 en producción**: Jorge abre Molino Azteca, confirma snapshot vs GSC/GA4 directo; si GA4 muestra "sin datos" → logout+login para activar scope
-- [ ] **Estrategia de roles**: Jorge decide entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación; Claude Code implementa
+- [x] **Estrategia de roles**: implementada vía `ADMIN_EMAILS` env var (2026-05-19)
 - [ ] **Rotar credenciales**: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Token (Jorge)
 - [ ] **Migrar wizard /api/clientes → tRPC**: llamar `api.clientes.crear` desde el wizard Next.js (requiere `@trpc/client` + `@trpc/react-query` en frontend)
 
@@ -299,7 +294,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 |---|---|---|
 | GA4 en portada | ✅ Implementado (Sesión 11) | `Ga4SnapshotCards` con deltas 28d vs 28d anterior. Jorge debe validar datos en producción. |
 | Validación GSC vs Search Console directo | Jorge | Ir a Molino Azteca, RFN y Quicsa en producción; comparar snapshot 28d y gráfica contra Search Console directo. |
-| Estrategia de roles | Jorge debe decidir | Elegir entre (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser`, (c) UI de asignación. Sin resolver, Félix y Cindy verán lista vacía al hacer su primer login. |
+| Estrategia de roles | ✅ Resuelto | `ADMIN_EMAILS` env var implementada. Confirmar emails con Jorge y configurar en Easypanel antes del primer login de Félix/Cindy. |
 | Credenciales pendientes | Jorge | Rotar: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Access Token. |
 
 ---
@@ -313,7 +308,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Sync con Cerebro más complejo de lo previsto | Media | Medio | REST simple ya decidido; `cerebro-bridge.ts` pendiente |
 | Sitios bloquean al crawler | Media | Bajo | User agent custom, respeto robots.txt, fallback Playwright |
 | Bug de autorización entre clientes | Baja | Crítico | Toda query Prisma filtra por `clientId` de sesión |
-| Estrategia de roles sin resolver | Alta | Crítico (bloquea equipo) | `@default(EDITOR)` + `ClientUser` vacío → nuevo login = lista vacía. Resolver antes de dar acceso a Félix/Cindy. |
+| ADMIN_EMAILS sin configurar en Easypanel | Media | Alto | Código implementado; falta agregar la env var con los emails confirmados. Sin ella, nuevos logins son EDITOR pero SÍ ven clientes (ClientUser dormido). |
 | Credenciales pendientes de rotación | Alta | Alto | NEXTAUTH_SECRET, Postgres pwd, Redis pwd, SEO_INTERNAL_SECRET, Meta Token. Plazo: esta semana. |
 
 ---

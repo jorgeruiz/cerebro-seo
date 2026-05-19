@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-05-10 (v3)
+**Última actualización:** 2026-05-19 (v4)
 
 ---
 
@@ -23,7 +23,8 @@ Repo:        github.com/jorgeruiz/cerebro-seo (privado, cuenta personal jorgerui
 **Notas técnicas importantes:**
 - **Prisma v5.22** (no v7): Prisma 7 eliminó soporte de `url` en el datasource del schema y cambió el formato de enums — incompatible con el setup estándar de Next.js. Se usa v5 como versión estable.
 - **shadcn estilo `base-nova`**: la versión instalada usa `@base-ui/react` como primitivos (no Radix UI). El patrón `asChild` **no existe** en este estilo. Para links con apariencia de botón, usar `buttonVariants({ variant })` aplicado directamente a `<Link>` de Next.js.
-- **tRPC pendiente**: el stack define tRPC para APIs internas, pero aún no está implementado. El endpoint `POST /api/clientes` es REST temporal — se migrará a `clientesRouter` tRPC en Fase 2. REST se reserva para: webhooks de proveedores externos, endpoints NextAuth, y bridge con Cerebro vía shared secret.
+- **tRPC v11 activo**: `@trpc/server` instalado. `appRouter` en `src/server/trpc/router.ts`, handler en `/api/trpc/[trpc]`. `clientesRouter` con `clientes.crear` (admin) y `clientes.listar` (protegido). El endpoint REST `POST /api/clientes` sigue activo en paralelo — se eliminará cuando el wizard frontend migre a tRPC.
+- **Roles ADMIN/EDITOR vía `ADMIN_EMAILS`**: env var en Easypanel con emails separados por coma. El callback `jwt` de NextAuth evalúa en cada login — sin tocar la BD. Todos los usuarios autenticados ven todos los clientes activos (`ClientUser` granular dormido).
 
 ---
 

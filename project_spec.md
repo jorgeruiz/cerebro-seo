@@ -96,15 +96,16 @@ La vista central del producto. Estructura jerárquica:
 
 ### 5.1 Roles y acceso
 
-| Rol | Acceso | Notas |
+| Rol | Acceso | Cómo se asigna |
 |---|---|---|
-| ADMIN (Jorge) | Todo. Ve **todos** los clientes activos sin filtrar por asignación. Configura clientes, ve costos de API, gestiona equipo. | Google OAuth |
-| EDITOR (Félix, Cindy) | Solo los clientes que tenga asignados vía `ClientUser.email`. Sin visibilidad de costos. Acceso a cliente no asignado devuelve 404 (no 403 — no revelar existencia). | Google OAuth |
+| ADMIN | Ve todos los clientes. Puede crear/configurar clientes. | Email en `ADMIN_EMAILS` env var (Easypanel). El jwt callback promueve a ADMIN en cada login sin tocar la BD. |
+| EDITOR | Ve todos los clientes activos. Sin visibilidad de costos de API. | Cualquier login Google de Click Society que no esté en `ADMIN_EMAILS`. |
 
-> La asignación EDITOR ↔ Cliente se gestiona en la tabla `ClientUser` por email (no por userId). No hay UI de asignación en v1 — se hace directamente en BD o via seed.
-> `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales.
+> **Mecanismo de promoción a ADMIN:** variable de entorno `ADMIN_EMAILS` en Easypanel con la lista de emails separados por coma (ej. `jorge@clicksociety.com.mx,otro@clicksociety.com.mx`). El callback `jwt` de NextAuth la evalúa en cada refresco de token — cambiar la lista surte efecto en el siguiente login sin redeploy de BD.
 >
-> **⚠ Deuda activa**: el schema tiene `role @default(EDITOR)`. Un EDITOR sin filas en `ClientUser` ve la lista de clientes **vacía**. Esto le ocurrió a Jorge en la saga 2026-05-12/16. Resolver estrategia de roles antes de dar acceso al equipo (Félix, Cindy). Opciones: (a) `ADMIN_EMAILS` env var, (b) poblar `ClientUser` por EDITOR, (c) UI de asignación.
+> **`ClientUser` granular dormido:** la tabla existe en el schema pero no se usa para filtrar. Todos los usuarios autenticados ven todos los clientes activos. Se activará en Fase 2+ si se necesita restricción por cuenta (ej. un EDITOR que solo gestiona ciertos clientes).
+>
+> `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales.
 
 ### 5.2 Modelo de servicios por cliente
 
