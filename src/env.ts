@@ -34,6 +34,11 @@ const envSchema = z.object({
   STORAGE_BUCKET: z.string().optional(),
   STORAGE_PROVIDER: z.enum(["r2", "s3"]).optional(),
 
+  // Roles — emails que siempre se promueven a ADMIN en el login.
+  // Formato: "jorge@clicksociety.com.mx,otro@clicksociety.com.mx"
+  // Si no se define, el rol viene del campo role en la BD (default: EDITOR).
+  ADMIN_EMAILS: z.string().optional(),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])

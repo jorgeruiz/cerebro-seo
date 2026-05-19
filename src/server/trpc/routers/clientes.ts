@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, adminProcedure, protectedProcedure } from "../index";
 import { prisma } from "@/lib/db";
-import { ClientStatus, CycleStatus, UserRole } from "@prisma/client";
+import { ClientStatus, CycleStatus } from "@prisma/client";
 
 export const clientesRouter = router({
   // Crear cliente — solo ADMIN
@@ -65,22 +65,19 @@ export const clientesRouter = router({
       return { id: client.id };
     }),
 
-  // Listar clientes — ADMIN ve todos; EDITOR solo los asignados en ClientUser
+  // Listar clientes — todos los usuarios autenticados ven todos los clientes activos
   listar: protectedProcedure
     .input(
       z
         .object({ filter: z.enum(["seo", "all"]).default("seo") })
         .optional()
     )
-    .query(async ({ ctx, input }) => {
-      const role = ctx.session.user.role as UserRole;
-      const email = ctx.session.user.email ?? "";
+    .query(async ({ input }) => {
       const filterSeo = input?.filter !== "all";
 
-      const baseWhere =
-        role === UserRole.ADMIN
-          ? { status: ClientStatus.ACTIVE }
-          : { status: ClientStatus.ACTIVE, clientUsers: { some: { email } } };
+      // Todos los usuarios autenticados ven todos los clientes activos.
+      // ClientUser granular dormido — reservado para Fase 2.
+      const baseWhere = { status: ClientStatus.ACTIVE };
 
       const where = filterSeo
         ? { ...baseWhere, services: { has: "seo" } }

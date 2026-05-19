@@ -56,6 +56,17 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as unknown as { role: UserRole }).role;
       }
+      // ADMIN_EMAILS: promueve a ADMIN sin tocar la BD.
+      // Se re-evalúa en cada refresco de token — cambiar la env var surte efecto
+      // en el siguiente login sin necesidad de UPDATE manual en la BD.
+      const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const email = (token.email as string | undefined)?.toLowerCase() ?? "";
+      if (adminEmails.length > 0 && email && adminEmails.includes(email)) {
+        token.role = UserRole.ADMIN;
+      }
       return token;
     },
     async session({ session, token }) {

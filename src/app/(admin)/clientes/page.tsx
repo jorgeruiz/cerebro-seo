@@ -16,12 +16,10 @@ const SERVICE_LABEL: Record<string, { label: string; color: string }> = {
   contenidos: { label: "Contenido", color: "bg-green-50 text-green-700 border-green-200" },
 };
 
-async function getClients(role: UserRole, userEmail: string, filterSeo: boolean) {
-  // ADMIN ve todos los clientes activos (filtrados por SEO si el toggle está en SEO).
-  // EDITOR solo ve los que tiene asignados vía ClientUser (por email).
-  const baseWhere = role === UserRole.ADMIN
-    ? { status: ClientStatus.ACTIVE }
-    : { status: ClientStatus.ACTIVE, clientUsers: { some: { email: userEmail } } };
+async function getClients(_role: UserRole, _userEmail: string, filterSeo: boolean) {
+  // Todos los usuarios autenticados (ADMIN y EDITOR) ven todos los clientes activos.
+  // ClientUser granular está dormido — se activará en Fase 2 si se necesita restricción por cuenta.
+  const baseWhere = { status: ClientStatus.ACTIVE };
 
   const where = filterSeo
     ? { ...baseWhere, services: { has: "seo" } }
