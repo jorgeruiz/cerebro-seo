@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-20
-**Fase actual:** Fase 1 — ✅ COMPLETA. GSC y GA4 validados. Roles C+A desplegados. 3 credenciales rotadas.
-**Próximo hito:** Sesión 13 — Validar acceso de Félix (incógnito) + planear Fase 2
+**Fase actual:** Fase 2 — En curso. Módulo Términos de búsqueda implementado (GSC).
+**Próximo hito:** Sesión 14 — Validar Términos de búsqueda en producción + siguiente módulo Fase 2
 
 ---
 
@@ -81,6 +81,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Roles ADMIN/EDITOR | 🟡 Operativo (parcial) | C+A desplegado. Jorge = ADMIN validado. Félix pendiente validación en incógnito. Ver §DEUDAS. |
 | Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
+| Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
 
 ---
@@ -324,6 +325,29 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 13 — 2026-05-20
+**Participantes:** Claude Code (sesión autónoma)
+**Resultado:** ✅ Módulo Términos de búsqueda implementado. 7/7 tests. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `GoogleSearchConsoleProvider.getQueries()`: nuevo método con `dimensionFilterGroups` para filtros device/country, `rowLimit: 1000`, cache Redis 24h por combinación de filtros.
+- `getGscQueries()` server action en `actions.ts`: verifica sesión/site/oauth, calcula fechas por range (28d/90d/12m), ordena en memoria, top 200, log ApiUsage.
+- `src/app/(admin)/clientes/[id]/terminos-busqueda/page.tsx`: server component con SSR de datos default, breadcrumb, reusar `GscConnectSection`.
+- `GscQueriesTable.tsx`: client component con toggle range, selects device/country, tabla shadcn ordenable (ChevronUp/Down por columna), skeleton loading, empty state.
+- Portada: módulos ahora tienen `active: boolean`. "Términos de búsqueda" es `<Link>` real, resto sigue `<button disabled>`. href corregido a `terminos-busqueda`.
+- shadcn `table` instalado.
+- 3 nuevos tests: happy path, filtro device → dimensionFilterGroups, caché hit.
+
+**Commits:** `feat: módulo términos de búsqueda con filtros device/country/range (GSC)` (c9de28b)
+
+**Costo de APIs:** $0 (GSC free tier, sin llamadas DataForSEO ni Claude).
+
+**Pendiente para Sesión 14:**
+- Validar en producción con Molino Azteca (Jorge navega a `/clientes/[id]/terminos-busqueda`)
+- Siguiente módulo Fase 2 (Tráfico de páginas o Términos de búsqueda mejorado con comparativa)
+
+---
 
 ### Sesión 12 — 2026-05-20
 **Participantes:** Jorge + Claude (Project, modo diseño y operación)
