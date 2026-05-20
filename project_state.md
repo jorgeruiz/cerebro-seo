@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-19
-**Fase actual:** Fase 1 — ✅ COMPLETA. GSC y GA4 con datos reales validados en producción.
-**Próximo hito:** Sesión 12 — Planear Fase 2 (resolver estrategia de roles + rotar credenciales pendientes primero)
+**Última actualización:** 2026-05-20
+**Fase actual:** Fase 1 — ✅ COMPLETA. GSC y GA4 validados. Roles C+A desplegados. 3 credenciales rotadas.
+**Próximo hito:** Sesión 13 — Validar acceso de Félix (incógnito) + planear Fase 2
 
 ---
 
@@ -12,20 +12,22 @@
 
 > Esta sección se escribe al inicio de cada contexto para que no se pierda entre el historial.
 
-### ~~🔴 Deuda crítica: Estrategia de roles~~ ✅ RESUELTA (2026-05-19)
+### 🟡 Deuda de roles — PARCIALMENTE RESUELTA (2026-05-20)
 
-`ADMIN_EMAILS` env var en Easypanel promueve a ADMIN automáticamente en el jwt callback, sin tocar la BD. EDITORs (cualquier login no en la lista) ven todos los clientes activos — `ClientUser` granular dormido. Confirmar emails con Jorge antes del deploy.
+Estrategia C+A implementada y desplegada. Jorge validado como ADMIN (vía `ADMIN_EMAILS`) viendo todos los clientes. **Félix sigue apareciendo como EDITOR sin ver clientes.** Pendiente: que Félix pruebe login en ventana incógnito fresca (su JWT actual puede estar firmado con `NEXTAUTH_SECRET` viejo o con lógica anterior). Si incógnito no resuelve, diagnosticar con: (a) valor exacto de `ADMIN_EMAILS` en Easypanel, (b) callback `jwt` en `src/lib/auth.ts`, (c) query en `src/app/(admin)/clientes/page.tsx`.
 
-### 🔴 Deuda de seguridad: Credenciales pendientes de rotación
+### 🟡 Deuda de seguridad: Credenciales pendientes de rotación
 
-Ya rotadas: Anthropic, Notion Integration Token, Google OAuth Client Secret, DataForSEO.
+Rotadas en sesión 12 (2026-05-20):
+- ✅ `NEXTAUTH_SECRET` — generado con `openssl rand -base64 32`, validado con login fresco
+- ✅ `SEO_INTERNAL_SECRET` — generado y aplicado (preventivo para bridge Fase 2)
+- ✅ Redis password — generado con `openssl rand -hex 32`, aplicado en `cerebro-seo-redis` Y en `REDIS_URL` de `cerebro-seo`, validado con GSC/GA4 cargando datos
 
-**Pendientes (rotar esta semana):**
-- `NEXTAUTH_SECRET` — verificar que sea robusto; rotar si fue generado en chat
-- Postgres password (`CerebroClick2026#`)
-- Redis password
-- `SEO_INTERNAL_SECRET`
-- Meta Access Token (si aplica al proyecto)
+Ya rotadas previamente: Anthropic, Notion Integration Token, Google OAuth Client Secret, DataForSEO.
+
+**Pendientes:**
+- ⏸ Postgres password — **APLAZADO**. El servicio `cerebro-db` es Postgres **compartido** entre Cerebro web y Cerebro SEO. Requiere sesión coordinada que actualice `DATABASE_URL` en ambos servicios simultáneamente. No rotar en sesión solo-Cerebro-SEO.
+- N/A: Meta Access Token — no existe en Cerebro SEO (verificado 2026-05-20).
 
 ### 🟡 Deuda operativa: Auto-deploy de Easypanel
 
@@ -74,9 +76,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
 | Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=4096` para evitar OOM. |
-| Redis producción | ✅ Completo | `apps-cerebro-seo-redis:6379` (hostname con guiones). Dos clientes separados: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ). Error listeners activos. |
+| Redis producción | ✅ Completo | `apps_cerebro-seo-redis:6379` (underscore después de `apps`, guiones en el nombre del servicio — formato Easypanel). Password rotado 2026-05-20. Dos clientes separados. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
-| Roles ADMIN/EDITOR | ✅ Operativo (con deuda) | Jorge = ADMIN en producción (promovido manualmente 2026-05-17). `@default(EDITOR)` requiere estrategia para futuros usuarios. Ver §DEUDAS. |
+| Roles ADMIN/EDITOR | 🟡 Operativo (parcial) | C+A desplegado. Jorge = ADMIN validado. Félix pendiente validación en incógnito. Ver §DEUDAS. |
 | Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
@@ -130,19 +132,23 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
 | 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
 | 2026-05-15 | **Build de Next.js requiere mínimo 4GB de heap.** Configurado en Dockerfile: `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN npm run build`. El default de Node (~1.5GB) agota el heap a los ~270s durante `next build`. |
-| 2026-05-15 | **REDIS_URL en producción debe usar hostname interno con guiones (`apps-cerebro-seo-redis`), no underscores.** Underscores no son válidos en DNS; `ioredis` no puede resolver el hostname y la conexión falla silenciosamente. |
+| 2026-05-15 | **REDIS_URL en producción usa hostname interno `apps_cerebro-seo-redis`** — Easypanel genera hostnames con formato `<proyecto>_<servicio>`: underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. El error original era un hostname incompleto (sin prefijo `apps_`), no los guiones en sí. |
 | 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
 | 2026-05-16 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs, con database strategy recibe un UUID opaco y falla silenciosamente. PrismaAdapter sigue activo para persistir User y Account. |
 | 2026-05-16 | **`NEXTAUTH_URL_INTERNAL` debe ser el dominio público en producción**, no `http://localhost:3000`. Next.js usa esta variable para llamadas internas del middleware — si apunta a localhost, el middleware falla en el contenedor. |
 | 2026-05-16 | **ADMIN ve todos los clientes activos; EDITOR solo los asignados vía `ClientUser` por email.** La tabla `ClientUser` está actualmente vacía — EDITORs sin asignaciones ven lista vacía. Requiere estrategia de roles resuelta antes de dar acceso al equipo. |
 | 2026-05-16 | **El schema tiene `role UserRole @default(EDITOR)`**: todo login nuevo queda como EDITOR. Jorge promovido a ADMIN vía `UPDATE "User" SET role='ADMIN'` directamente en BD de producción (2026-05-17). No es escalable sin mecanismo automático. |
 | 2026-05-16 | **Cerebro SEO maneja 42 clientes activos**. Vista default filtra a los 12 con servicio `seo`. Toggle "Todos los activos" muestra los 42. Costo variable (DataForSEO/Claude) solo para clientes con `services.includes("seo")`. |
-| 2026-05-16 | **`REDIS_URL` en producción**: `redis://default:[password]@apps-cerebro-seo-redis:6379`. Hostname con guiones (no underscores — no válidos en DNS). Password embebido en la URL. Dos clientes en el código: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ, `maxRetriesPerRequest: null`). |
+| 2026-05-16 | **`REDIS_URL` en producción**: `redis://default:[password]@apps_cerebro-seo-redis:6379`. Hostname Easypanel: `apps_cerebro-seo-redis` (underscore proyecto-servicio, guiones en nombre servicio). Password embebido en la URL. Dos clientes en el código: `redis` (cache, fail-fast) y `redisBullMQ` (BullMQ, `maxRetriesPerRequest: null`). |
 | 2026-05-16 | **Providers (GSC, GA4, DataForSEO) tienen `try/catch` en operaciones Redis.** Si Redis está caído, los providers van directo a la API externa (sin caché, pero con datos). Redis caído no bloquea el render de páginas. |
 | 2026-05-19 | **GA4 validado en producción: el provider filtra a tráfico orgánico (`sessionDefaultChannelGrouping = "Organic Search"`)**, no tráfico total. Al validar los números del panel contra GA4 directo, ir a **Reports → Traffic Acquisition → Organic Search**, NO al Home/Overview de GA4 (que suma todos los canales). Comparar contra el total es falso negativo. |
 | 2026-05-19 | **GSC y GA4 con datos reales validados en producción. Fase 1 COMPLETA.** |
 | 2026-05-19 | **Estrategia de roles: `ADMIN_EMAILS` env var.** Lista de emails separados por coma en Easypanel → jwt callback promueve a ADMIN en cada login sin tocar la BD. Retrocompatible: si la var no está definida, el rol viene de la BD. `@default(EDITOR)` en schema sigue activo — todo login nuevo que no esté en ADMIN_EMAILS entra como EDITOR. |
 | 2026-05-19 | **ClientUser granular dormido.** Todos los usuarios autenticados (ADMIN y EDITOR) ven todos los clientes activos. ClientUser se activará en Fase 2+ si se necesita restricción por cuenta. EDITOR no ve costos de API (no hay UI de costos expuesta). |
+| 2026-05-20 | **Estrategia de roles C+A desplegada**: (C) EDITOR ve todos los clientes activos igual que ADMIN — `ClientUser` ya no filtra en `/clientes` ni en `[id]`. (A) Rol asignado por `ADMIN_EMAILS` en callback `jwt` de NextAuth, normalizado lowercase+trim, idempotente en cada refresh. `ClientUser` permanece en schema dormido. Jorge y Félix configurados en `ADMIN_EMAILS`. |
+| 2026-05-20 | **`ADMIN_EMAILS` es la autoridad sobre roles en producción.** Sobreescribe `User.role` de BD en cada login. El `UPDATE` manual del 2026-05-17 queda obsoleto — la fuente única de verdad para promoción de ADMIN es la env var de Easypanel. |
+| 2026-05-20 | **Postgres `cerebro-db` es compartido con Cerebro web.** Rotación de password requiere coordinar actualización de `DATABASE_URL` en ambos servicios simultáneamente. NO rotar en sesiones solo-Cerebro-SEO. |
+| 2026-05-20 | **Credenciales rotadas (sesión 12)**: `NEXTAUTH_SECRET`, `SEO_INTERNAL_SECRET`, Redis password. Postgres password aplazado (compartido con cerebro-web). Meta Access Token N/A en Cerebro SEO. |
 
 ---
 
@@ -235,11 +241,16 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] `feat: GA4 snapshot 28d con deltas en portada del cliente` (Ga4SnapshotCards, getGa4Snapshot, CTA)
 - [x] `feat: infraestructura tRPC + clientesRouter en paralelo a /api/clientes`
 
-**Pendiente (Sesión 12 — con supervisión de Jorge):**
-- [ ] **Validar GSC + GA4 en producción**: Jorge abre Molino Azteca, confirma snapshot vs GSC/GA4 directo; si GA4 muestra "sin datos" → logout+login para activar scope
-- [x] **Estrategia de roles**: implementada vía `ADMIN_EMAILS` env var (2026-05-19)
-- [ ] **Rotar credenciales**: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Token (Jorge)
-- [ ] **Migrar wizard /api/clientes → tRPC**: llamar `api.clientes.crear` desde el wizard Next.js (requiere `@trpc/client` + `@trpc/react-query` en frontend)
+**Completado (Sesión 12 — 2026-05-20):**
+- [x] Estrategia de roles C+A implementada y desplegada en producción
+- [x] NEXTAUTH_SECRET rotado y validado
+- [x] SEO_INTERNAL_SECRET rotado
+- [x] Redis password rotado y validado con app + GSC/GA4
+
+**Pendiente (Sesión 13):**
+- [ ] **Validar acceso de Félix**: login en ventana incógnito fresca para confirmar rol ADMIN y visibilidad de clientes
+- [ ] **Rotar Postgres password**: coordinar con sesión que también actualice `cerebro-web` (compartido)
+- [ ] **Migrar wizard /api/clientes → tRPC**: Fase 2, requiere `@trpc/client` + `@trpc/react-query`
 
 ---
 
@@ -292,10 +303,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| GA4 en portada | ✅ Implementado (Sesión 11) | `Ga4SnapshotCards` con deltas 28d vs 28d anterior. Jorge debe validar datos en producción. |
-| Validación GSC vs Search Console directo | Jorge | Ir a Molino Azteca, RFN y Quicsa en producción; comparar snapshot 28d y gráfica contra Search Console directo. |
-| Estrategia de roles | ✅ Resuelto | `ADMIN_EMAILS` env var implementada. Confirmar emails con Jorge y configurar en Easypanel antes del primer login de Félix/Cindy. |
-| Credenciales pendientes | Jorge | Rotar: NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET, Meta Access Token. |
+| Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
+| Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
+| Planear Fase 2 | Jorge + Claude | Priorizar módulos, estimación de costos DataForSEO, diseño sync Notion. |
 
 ---
 
@@ -308,12 +318,38 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Sync con Cerebro más complejo de lo previsto | Media | Medio | REST simple ya decidido; `cerebro-bridge.ts` pendiente |
 | Sitios bloquean al crawler | Media | Bajo | User agent custom, respeto robots.txt, fallback Playwright |
 | Bug de autorización entre clientes | Baja | Crítico | Toda query Prisma filtra por `clientId` de sesión |
-| ADMIN_EMAILS sin configurar en Easypanel | Media | Alto | Código implementado; falta agregar la env var con los emails confirmados. Sin ella, nuevos logins son EDITOR pero SÍ ven clientes (ClientUser dormido). |
-| Credenciales pendientes de rotación | Alta | Alto | NEXTAUTH_SECRET, Postgres pwd, Redis pwd, SEO_INTERNAL_SECRET, Meta Token. Plazo: esta semana. |
+| Félix no puede entrar como ADMIN | Media | Medio | JWT firmado con secret viejo o cache. Probar incógnito. Si persiste: revisar ADMIN_EMAILS en Easypanel. |
+| Postgres password sin rotar | Baja | Medio | Compartido con cerebro-web; aplazado para sesión coordinada. No es urgente (no expuesto externamente). |
 
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 12 — 2026-05-20
+**Participantes:** Jorge + Claude (Project, modo diseño y operación)
+**Resultado:** ✅ Estrategia de roles C+A desplegada. 3 credenciales rotadas. Documentación corregida. Bloqueador Félix pendiente (incógnito).
+
+**Trabajo realizado:**
+- **Diseño de roles**: decidida estrategia C (EDITOR ve todos los clientes) + A (rol por `ADMIN_EMAILS` env var). Descartadas opción B (poblar `ClientUser` por seed) y D (UI de promoción) — sobre-ingeniería para equipo de 3 personas en herramienta interna.
+- **Implementación**: callback `jwt` lee `ADMIN_EMAILS` normalizado (lowercase+trim), `clientes/page.tsx` y `[id]/page.tsx` eliminan filtro `ClientUser` para EDITOR, `ClientUser` dormido en schema.
+- **Easypanel**: `ADMIN_EMAILS=jorge@clicksociety.com.mx,felix@clicksociety.com.mx` configurado vía API tRPC (`services.app.updateEnv`). Redeploy disparado.
+- **Validación Jorge**: login fresco en incógnito → ADMIN → 42 clientes visibles → toggle SEO/Todos funciona.
+- **Bloqueador Félix**: entra como EDITOR sin ver clientes. Pendiente prueba en incógnito (Félix no disponible al cierre).
+- **Rotación de credenciales**:
+  - ✅ `NEXTAUTH_SECRET`: `openssl rand -base64 32`, aplicado, validado (logout+login fresco invalidó sesión vieja)
+  - ✅ `SEO_INTERNAL_SECRET`: generado y aplicado (preventivo para bridge Fase 2)
+  - ✅ Redis password: `openssl rand -hex 32`, aplicado en `cerebro-seo-redis` Y en `REDIS_URL` de `cerebro-seo`, restart coordinado Redis→app, validado con GSC/GA4 cargando
+  - ⏸ Postgres password: aplazado (`cerebro-db` compartido con `cerebro-web`)
+  - N/A Meta Token: no existe en Cerebro SEO
+- **Corrección documental**: hostname Redis real es `apps_cerebro-seo-redis` (verificado en UI Easypanel). Decisión 2026-05-15 tenía el hostname mal escrito.
+
+**Costo de APIs:** $0 (solo configuración y rotación de secretos).
+
+**Pendiente para Sesión 13:**
+- Validación de Félix con incógnito (Jorge coordina).
+- Arranque planificación Fase 2.
+
+---
 
 ### Sesión 11 — 2026-05-18 (autónoma)
 **Participantes:** Claude Code (Jorge no disponible en tiempo real)

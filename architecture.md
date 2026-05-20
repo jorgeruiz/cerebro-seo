@@ -24,7 +24,7 @@ Repo:        github.com/jorgeruiz/cerebro-seo (privado, cuenta personal jorgerui
 - **Prisma v5.22** (no v7): Prisma 7 eliminó soporte de `url` en el datasource del schema y cambió el formato de enums — incompatible con el setup estándar de Next.js. Se usa v5 como versión estable.
 - **shadcn estilo `base-nova`**: la versión instalada usa `@base-ui/react` como primitivos (no Radix UI). El patrón `asChild` **no existe** en este estilo. Para links con apariencia de botón, usar `buttonVariants({ variant })` aplicado directamente a `<Link>` de Next.js.
 - **tRPC v11 activo**: `@trpc/server` instalado. `appRouter` en `src/server/trpc/router.ts`, handler en `/api/trpc/[trpc]`. `clientesRouter` con `clientes.crear` (admin) y `clientes.listar` (protegido). El endpoint REST `POST /api/clientes` sigue activo en paralelo — se eliminará cuando el wizard frontend migre a tRPC.
-- **Roles ADMIN/EDITOR vía `ADMIN_EMAILS`**: env var en Easypanel con emails separados por coma. El callback `jwt` de NextAuth evalúa en cada login — sin tocar la BD. Todos los usuarios autenticados ven todos los clientes activos (`ClientUser` granular dormido).
+- **Roles ADMIN/EDITOR vía `ADMIN_EMAILS`**: env var en Easypanel con emails separados por coma. El callback `jwt` de NextAuth normaliza (lowercase+trim) y evalúa en cada refresh — sin tocar la BD. Todos los usuarios autenticados ven todos los clientes activos. `ClientUser` granular dormido en v1.
 
 ---
 
@@ -313,10 +313,11 @@ Nunca hacer INSERT manual a `_prisma_migrations` — Prisma verifica el checksum
 
 | Variable | Valor en Easypanel | Notas |
 |---|---|---|
-| `REDIS_URL` | `redis://default:[pwd]@apps-cerebro-seo-redis:6379` | Hostname con **guiones** (no underscores). Password embebido. |
+| `REDIS_URL` | `redis://default:[pwd]@apps_cerebro-seo-redis:6379` | Hostname Easypanel: `<proyecto>_<servicio>` — underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. Password embebido. |
 | `NEXTAUTH_URL` | `https://seo.clicksociety.com.mx` | URL pública. NO `localhost`. |
 | `NEXTAUTH_URL_INTERNAL` | `https://seo.clicksociety.com.mx` | Igual que `NEXTAUTH_URL`. Si apunta a `localhost`, el middleware falla en el contenedor. |
-| `DATABASE_URL` | `postgresql://cerebro:[pwd]@apps-cerebro-db:5432/cerebro_seo` | BD interna Easypanel. |
+| `DATABASE_URL` | `postgresql://cerebro:[pwd]@apps-cerebro-db:5432/cerebro_seo` | BD interna Easypanel. Compartida con cerebro-web — rotar password en sesión coordinada. |
+| `ADMIN_EMAILS` | `jorge@clicksociety.com.mx,felix@clicksociety.com.mx` | Lista de emails ADMIN, separados por coma sin espacios. Cambios requieren restart del servicio. |
 
 > **Nota Redis**: `ioredis` usa dos clientes en el código. `redis` (cache) tiene `maxRetriesPerRequest: 0` + `enableOfflineQueue: false` para fallar rápido. `redisBullMQ` tiene `maxRetriesPerRequest: null` como requiere BullMQ. Ambos tienen `.on('error', ...)` listener para evitar crash por excepción no manejada.
 
@@ -509,7 +510,8 @@ Implementación pendiente en `src/lib/cerebro-bridge.ts` (Fase 2). Ver `integrat
 
 - **Auth:** NextAuth v4. Google OAuth únicamente — herramienta 100% interna, sin acceso de clientes finales.
 - **Session strategy: JWT obligatorio en producción.** `session.strategy: "jwt"` es requerido cuando se usa `next-auth/middleware` en Next.js App Router. Con `strategy: "database"` (default de PrismaAdapter), la cookie `session-token` contiene un UUID opaco. El middleware llama `getToken()` internamente, que solo decodifica JWTs — al recibir un UUID falla silenciosamente y redirige al login aunque la sesión exista en Postgres. PrismaAdapter sigue activo y persiste `User` y `Account` correctamente.
-- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR). El rol se incluye en el JWT y se propaga a `session.user.role` vía el callback `jwt`.
+- **Roles:** `UserRole` enum en BD (ADMIN, EDITOR). El rol efectivo se asigna vía `ADMIN_EMAILS` env var en el callback `jwt` de NextAuth — normalizado lowercase+trim, idempotente en cada refresh de token. Si el email está en la lista → ADMIN; si no → rol de BD (`@default(EDITOR)`). `ClientUser` permanece en schema para granularidad futura, no se usa en v1. **`ADMIN_EMAILS` sobreescribe `User.role` de BD.**
+- **Variable `ADMIN_EMAILS`** (requerida en producción): lista de emails separados por coma. Formato: `admin1@dominio.com,admin2@dominio.com` (sin espacios). Cambios requieren restart del servicio para tomar efecto.
 - **Autorización server-side:** Admin layout verifica rol ADMIN o EDITOR.
 - **Row-level security:** toda query Prisma filtrada por `clientId` derivado de la sesión. Nunca confiar en `clientId` del request.
 - **Bridge Cerebro:** shared secret en header `x-internal-secret`, validado en ambos servicios.

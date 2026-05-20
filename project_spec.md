@@ -101,9 +101,7 @@ La vista central del producto. Estructura jerárquica:
 | ADMIN | Ve todos los clientes. Puede crear/configurar clientes. | Email en `ADMIN_EMAILS` env var (Easypanel). El jwt callback promueve a ADMIN en cada login sin tocar la BD. |
 | EDITOR | Ve todos los clientes activos. Sin visibilidad de costos de API. | Cualquier login Google de Click Society que no esté en `ADMIN_EMAILS`. |
 
-> **Mecanismo de promoción a ADMIN:** variable de entorno `ADMIN_EMAILS` en Easypanel con la lista de emails separados por coma (ej. `jorge@clicksociety.com.mx,otro@clicksociety.com.mx`). El callback `jwt` de NextAuth la evalúa en cada refresco de token — cambiar la lista surte efecto en el siguiente login sin redeploy de BD.
->
-> **`ClientUser` granular dormido:** la tabla existe en el schema pero no se usa para filtrar. Todos los usuarios autenticados ven todos los clientes activos. Se activará en Fase 2+ si se necesita restricción por cuenta (ej. un EDITOR que solo gestiona ciertos clientes).
+> **Implementado 2026-05-20**: la asignación de rol ADMIN se hace vía `ADMIN_EMAILS` (env var en Easypanel con lista de emails separados por coma). El callback `jwt` de NextAuth normaliza el email del token (lowercase + trim) y lo compara contra la lista; si coincide, asigna ADMIN, si no, EDITOR. **EDITOR ahora ve todos los clientes activos igual que ADMIN** — la tabla `ClientUser` permanece en el schema pero no se usa para filtrado en v1 (queda disponible para granularidad por-cliente si se comercializa en el futuro). La diferencia ADMIN vs EDITOR se mantiene en visibilidad de costos de API y configuración del sistema.
 >
 > `CLIENT` existe en el enum del schema pero no se usa en v1. La herramienta es 100% interna — no hay portal para clientes finales.
 
