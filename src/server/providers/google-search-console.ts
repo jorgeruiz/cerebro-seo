@@ -35,6 +35,21 @@ export interface GscQueriesParams {
   rowLimit?: number;
 }
 
+export interface GscPageRow {
+  page: string;      // URL absoluta tal como devuelve GSC
+  clicks: number;
+  impressions: number;
+  ctr: number;       // porcentaje, ej: 3.45
+  position: number;  // promedio
+}
+
+export interface GscPagesParams {
+  siteUrl: string;
+  startDate: string;
+  endDate: string;
+  rowLimit?: number;
+}
+
 const MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 
 function formatDateLabel(iso: string): string {
@@ -168,6 +183,41 @@ export class GoogleSearchConsoleProvider {
 
     const rows: GscQueryRow[] = (data.rows ?? []).map((row) => ({
       query: row.keys?.[0] ?? "",
+      clicks: row.clicks ?? 0,
+      impressions: row.impressions ?? 0,
+      ctr: parseFloat(((row.ctr ?? 0) * 100).toFixed(2)),
+      position: parseFloat((row.position ?? 0).toFixed(1)),
+    }));
+
+    try {
+      await redis.set(cacheKey, JSON.stringify(rows), "EX", 86400);
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
+    return rows;
+  }
+
+  async getPages(params: GscPagesParams): Promise<GscPageRow[]> {
+    const { siteUrl, startDate, endDate, rowLimit = 500 } = params;
+    const cacheKey = `cache:gsc:${encodeURIComponent(siteUrl)}:${startDate}:${endDate}:pages`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as GscPageRow[];
+    } catch { /* Redis caído — continuar sin caché */ }
+
+    const sc = google.webmasters({ version: "v3", auth: this.auth });
+    const { data } = await sc.searchanalytics.query({
+      siteUrl,
+      requestBody: {
+        startDate,
+        endDate,
+        dimensions: ["page"],
+        rowLimit,
+      },
+    });
+
+    const rows: GscPageRow[] = (data.rows ?? []).map((row) => ({
+      page: row.keys?.[0] ?? "",
       clicks: row.clicks ?? 0,
       impressions: row.impressions ?? 0,
       ctr: parseFloat(((row.ctr ?? 0) * 100).toFixed(2)),

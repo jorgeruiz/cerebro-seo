@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import type { GscQueryRow } from "@/server/providers/google-search-console";
 import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
+import type { Ga4PageRow } from "@/server/providers/google-analytics-4";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,32 @@ export interface GscQueriesParams {
 export interface GscQueriesResult {
   queries: GscQueryRow[];
   total: number;
+}
+
+export type PageTrafficSortBy =
+  | "sessions" | "users" | "conversions" | "bounceRate"
+  | "clicks" | "impressions" | "ctr" | "position";
+
+export interface PageTrafficRow {
+  page: string;
+  // GA4 (null si la página no aparece en GA4)
+  sessions: number | null;
+  users: number | null;
+  conversions: number | null;
+  bounceRate: number | null;
+  avgSessionDuration: number | null;
+  // GSC (null si la página no aparece en GSC)
+  clicks: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  position: number | null;
+}
+
+export interface PagesTrafficResult {
+  pages: PageTrafficRow[];
+  total: number;
+  hasGsc: boolean;
+  hasGa4: boolean;
 }
 
 export interface Ga4Snapshot {
@@ -256,4 +283,142 @@ export async function getGscQueries(
 
   const limited = sorted.slice(0, 200);
   return { queries: limited, total: rows.length };
+}
+
+// Quita el dominio de una URL GSC para obtener la pagePath relativa
+// "https://molino.com/servicios" → "/servicios"
+function normalizePagePath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.startsWith("/") ? url : `/${url}`;
+  }
+}
+
+/**
+ * Fusiona datos de tráfico de páginas desde GA4 (sesiones, usuarios, conversiones,
+ * rebote) y GSC (clics, impresiones, CTR, posición) en una sola tabla por URL.
+ * Outer join: incluye páginas que aparezcan en cualquiera de las dos fuentes.
+ * Nulls al final al ordenar.
+ */
+export async function getPagesTraffic({
+  clientId,
+  range,
+  sortBy,
+  sortDir,
+}: {
+  clientId: string;
+  range: GscRange;
+  sortBy: PageTrafficSortBy;
+  sortDir: "asc" | "desc";
+}): Promise<PagesTrafficResult | { error: string }> {
+  const session = await getSession();
+  if (!session?.user?.id) return { error: "no_session" };
+
+  const site = await prisma.site.findFirst({ where: { clientId } });
+  if (!site?.gscProperty && !site?.ga4Property) {
+    return { error: "no_properties_configured" };
+  }
+
+  const oauth = await getOAuth2Client(session.user.id);
+  if (!oauth) return { error: "no_oauth_token" };
+
+  const { startDate, endDate } = rangeToDates(range);
+  const hasGsc = !!site.gscProperty;
+  const hasGa4 = !!site.ga4Property;
+
+  // Llamadas en paralelo — solo las propiedades configuradas
+  const [gscPages, ga4Pages] = await Promise.all([
+    hasGsc
+      ? new GoogleSearchConsoleProvider(oauth).getPages({
+          siteUrl: site.gscProperty!,
+          startDate,
+          endDate,
+        })
+      : Promise.resolve([] as Awaited<ReturnType<GoogleSearchConsoleProvider["getPages"]>>),
+    hasGa4
+      ? new GoogleAnalytics4Provider(oauth).getPagesMetrics(
+          site.ga4Property!,
+          startDate,
+          endDate
+        )
+      : Promise.resolve([] as Ga4PageRow[]),
+  ]);
+
+  // Log ApiUsage por cada fuente consultada
+  const usageEntries = [];
+  if (hasGsc && gscPages.length > 0) {
+    usageEntries.push({ provider: "gsc", endpoint: "searchanalytics.query.pages", cost: 0, clientId });
+  }
+  if (hasGa4 && ga4Pages.length > 0) {
+    usageEntries.push({ provider: "ga4", endpoint: "runReport.pages", cost: 0, clientId });
+  }
+  if (usageEntries.length > 0) {
+    await prisma.apiUsage.createMany({ data: usageEntries });
+  }
+
+  // Outer join por pagePath normalizada
+  // Mapa: pagePath → row combinada
+  const merged = new Map<string, PageTrafficRow>();
+
+  // Insertar páginas de GA4 (pagePath ya es relativa)
+  for (const row of ga4Pages) {
+    const path = row.page.startsWith("/") ? row.page : `/${row.page}`;
+    merged.set(path, {
+      page: path,
+      sessions: row.sessions,
+      users: row.users,
+      conversions: row.conversions,
+      bounceRate: row.bounceRate,
+      avgSessionDuration: row.avgSessionDuration,
+      clicks: null,
+      impressions: null,
+      ctr: null,
+      position: null,
+    });
+  }
+
+  // Insertar/actualizar páginas de GSC (normalizar URL absoluta → pagePath)
+  for (const row of gscPages) {
+    const path = normalizePagePath(row.page);
+    const existing = merged.get(path);
+    if (existing) {
+      existing.clicks = row.clicks;
+      existing.impressions = row.impressions;
+      existing.ctr = row.ctr;
+      existing.position = row.position;
+    } else {
+      merged.set(path, {
+        page: path,
+        sessions: null,
+        users: null,
+        conversions: null,
+        bounceRate: null,
+        avgSessionDuration: null,
+        clicks: row.clicks,
+        impressions: row.impressions,
+        ctr: row.ctr,
+        position: row.position,
+      });
+    }
+  }
+
+  const all = Array.from(merged.values());
+
+  // Ordenar con nulls al final
+  const sorted = [...all].sort((a, b) => {
+    const av = a[sortBy];
+    const bv = b[sortBy];
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+
+  return {
+    pages: sorted.slice(0, 200),
+    total: all.length,
+    hasGsc,
+    hasGa4,
+  };
 }

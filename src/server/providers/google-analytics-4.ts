@@ -16,6 +16,15 @@ export interface Ga4Overview {
   totalConversions: number;
 }
 
+export interface Ga4PageRow {
+  page: string;               // pagePath relativa, ej: "/servicios/filtros"
+  sessions: number;
+  users: number;
+  conversions: number;
+  bounceRate: number;         // porcentaje, ej: 45.2
+  avgSessionDuration: number; // segundos
+}
+
 // GA4 devuelve fechas como "20260412" — convertir a "2026-04-12"
 function parseGa4Date(raw: string): string {
   return raw.length === 8
@@ -127,5 +136,60 @@ export class GoogleAnalytics4Provider {
     } catch { /* Redis caído — devolver datos sin cachear */ }
 
     return overview;
+  }
+
+  async getPagesMetrics(
+    propertyId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Ga4PageRow[]> {
+    const cacheKey = `cache:ga4:${propertyId}:${startDate}:${endDate}:pages`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as Ga4PageRow[];
+    } catch { /* Redis caído — continuar sin caché */ }
+
+    const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
+    const { data } = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "pagePath" }],
+        metrics: [
+          { name: "sessions" },
+          { name: "totalUsers" },
+          { name: "conversions" },
+          { name: "bounceRate" },
+          { name: "averageSessionDuration" },
+        ],
+        dimensionFilter: {
+          filter: {
+            fieldName: "sessionDefaultChannelGrouping",
+            stringFilter: { value: "Organic Search" },
+          },
+        },
+        orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      },
+    });
+
+    const rows: Ga4PageRow[] = (data.rows ?? []).map((row) => ({
+      page: row.dimensionValues?.[0]?.value ?? "",
+      sessions: parseInt(row.metricValues?.[0]?.value ?? "0"),
+      users: parseInt(row.metricValues?.[1]?.value ?? "0"),
+      conversions: parseInt(row.metricValues?.[2]?.value ?? "0"),
+      bounceRate: parseFloat(
+        (parseFloat(row.metricValues?.[3]?.value ?? "0") * 100).toFixed(1)
+      ),
+      avgSessionDuration: parseFloat(
+        parseFloat(row.metricValues?.[4]?.value ?? "0").toFixed(0)
+      ),
+    }));
+
+    try {
+      await redis.set(cacheKey, JSON.stringify(rows), "EX", 14400); // 4h
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
+    return rows;
   }
 }

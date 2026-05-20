@@ -78,7 +78,7 @@ const MODULES = [
   { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-purple-500", requiresSeo: true,  active: false },
   { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-green-500",  requiresSeo: true,  active: false },
   { label: "Keyword Ideas",        icon: Globe,        href: "keywords",          color: "text-indigo-500", requiresSeo: true,  active: false },
-  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico",           color: "text-cyan-500",   requiresSeo: false, active: false },
+  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-cyan-500",   requiresSeo: false, active: true  },
   { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-orange-500", requiresSeo: false, active: false },
   { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-red-500",    requiresSeo: false, active: false },
   { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-yellow-500", requiresSeo: true,  active: false },
