@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-20
-**Fase actual:** Fase 2 — En curso. Módulo Términos de búsqueda implementado (GSC).
-**Próximo hito:** Sesión 14 — Validar Términos de búsqueda en producción + siguiente módulo Fase 2
+**Fase actual:** Fase 2 — En curso. Módulos Términos de búsqueda y Tráfico de páginas implementados.
+**Próximo hito:** Sesión 15 — Validar módulos en producción + siguiente módulo Fase 2
 
 ---
 
@@ -82,6 +82,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
 | Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
+| Módulo Tráfico de páginas | ✅ Implementado | `/clientes/[id]/trafico-paginas`. Fusión GA4+GSC por URL (outer join), columnas condicionales, SSR, nulls al final. |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
 
 ---
@@ -325,6 +326,27 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 14 — 2026-05-20
+**Participantes:** Claude Code (sesión autónoma)
+**Resultado:** ✅ Módulo Tráfico de páginas implementado. 12/12 tests. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `GoogleSearchConsoleProvider.getPages()`: `dimensions:["page"]`, cache Redis 24h.
+- `GoogleAnalytics4Provider.getPagesMetrics()`: `pagePath` + sesiones/usuarios/conversiones/rebote/avgDuration, filtro Organic Search, cache Redis 4h.
+- `getPagesTraffic()` server action: `Promise.all` para GSC y GA4 en paralelo, `normalizePagePath()` para convertir URL absoluta GSC → pagePath relativa GA4, outer join en Map, sort con nulls al final, top 200.
+- `trafico-paginas/page.tsx`: SSR con datos default, header + breadcrumb, 3 estados (sin propiedades, solo GSC, solo GA4, ambas).
+- `PagesTrafficTable.tsx`: columnas condicionales según `hasGsc`/`hasGa4`, toggle range, badges de fuentes, skeleton, null → "—" en gris, tooltip URL completa.
+- Portada: "Tráfico de páginas" activado como Link real a `trafico-paginas`.
+- 5 nuevos tests (2 GSC pages + 3 GA4 pages). Total: 12/12 verdes.
+
+**Decisión técnica clave:** Normalización URL entre fuentes — GSC entrega URL absoluta (`https://dominio.com/ruta`), GA4 entrega `pagePath` relativa (`/ruta`). Función `normalizePagePath()` usa `new URL(url).pathname` para hacer el match del outer join. Sin esto, cada página aparecería duplicada.
+
+**Commits:** `feat: módulo tráfico de páginas con fusión GA4+GSC por URL` (863867f)
+
+**Costo de APIs:** $0 (GSC free tier, GA4 free tier, sin DataForSEO ni Claude).
+
+---
 
 ### Sesión 13 — 2026-05-20
 **Participantes:** Claude Code (sesión autónoma)
