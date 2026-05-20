@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -70,17 +71,18 @@ const CYCLE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const MODULES = [
-  // requiresSeo: false = disponible para todos los clientes activos (feature gratis)
+  // active: true = módulo implementado y linkeable
+  // requiresSeo: false = disponible para todos los clientes activos
   // requiresSeo: true  = solo clientes con servicio SEO contratado
-  { label: "Términos de búsqueda", icon: Search,     href: "terminos",     color: "text-blue-500",   requiresSeo: false },
-  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",    color: "text-purple-500", requiresSeo: true  },
-  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",color: "text-green-500",  requiresSeo: true  },
-  { label: "Keyword Ideas",        icon: Globe,        href: "keywords",     color: "text-indigo-500", requiresSeo: true  },
-  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico",      color: "text-cyan-500",   requiresSeo: false },
-  { label: "Eventos",              icon: Calendar,    href: "eventos",      color: "text-orange-500", requiresSeo: false },
-  { label: "Site Audit",           icon: FileSearch,  href: "audit",        color: "text-red-500",    requiresSeo: false },
-  { label: "Competencia",          icon: BarChart3,   href: "competencia",  color: "text-yellow-500", requiresSeo: true  },
-  { label: "Backlinks",            icon: Link2,        href: "backlinks",    color: "text-pink-500",   requiresSeo: true  },
+  { label: "Términos de búsqueda", icon: Search,     href: "terminos-busqueda", color: "text-blue-500",   requiresSeo: false, active: true  },
+  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-purple-500", requiresSeo: true,  active: false },
+  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-green-500",  requiresSeo: true,  active: false },
+  { label: "Keyword Ideas",        icon: Globe,        href: "keywords",          color: "text-indigo-500", requiresSeo: true,  active: false },
+  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico",           color: "text-cyan-500",   requiresSeo: false, active: false },
+  { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-orange-500", requiresSeo: false, active: false },
+  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-red-500",    requiresSeo: false, active: false },
+  { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-yellow-500", requiresSeo: true,  active: false },
+  { label: "Backlinks",            icon: Link2,        href: "backlinks",         color: "text-pink-500",   requiresSeo: true,  active: false },
 ];
 
 export default async function ClienteDetallePage({
@@ -314,20 +316,12 @@ export default async function ClienteDetallePage({
             Módulos de análisis
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {MODULES.map(({ label, icon: Icon, href, color, requiresSeo }) => {
+            {MODULES.map(({ label, icon: Icon, href, color, requiresSeo, active }) => {
               const locked = requiresSeo && !hasSeo;
-              return (
-                <button
-                  key={href}
-                  className={[
-                    "flex flex-col items-start gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition-all duration-150",
-                    locked
-                      ? "border-gray-100 cursor-not-allowed opacity-50"
-                      : "border-gray-100 cursor-not-allowed opacity-60 hover:shadow-md hover:border-indigo-200",
-                  ].join(" ")}
-                  disabled
-                  title={locked ? "Este cliente no tiene servicio SEO contratado. Para activarlo, agrégalo desde Notion → Servicio." : "Disponible en Fase 2"}
-                >
+              const moduleUrl = `/clientes/${client.id}/${href}`;
+
+              const inner = (
+                <>
                   <div className="flex items-center justify-between w-full">
                     <div className={`h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center ${locked ? "text-gray-300" : color}`}>
                       <Icon className="h-4 w-4" />
@@ -335,12 +329,40 @@ export default async function ClienteDetallePage({
                     {locked && <Lock className="h-3 w-3 text-gray-300 shrink-0" />}
                   </div>
                   <span className={`text-xs font-medium leading-tight ${locked ? "text-gray-400" : "text-gray-700"}`}>{label}</span>
+                </>
+              );
+
+              if (active && !locked) {
+                return (
+                  <Link
+                    key={href}
+                    href={moduleUrl}
+                    className="flex flex-col items-start gap-3 rounded-xl border border-gray-100 bg-white p-4 text-left shadow-sm transition-all duration-150 hover:shadow-md hover:border-indigo-200"
+                  >
+                    {inner}
+                  </Link>
+                );
+              }
+
+              return (
+                <button
+                  key={href}
+                  className={[
+                    "flex flex-col items-start gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition-all duration-150",
+                    locked
+                      ? "border-gray-100 cursor-not-allowed opacity-50"
+                      : "border-gray-100 cursor-not-allowed opacity-60",
+                  ].join(" ")}
+                  disabled
+                  title={locked ? "Este cliente no tiene servicio SEO contratado." : "Disponible próximamente"}
+                >
+                  {inner}
                 </button>
               );
             })}
           </div>
           <p className="text-xs text-gray-400 mt-3 text-center">
-            Los módulos se activarán conforme se implemente la Fase 2 del proyecto.
+            Los módulos restantes se activarán conforme avance la Fase 2.
           </p>
         </section>
       </div>

@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
+import type { GscQueryRow } from "@/server/providers/google-search-console";
 import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -16,6 +17,24 @@ export interface GscSite {
 }
 
 export type GscRange = "28d" | "90d" | "12m";
+export type { GscQueryRow };
+
+export type GscQueriesDevice = "all" | "desktop" | "mobile" | "tablet";
+export type GscQueriesSortBy = "clicks" | "impressions" | "ctr" | "position";
+
+export interface GscQueriesParams {
+  clientId: string;
+  range: GscRange;
+  device: GscQueriesDevice;
+  country: string; // "all" | ISO 3166-1 alpha-3 lowercase
+  sortBy: GscQueriesSortBy;
+  sortDir: "asc" | "desc";
+}
+
+export interface GscQueriesResult {
+  queries: GscQueryRow[];
+  total: number;
+}
 
 export interface Ga4Snapshot {
   sessions: number;
@@ -182,4 +201,59 @@ export async function getGa4Snapshot(
     bounceRateDelta: parseFloat((current.avgBounceRate - prev.avgBounceRate).toFixed(1)),
     conversionsDelta: current.totalConversions - prev.totalConversions,
   };
+}
+
+function rangeToDates(range: GscRange): { startDate: string; endDate: string } {
+  const days = range === "28d" ? 28 : range === "90d" ? 90 : 365;
+  return { startDate: daysBack(days), endDate: today() };
+}
+
+/**
+ * Devuelve las queries GSC del cliente filtradas por device/country/range.
+ * Top 200 queries ordenadas en memoria (paginación en Fase 3).
+ */
+export async function getGscQueries(
+  params: GscQueriesParams
+): Promise<GscQueriesResult | { error: string }> {
+  const session = await getSession();
+  if (!session?.user?.id) return { error: "no_session" };
+
+  const site = await prisma.site.findFirst({
+    where: { clientId: params.clientId },
+  });
+  if (!site?.gscProperty) return { error: "no_property_configured" };
+
+  const oauth = await getOAuth2Client(session.user.id);
+  if (!oauth) return { error: "no_oauth_token" };
+
+  const { startDate, endDate } = rangeToDates(params.range);
+
+  const gsc = new GoogleSearchConsoleProvider(oauth);
+  const rows = await gsc.getQueries({
+    siteUrl: site.gscProperty,
+    startDate,
+    endDate,
+    device: params.device,
+    country: params.country,
+  });
+
+  // Log a ApiUsage (GSC es free tier — cost: 0)
+  await prisma.apiUsage.create({
+    data: {
+      provider: "gsc",
+      endpoint: "searchanalytics.query/queries",
+      cost: 0,
+      clientId: params.clientId,
+    },
+  });
+
+  // Ordenar en memoria
+  const sorted = [...rows].sort((a, b) => {
+    const av = a[params.sortBy];
+    const bv = b[params.sortBy];
+    return params.sortDir === "desc" ? bv - av : av - bv;
+  });
+
+  const limited = sorted.slice(0, 200);
+  return { queries: limited, total: rows.length };
 }
