@@ -317,8 +317,7 @@ export default async function ClienteDetallePage({
                 </>
               ) : (
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  Sin estrategia del mes.<br />
-                  <span className="text-gray-300">(Sync pendiente)</span>
+                  Sin estrategia capturada en Notion para este mes.
                 </p>
               )}
             </div>
@@ -328,8 +327,7 @@ export default async function ClienteDetallePage({
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Tareas activas</p>
               {pendingTasks.length === 0 ? (
                 <p className="text-xs text-gray-400">
-                  Sin tareas activas.<br />
-                  <span className="text-gray-300">(Sync pendiente)</span>
+                  Sin tareas activas para este mes.
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -374,8 +372,7 @@ export default async function ClienteDetallePage({
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hipótesis</p>
               {(cycle?.hypotheses ?? []).length === 0 ? (
                 <p className="text-xs text-gray-400">
-                  Sin hipótesis registradas.<br />
-                  <span className="text-gray-300">(Sync pendiente)</span>
+                  Sin hipótesis registradas para este ciclo.
                 </p>
               ) : (
                 <ul className="space-y-2">

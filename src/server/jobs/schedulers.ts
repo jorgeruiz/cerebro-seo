@@ -1,5 +1,4 @@
-import { dataCollectionQueue, aiAnalysisQueue } from "./queues";
-// syncQueue importado cuando se activen los workers de Cerebro — ver TODO en registerGlobalJobs()
+import { dataCollectionQueue, aiAnalysisQueue, syncQueue } from "./queues";
 import { prisma } from "@/lib/db";
 
 /**
@@ -25,7 +24,7 @@ export async function initSchedulers(): Promise<void> {
   }
 
   // Jobs globales (no por cliente)
-  await registerGlobalJobs();
+  await registerGlobalJobs(seoClients);
 }
 
 /**
@@ -106,7 +105,9 @@ export async function registerClientJobs(clientId: string, services: string[] = 
 /**
  * Jobs globales que corren independientemente de clientes individuales.
  */
-async function registerGlobalJobs(): Promise<void> {
+async function registerGlobalJobs(
+  seoClients: { id: string }[]
+): Promise<void> {
   // Cierre de ciclo — día 1 de cada mes, 2 AM
   // El worker se encarga de iterar por todos los clientes con ciclo activo
   await aiAnalysisQueue.add(
@@ -129,30 +130,27 @@ async function registerGlobalJobs(): Promise<void> {
     }
   );
 
-  // Sync con Cerebro — cada 6 horas
-  // TODO: Descomentar cuando Cerebro web exponga los endpoints /api/internal/seo/*
-  // Ver: integration_cerebro.md §4 | Decisión: 2026-05-20 (workers construidos pero desactivados)
-  //
-  // await syncQueue.add(
-  //   "sync:cerebro",
-  //   {},
-  //   {
-  //     repeat: { pattern: "0 */6 * * *" },
-  //     jobId: "sync:cerebro:global",
-  //   }
-  // );
-  //
-  // // Sync de tareas y estrategia — cada 15min, solo clientes SEO
-  // for (const client of seoClients) {
-  //   await syncQueue.add(
-  //     "sync:cerebro-tasks",
-  //     { clientId: client.id },
-  //     {
-  //       repeat: { pattern: "*/15 * * * *" },
-  //       jobId: `sync:cerebro-tasks:${client.id}`,
-  //     }
-  //   );
-  // }
+  // Sync con Cerebro — cada 6 horas (bridge activado 2026-05-21)
+  await syncQueue.add(
+    "sync:cerebro",
+    {},
+    {
+      repeat: { pattern: "0 */6 * * *" },
+      jobId: "sync:cerebro:global",
+    }
+  );
+
+  // Sync de tareas y estrategia — cada 15min, solo clientes SEO
+  for (const client of seoClients) {
+    await syncQueue.add(
+      "sync:cerebro-tasks",
+      { clientId: client.id },
+      {
+        repeat: { pattern: "*/15 * * * *" },
+        jobId: `sync:cerebro-tasks:${client.id}`,
+      }
+    );
+  }
 }
 
 /**
