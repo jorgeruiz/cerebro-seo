@@ -335,17 +335,30 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ### Sesión 16 — 2026-05-21
 **Participantes:** Jorge + Claude Code
-**Resultado:** ✅ Workers del bridge activados en producción. Deploy exitoso. Primer sync pendiente de confirmación (cron cada 15min/6h).
+**Resultado:** 🟡 Bridge activado en código. Workers registrados. Middleware fix + instrumentation hook deployándose (múltiples builds en cola).
 
 **Trabajo realizado:**
-- `schedulers.ts`: `syncQueue` restaurado en imports, `registerGlobalJobs()` recibe `seoClients` como parámetro, `sync:cerebro` (cada 6h) y `sync:cerebro-tasks` (cada 15min × cliente SEO) descomentados y activos.
-- `page.tsx`: "(Sync pendiente)" reemplazado por mensajes neutros ("Sin estrategia capturada en Notion", etc.)
-- Easypanel: `CEREBRO_API_URL` y `CEREBRO_INTERNAL_SECRET` configurados por Jorge. Deploy activado.
-- Verificación post-deploy: `JOBLOGS:[]` esperado — los crons aún no han disparado (primer `sync:cerebro-tasks` en el próximo múltiplo de 15min desde el startup del contenedor). App responde HTTP 307 ✅.
+- `schedulers.ts`: `syncQueue` restaurado, `registerGlobalJobs(seoClients)` — `sync:cerebro` (cada 6h) y `sync:cerebro-tasks` (cada 15min × cliente SEO) activos.
+- `page.tsx`: "(Sync pendiente)" → mensajes neutros.
+- `middleware.ts`: excluir `/api/jobs` y `/api/internal` del NextAuth middleware (tenían su propio auth).
+- `src/instrumentation.ts`: Next.js instrumentation hook — llama `initJobs()` al startup del servidor.
+- `next.config.mjs`: `experimental.instrumentationHook: true`.
+- Easypanel: `CEREBRO_API_URL` y `CEREBRO_INTERNAL_SECRET` configurados por Jorge.
 
-**Decisión técnica:** BullMQ con `repeat: { pattern: "..." }` NO corre inmediatamente al startup — espera al próximo tiempo del cron. Para verificar primer sync: revisar `JobLog` donde `jobName LIKE 'cerebro-%'` después de la próxima :00/:15/:30/:45.
+**Diagnóstico de deploy:**
+- App responde HTTP 307 (funcionando) ✅
+- `/api/jobs/init` sigue devolviendo 307 — el middleware fix `73fdd91` no se confirma desplegado aún
+- `JOBLOGS:[]` y `REPEATABLE:[]` — el instrumentation hook no ha corrido o `initSchedulers()` falló silenciosamente
+- Múltiples builds simultáneos en Easypanel pueden haber interferido
 
-**Commits:** `feat: activar workers de sync con Cerebro web (bridge operativo end-to-end)` (5f7cd35)
+**Commits:** `5f7cd35` (workers), `bf6e551` (docs), `73fdd91` (middleware + instrumentation hook)
+
+**Próximo paso para Jorge:** Verificar que la versión en producción incluye `73fdd91`. En Easypanel Console:
+```
+curl -I https://seo.clicksociety.com.mx/api/jobs/init
+```
+Si responde `401` → middleware fix activo, workers se inicializarán al próximo startup.
+Si responde `307` → trigger un deploy nuevo desde Easypanel UI.
 
 **Costo de APIs:** $0 (REST interno gratuito).
 
