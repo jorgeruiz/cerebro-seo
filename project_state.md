@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-20
-**Fase actual:** Fase 2 — En curso. Módulos Términos de búsqueda y Tráfico de páginas implementados.
-**Próximo hito:** Sesión 15 — Validar módulos en producción + siguiente módulo Fase 2
+**Última actualización:** 2026-05-21
+**Fase actual:** Fase 2 — En curso. Bridge Cerebro construido (workers desactivados). 3 módulos implementados.
+**Próximo hito:** Sesión 16 — Activar bridge cuando Cerebro web exponga endpoints + validar módulos en producción
 
 ---
 
@@ -83,6 +83,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
 | Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
 | Módulo Tráfico de páginas | ✅ Implementado | `/clientes/[id]/trafico-paginas`. Fusión GA4+GSC por URL (outer join), columnas condicionales, SSR, nulls al final. |
+| Bridge Cerebro web | ✅ Construido (desactivado) | `cerebro-bridge.ts`, workers sync clientes y tareas, endpoint `/api/internal/cerebro/.../monthly-summary`. Workers activables descomentando TODO en `schedulers.ts`. |
+| Sección Operativa del mes | ✅ Implementado | 3 bloques en portada: Estrategia (focus+goals), Tareas (status badges), Hipótesis (validation badges). Estado vacío con "(Sync pendiente)". |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
 
 ---
@@ -151,6 +153,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-20 | **`ADMIN_EMAILS` es la autoridad sobre roles en producción.** Sobreescribe `User.role` de BD en cada login. El `UPDATE` manual del 2026-05-17 queda obsoleto — la fuente única de verdad para promoción de ADMIN es la env var de Easypanel. |
 | 2026-05-20 | **Postgres `cerebro-db` es compartido con Cerebro web.** Rotación de password requiere coordinar actualización de `DATABASE_URL` en ambos servicios simultáneamente. NO rotar en sesiones solo-Cerebro-SEO. |
 | 2026-05-20 | **Credenciales rotadas (sesión 12)**: `NEXTAUTH_SECRET`, `SEO_INTERNAL_SECRET`, Redis password. Postgres password aplazado (compartido con cerebro-web). Meta Access Token N/A en Cerebro SEO. |
+| 2026-05-21 | **SSO entre Cerebro y Cerebro SEO: Opción B — Login separado con mismas credenciales Google OAuth.** Cookie compartida en dominio padre descartada. Cero acoplamiento entre apps prevalece sobre fricción de 1 click para equipo de 3 personas. Reconsiderar si escala el equipo o se comercializa (Auth0, Clerk). |
+| 2026-05-21 | **Bridge Cerebro: workers construidos pero NO schedulados.** Bloqueador: 3 endpoints en Cerebro web no existen aún (`/api/internal/seo/clients`, `…/tasks/active`, `…/strategy/current`). Activar descomentando TODO en `src/server/jobs/schedulers.ts` cuando Cerebro web los exponga. |
+| 2026-05-21 | **`ClientStatus.PAUSED`** = cliente que ya no aparece en Cerebro (eliminado/desactivado). `ClientStatus.INACTIVE` no existe en el schema — usar `PAUSED`. |
 
 ---
 
@@ -306,6 +311,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
+| Bridge Cerebro: workers desactivados | Cerebro web (otro repo) | Implementar 3 endpoints en Cerebro web: `/api/internal/seo/clients`, `…/tasks/active`, `…/strategy/current`. Luego descomentar TODO en `schedulers.ts`. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
 | Planear Fase 2 | Jorge + Claude | Priorizar módulos, estimación de costos DataForSEO, diseño sync Notion. |
 
@@ -326,6 +332,33 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 15 — 2026-05-21
+**Participantes:** Claude Code (sesión autónoma con dirección de Jorge)
+**Resultado:** ✅ Bridge Cerebro construido completo. 24/24 tests. Build limpio. Workers desactivados pendiente endpoints en Cerebro web.
+
+**Trabajo realizado:**
+- `cerebro-bridge.ts`: cliente HTTP tipado con timeout 10s, retry 1x en 5xx, graceful 404 (`console.warn` y array vacío — no crashea cuando los endpoints no existen aún).
+- `cerebro-sync-worker.ts`: upsert clientes, guarda contra false negative (array vacío → no marcar nadie PAUSED), no sobrescribe `gscProperty`/`ga4Property`.
+- `cerebro-tasks-sync-worker.ts`: upsert tareas + hipótesis, upsert `MonthlyCycle` con `focus`/`goals` (campos nuevos).
+- `schedulers.ts`: bloque TODO comentado con instrucciones claras de activación.
+- `init.ts`: workers importados y registrados (escuchan la queue pero no hay jobs activos).
+- `monthly-summary/route.ts`: GET auth Bearer, hipótesis/tareas/insights del mes. Métricas de tráfico con placeholder "Disponible en Fase 3".
+- Panel portada: sección "Operativa del mes" expandida con 3 bloques (Estrategia, Tareas, Hipótesis), estados vacíos limpios con "(Sync pendiente)".
+- Migración `add_strategy_fields_to_monthly_cycle`: `focus String?` + `goals String[]` en `MonthlyCycle`.
+
+**Decisiones técnicas:**
+- `ClientStatus.PAUSED` como estado "ya no en Cerebro" (el enum no tiene `INACTIVE`)
+- Métricas de tráfico GSC/GA4 en `monthly-summary` placeholder hasta Fase 3 (CycleCloseAgent)
+- SSO descartado: login separado prevalece sobre 1-click de fricción para equipo de 3
+
+**Commits:** `feat: bridge REST con Cerebro web…` (5711fbb)
+
+**Costo de APIs:** $0 (REST interno gratuito, sin DataForSEO ni Claude).
+
+**Bloqueador para activar workers:** Cerebro web debe implementar 3 endpoints. Cuando existan, descomentar bloque TODO en `schedulers.ts`.
+
+---
 
 ### Sesión 14 — 2026-05-20
 **Participantes:** Claude Code (sesión autónoma)
