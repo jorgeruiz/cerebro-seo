@@ -26,7 +26,9 @@ const envSchema = z.object({
   // Notion
   NOTION_API_KEY: z.string().min(1),
 
-  // Cerebro Bridge (activo en Fase 2)
+  // Cerebro Bridge — URL base de Cerebro web para el cliente HTTP del bridge
+  // En producción: https://cerebro.clicksociety.com.mx
+  // En dev: http://localhost:3001 (fallback en código si no está definida)
   CEREBRO_API_URL: z.string().url().optional(),
   CEREBRO_INTERNAL_SECRET: z.string().optional(),
 

@@ -1,4 +1,5 @@
-import { dataCollectionQueue, aiAnalysisQueue, syncQueue } from "./queues";
+import { dataCollectionQueue, aiAnalysisQueue } from "./queues";
+// syncQueue importado cuando se activen los workers de Cerebro — ver TODO en registerGlobalJobs()
 import { prisma } from "@/lib/db";
 
 /**
@@ -129,14 +130,29 @@ async function registerGlobalJobs(): Promise<void> {
   );
 
   // Sync con Cerebro — cada 6 horas
-  await syncQueue.add(
-    "sync:cerebro",
-    {},
-    {
-      repeat: { pattern: "0 */6 * * *" },
-      jobId: "sync:cerebro:global",
-    }
-  );
+  // TODO: Descomentar cuando Cerebro web exponga los endpoints /api/internal/seo/*
+  // Ver: integration_cerebro.md §4 | Decisión: 2026-05-20 (workers construidos pero desactivados)
+  //
+  // await syncQueue.add(
+  //   "sync:cerebro",
+  //   {},
+  //   {
+  //     repeat: { pattern: "0 */6 * * *" },
+  //     jobId: "sync:cerebro:global",
+  //   }
+  // );
+  //
+  // // Sync de tareas y estrategia — cada 15min, solo clientes SEO
+  // for (const client of seoClients) {
+  //   await syncQueue.add(
+  //     "sync:cerebro-tasks",
+  //     { clientId: client.id },
+  //     {
+  //       repeat: { pattern: "*/15 * * * *" },
+  //       jobId: `sync:cerebro-tasks:${client.id}`,
+  //     }
+  //   );
+  // }
 }
 
 /**

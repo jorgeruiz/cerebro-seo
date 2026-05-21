@@ -110,6 +110,8 @@ model MonthlyCycle {
   yearMonth       String
   status          CycleStatus
   strategySummary String?     @db.Text
+  focus           String?     // Foco del mes (del sync con Cerebro)
+  goals           String[]    @default([]) // Objetivos del mes (del sync con Cerebro)
   notionPageId    String?
   reportPdfUrl    String?
   startedAt       DateTime

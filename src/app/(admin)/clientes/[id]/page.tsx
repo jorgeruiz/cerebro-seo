@@ -40,8 +40,22 @@ async function getClientData(id: string) {
         orderBy: { yearMonth: "desc" },
         take: 1,
         include: {
-          tasks: { orderBy: { priority: "asc" }, take: 10 },
-          hypotheses: { where: { validation: "PENDING" } },
+          tasks: {
+            orderBy: [{ status: "asc" }, { priority: "asc" }],
+            take: 10,
+            select: {
+              id: true, title: true, description: true, status: true,
+              assignedTo: true, dueDate: true, priority: true,
+            },
+          },
+          hypotheses: {
+            orderBy: { validation: "asc" },
+            take: 10,
+            select: {
+              id: true, statement: true, expectedMetric: true, expectedDelta: true,
+              timeframeDays: true, validation: true, validatedAt: true,
+            },
+          },
         },
       },
       keywords: { where: { isPriority: true }, take: 10 },
@@ -275,40 +289,123 @@ export default async function ClienteDetallePage({
         )}
 
         {/* Operativa del mes */}
-        {cycle && (
-          <section>
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-              Operativa del mes · {cycle.yearMonth}
-            </h2>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-              {cycle.strategySummary && (
-                <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-                  {cycle.strategySummary}
+        <section>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+            Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+            {/* Bloque 1 — Estrategia del mes */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estrategia</p>
+              {cycle?.focus ? (
+                <>
+                  <p className="text-sm font-medium text-gray-800 mb-2">{cycle.focus}</p>
+                  {(cycle.goals ?? []).length > 0 && (
+                    <ul className="space-y-1">
+                      {(cycle.goals ?? []).map((g, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                          <span className="text-indigo-400 shrink-0 mt-0.5">·</span>
+                          {g}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {cycle.strategySummary && (
+                    <p className="text-xs text-gray-400 mt-3 leading-relaxed">{cycle.strategySummary}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Sin estrategia del mes.<br />
+                  <span className="text-gray-300">(Sync pendiente)</span>
                 </p>
               )}
+            </div>
 
+            {/* Bloque 2 — Tareas activas */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Tareas activas</p>
               {pendingTasks.length === 0 ? (
-                <p className="text-sm text-gray-400">Sin tareas pendientes este mes.</p>
+                <p className="text-xs text-gray-400">
+                  Sin tareas activas.<br />
+                  <span className="text-gray-300">(Sync pendiente)</span>
+                </p>
               ) : (
                 <ul className="space-y-2">
-                  {pendingTasks.map((task) => (
-                    <li key={task.id} className="flex items-start gap-3">
-                      <div className="mt-1 h-4 w-4 rounded border-2 border-gray-200 shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">{task.title}</p>
-                        {task.description && (
-                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
-                            {task.description}
-                          </p>
-                        )}
-                      </div>
+                  {pendingTasks.slice(0, 5).map((task) => {
+                    const statusColors: Record<string, string> = {
+                      IN_PROGRESS: "bg-blue-50 text-blue-700",
+                      BLOCKED:     "bg-red-50 text-red-700",
+                      PENDING:     "bg-gray-50 text-gray-600",
+                      DONE:        "bg-green-50 text-green-700",
+                    };
+                    const statusLabels: Record<string, string> = {
+                      IN_PROGRESS: "En curso",
+                      BLOCKED:     "Bloqueada",
+                      PENDING:     "Pendiente",
+                      DONE:        "Completada",
+                    };
+                    return (
+                      <li key={task.id} className="flex items-start gap-2">
+                        <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${statusColors[task.status] ?? "bg-gray-50 text-gray-500"}`}>
+                          {statusLabels[task.status] ?? task.status}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-gray-800 leading-tight truncate">{task.title}</p>
+                          {task.assignedTo && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{task.assignedTo}</p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {pendingTasks.length > 5 && (
+                    <li className="text-xs text-indigo-500 pt-1">
+                      +{pendingTasks.length - 5} tareas más
                     </li>
-                  ))}
+                  )}
                 </ul>
               )}
             </div>
-          </section>
-        )}
+
+            {/* Bloque 3 — Hipótesis del mes */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hipótesis</p>
+              {(cycle?.hypotheses ?? []).length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  Sin hipótesis registradas.<br />
+                  <span className="text-gray-300">(Sync pendiente)</span>
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {(cycle?.hypotheses ?? []).slice(0, 5).map((h) => {
+                    const validColors: Record<string, string> = {
+                      PENDING:   "bg-yellow-50 text-yellow-700",
+                      VALIDATED: "bg-green-50 text-green-700",
+                      REFUTED:   "bg-red-50 text-red-700",
+                      PARTIAL:   "bg-orange-50 text-orange-700",
+                    };
+                    const validLabels: Record<string, string> = {
+                      PENDING:   "Pendiente",
+                      VALIDATED: "Validada",
+                      REFUTED:   "Refutada",
+                      PARTIAL:   "Parcial",
+                    };
+                    return (
+                      <li key={h.id} className="flex items-start gap-2">
+                        <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${validColors[h.validation] ?? "bg-gray-50 text-gray-500"}`}>
+                          {validLabels[h.validation] ?? h.validation}
+                        </span>
+                        <p className="text-xs text-gray-700 leading-tight line-clamp-2">{h.statement}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* Los 9 módulos */}
         <section>
