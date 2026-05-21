@@ -3,8 +3,8 @@
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
 **Última actualización:** 2026-05-21
-**Fase actual:** Fase 2 — En curso. Bridge Cerebro construido (workers desactivados). 3 módulos implementados.
-**Próximo hito:** Sesión 16 — Activar bridge cuando Cerebro web exponga endpoints + validar módulos en producción
+**Fase actual:** Fase 2 — En curso. Bridge Cerebro operativo. 3 módulos implementados.
+**Próximo hito:** Sesión 17 — Validar primer sync de clientes/tareas + siguiente módulo Fase 2
 
 ---
 
@@ -83,7 +83,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
 | Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
 | Módulo Tráfico de páginas | ✅ Implementado | `/clientes/[id]/trafico-paginas`. Fusión GA4+GSC por URL (outer join), columnas condicionales, SSR, nulls al final. |
-| Bridge Cerebro web | ✅ Construido (desactivado) | `cerebro-bridge.ts`, workers sync clientes y tareas, endpoint `/api/internal/cerebro/.../monthly-summary`. Workers activables descomentando TODO en `schedulers.ts`. |
+| Bridge Cerebro web | ✅ Operativo | `cerebro-bridge.ts`, workers sync clientes y tareas activos (cada 6h y 15min). Endpoint `/api/internal/cerebro/.../monthly-summary` disponible. |
 | Sección Operativa del mes | ✅ Implementado | 3 bloques en portada: Estrategia (focus+goals), Tareas (status badges), Hipótesis (validation badges). Estado vacío con "(Sync pendiente)". |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
 
@@ -311,7 +311,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
-| Bridge Cerebro: workers desactivados | Cerebro web (otro repo) | Implementar 3 endpoints en Cerebro web: `/api/internal/seo/clients`, `…/tasks/active`, `…/strategy/current`. Luego descomentar TODO en `schedulers.ts`. |
+| Primer sync de clientes/tareas | Automático | `sync:cerebro-tasks` dispara cada 15min, `sync:cerebro` cada 6h. El primer run del contenedor actual ocurrirá en el próximo múltiplo de 15min. Verificar `JobLog` en BD. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
 | Planear Fase 2 | Jorge + Claude | Priorizar módulos, estimación de costos DataForSEO, diseño sync Notion. |
 
@@ -332,6 +332,24 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 16 — 2026-05-21
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Workers del bridge activados en producción. Deploy exitoso. Primer sync pendiente de confirmación (cron cada 15min/6h).
+
+**Trabajo realizado:**
+- `schedulers.ts`: `syncQueue` restaurado en imports, `registerGlobalJobs()` recibe `seoClients` como parámetro, `sync:cerebro` (cada 6h) y `sync:cerebro-tasks` (cada 15min × cliente SEO) descomentados y activos.
+- `page.tsx`: "(Sync pendiente)" reemplazado por mensajes neutros ("Sin estrategia capturada en Notion", etc.)
+- Easypanel: `CEREBRO_API_URL` y `CEREBRO_INTERNAL_SECRET` configurados por Jorge. Deploy activado.
+- Verificación post-deploy: `JOBLOGS:[]` esperado — los crons aún no han disparado (primer `sync:cerebro-tasks` en el próximo múltiplo de 15min desde el startup del contenedor). App responde HTTP 307 ✅.
+
+**Decisión técnica:** BullMQ con `repeat: { pattern: "..." }` NO corre inmediatamente al startup — espera al próximo tiempo del cron. Para verificar primer sync: revisar `JobLog` donde `jobName LIKE 'cerebro-%'` después de la próxima :00/:15/:30/:45.
+
+**Commits:** `feat: activar workers de sync con Cerebro web (bridge operativo end-to-end)` (5f7cd35)
+
+**Costo de APIs:** $0 (REST interno gratuito).
+
+---
 
 ### Sesión 15 — 2026-05-21
 **Participantes:** Claude Code (sesión autónoma con dirección de Jorge)
