@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-21
-**Fase actual:** Fase 2 — En curso. Bridge Cerebro operativo. 3 módulos implementados.
-**Próximo hito:** Sesión 17 — Validar primer sync de clientes/tareas + siguiente módulo Fase 2
+**Última actualización:** 2026-05-21 (Sesión 16 completada)
+**Fase actual:** Fase 2 — En curso. Bridge Cerebro **operativo y deployado**. Workers BullMQ activos. 3 módulos implementados.
+**Próximo hito:** Sesión 17 — Verificar primer sync:cerebro (6h) produjo JobLog + siguiente módulo Fase 2
 
 ---
 
@@ -75,7 +75,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
-| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=4096` para evitar OOM. |
+| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=2048` (VPS 3.8GB sin swap — 4096 causaba OOM). |
 | Redis producción | ✅ Completo | `apps_cerebro-seo-redis:6379` (underscore después de `apps`, guiones en el nombre del servicio — formato Easypanel). Password rotado 2026-05-20. Dos clientes separados. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
 | Roles ADMIN/EDITOR | 🟡 Operativo (parcial) | C+A desplegado. Jorge = ADMIN validado. Félix pendiente validación en incógnito. Ver §DEUDAS. |
@@ -135,7 +135,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-14 | **Dockerfile estructurado para invalidar caché correctamente**: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` para que la capa Prisma sea independiente del código fuente. Cualquier cambio en `src/` invalida solo las capas posteriores. |
 | 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
 | 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
-| 2026-05-15 | **Build de Next.js requiere mínimo 4GB de heap.** Configurado en Dockerfile: `NODE_OPTIONS="--max-old-space-size=4096"` en el paso `RUN npm run build`. El default de Node (~1.5GB) agota el heap a los ~270s durante `next build`. |
+| 2026-05-15 | **Build de Next.js requiere heap extra.** El default Node (~1.5GB) agota el heap a los ~270s durante `next build`. |
+| 2026-05-21 | **`NODE_OPTIONS=--max-old-space-size=2048` (no 4096).** VPS tiene 3.8GB RAM total SIN swap. Con 4096 el OOM Killer del kernel mataba el build en ~4-8 min sin error visible. 2048 (2GB) es suficiente para `next build` y deja margen para otros procesos. |
 | 2026-05-15 | **REDIS_URL en producción usa hostname interno `apps_cerebro-seo-redis`** — Easypanel genera hostnames con formato `<proyecto>_<servicio>`: underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. El error original era un hostname incompleto (sin prefijo `apps_`), no los guiones en sí. |
 | 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
 | 2026-05-16 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs, con database strategy recibe un UUID opaco y falla silenciosamente. PrismaAdapter sigue activo para persistir User y Account. |
@@ -311,7 +312,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
-| Primer sync de clientes/tareas | Automático | `sync:cerebro-tasks` dispara cada 15min, `sync:cerebro` cada 6h. El primer run del contenedor actual ocurrirá en el próximo múltiplo de 15min. Verificar `JobLog` en BD. |
+| Primer sync de clientes/tareas | Automático | Workers activos desde Sesión 16. `sync:cerebro-tasks` cada 15min, `sync:cerebro` cada 6h. Al inicio de Sesión 17, verificar `JobLog` en BD — debe tener entradas `status: success` para los workers de sync. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
 | Planear Fase 2 | Jorge + Claude | Priorizar módulos, estimación de costos DataForSEO, diseño sync Notion. |
 
@@ -335,30 +336,29 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ### Sesión 16 — 2026-05-21
 **Participantes:** Jorge + Claude Code
-**Resultado:** 🟡 Bridge activado en código. Workers registrados. Middleware fix + instrumentation hook deployándose (múltiples builds en cola).
+**Resultado:** ✅ Bridge completamente operativo. Workers BullMQ inicializados. Primer sync pendiente de primer ciclo (programado).
 
 **Trabajo realizado:**
 - `schedulers.ts`: `syncQueue` restaurado, `registerGlobalJobs(seoClients)` — `sync:cerebro` (cada 6h) y `sync:cerebro-tasks` (cada 15min × cliente SEO) activos.
 - `page.tsx`: "(Sync pendiente)" → mensajes neutros.
-- `middleware.ts`: excluir `/api/jobs` y `/api/internal` del NextAuth middleware (tenían su propio auth).
+- `middleware.ts`: excluir `/api/jobs` y `/api/internal` del NextAuth middleware.
 - `src/instrumentation.ts`: Next.js instrumentation hook — llama `initJobs()` al startup del servidor.
 - `next.config.mjs`: `experimental.instrumentationHook: true`.
-- Easypanel: `CEREBRO_API_URL` y `CEREBRO_INTERNAL_SECRET` configurados por Jorge.
+- `Dockerfile`: `NODE_OPTIONS=--max-old-space-size=2048` (bajado de 4096 → VPS solo tiene 3.8GB RAM sin swap, 4GB causaba OOM Kill silencioso del proceso de build).
 
-**Diagnóstico de deploy:**
-- App responde HTTP 307 (funcionando) ✅
-- `/api/jobs/init` sigue devolviendo 307 — el middleware fix `73fdd91` no se confirma desplegado aún
-- `JOBLOGS:[]` y `REPEATABLE:[]` — el instrumentation hook no ha corrido o `initSchedulers()` falló silenciosamente
-- Múltiples builds simultáneos en Easypanel pueden haber interferido
+**Diagnóstico de OOM (causa raíz de builds fallidos):**
+- VPS: 3.8GB RAM total, 0 swap. Con heap de 4GB, el OOM Killer del kernel mataba el build en ~4-8 min.
+- Confirmado con `free -h` en el contenedor: `MemTotal: 4009208 kB`, `Swap: 0`.
+- Fix: `NODE_OPTIONS=--max-old-space-size=2048` (2GB). Build exitoso en 7 min.
+- Commits fallidos: `bf6e551` (docs), `73fdd91` (middleware fix) — todos eran OOM, no errores de código.
 
-**Commits:** `5f7cd35` (workers), `bf6e551` (docs), `73fdd91` (middleware + instrumentation hook)
+**Estado post-deploy (contenedor `eayhrpkwsqa8jb84co0c3dsmk`):**
+- `GET /api/jobs/init` → **401** ✅ (ya no es 307 — middleware correcto)
+- Workers BullMQ: múltiples `bull:data-collection:repeat:*`, `bull:ai-analysis:repeat:*`, `bull:sync:repeat:*` en Redis ✅
+- `JobLog` en BD: 0 entradas (el servidor lleva ~20 min, primer ciclo de 15min aún pendiente)
+- 5 clientes ACTIVE: Lavado Real, DPS Gestion Documental, HJ Exhibi Muebles, SSEPO, RML Diseño
 
-**Próximo paso para Jorge:** Verificar que la versión en producción incluye `73fdd91`. En Easypanel Console:
-```
-curl -I https://seo.clicksociety.com.mx/api/jobs/init
-```
-Si responde `401` → middleware fix activo, workers se inicializarán al próximo startup.
-Si responde `307` → trigger un deploy nuevo desde Easypanel UI.
+**Commits:** `5f7cd35` (workers), `73fdd91` (middleware + instrumentation), `c2a5a18` (fix OOM heap 2GB)
 
 **Costo de APIs:** $0 (REST interno gratuito).
 
