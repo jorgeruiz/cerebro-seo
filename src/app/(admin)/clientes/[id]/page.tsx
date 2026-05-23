@@ -29,6 +29,7 @@ import { InsightCards } from "./InsightCards";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { GscSnapshot, Ga4Snapshot } from "./actions";
+import { env } from "@/env";
 
 async function getClientData(id: string) {
   return prisma.client.findUnique({
@@ -60,7 +61,7 @@ async function getClientData(id: string) {
       },
       keywords: { where: { isPriority: true }, take: 10 },
       insights: {
-        where: { dismissed: false },
+        where: { dismissed: false, acknowledgedAt: null },
         orderBy: [{ severity: "desc" }, { generatedAt: "desc" }],
         take: 5,
       },
@@ -172,6 +173,11 @@ export default async function ClienteDetallePage({
   const pendingTasks = cycle?.tasks.filter((t) => t.status !== "DONE") ?? [];
   const criticalInsights = client.insights.filter((i) => i.severity === "critical");
 
+  // Piloto de InsightsAgent: solo para clientes en INSIGHTS_PILOT_CLIENT_IDS
+  const pilotIds = env.INSIGHTS_PILOT_CLIENT_IDS
+    ?.split(",").map((s) => s.trim()).filter(Boolean);
+  const isPilotClient = !pilotIds || pilotIds.length === 0 || pilotIds.includes(client.id);
+
   return (
     <div className="min-h-full">
       {/* Hero header del cliente */}
@@ -279,12 +285,16 @@ export default async function ClienteDetallePage({
         </section>
 
         {/* Insights proactivos */}
-        {client.insights.length > 0 && (
+        {hasSeo && (
           <section>
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
               Insights del sistema
             </h2>
-            <InsightCards insights={client.insights} />
+            <InsightCards
+              insights={client.insights}
+              clientId={client.id}
+              isPilotClient={isPilotClient}
+            />
           </section>
         )}
 

@@ -41,6 +41,12 @@ const envSchema = z.object({
   // Si no se define, el rol viene del campo role en la BD (default: EDITOR).
   ADMIN_EMAILS: z.string().optional(),
 
+  // InsightsAgent — IDs de clientes locales para piloto (separados por coma, sin espacios).
+  // Si está definido, el agente solo corre para esos clientes.
+  // Si NO está definido, corre para TODOS los clientes con servicio SEO.
+  // Ejemplo: "clxyz123abc,clxyz456def,clxyz789ghi"
+  INSIGHTS_PILOT_CLIENT_IDS: z.string().optional(),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])

@@ -345,6 +345,54 @@ export async function runInsightsProcessor(
   ]);
   const triggerBlock = buildTriggerBlock(trigger, context);
 
+  // Guard: si no hay keywords trackeadas ni audit disponible, no llamar a Claude.
+  // Crea un insight informativo (costo $0) y marca como corrido.
+  const noKeywords =
+    trendsBlock.includes("Total keywords trackeadas: 0") ||
+    trendsBlock.includes("Total keywords trackeadas: N/D");
+  const noAudit = trendsBlock.includes("Sin audit disponible");
+
+  if (noKeywords && noAudit) {
+    // Sin datos de tracking aún — guardar insight informativo si no existe ya este mes
+    const existingInfo = await prisma.insight.findFirst({
+      where: {
+        clientId,
+        type: "INFO",
+        generatedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+        title: { contains: "tracking activo" },
+      },
+    });
+
+    if (!existingInfo) {
+      await prisma.insight.create({
+        data: {
+          clientId,
+          type: "INFO",
+          severity: "low",
+          title: "Análisis disponible cuando el tracking esté activo",
+          description:
+            "El InsightsAgent está activo pero aún no hay datos de posicionamiento en la base de datos. Los insights se generarán automáticamente cuando el RankTrackingAgent comience a registrar posiciones.",
+          suggestedAction:
+            "Configurar keywords prioritarias en el perfil del cliente para iniciar el tracking.",
+          affectedUrls: [],
+          affectedKeywords: [],
+        },
+      });
+    }
+
+    if (trigger === "scheduled") {
+      const ranKey = `insights:ran:${clientId}:${format(new Date(), "yyyy-MM-dd")}:scheduled`;
+      await redis.setex(ranKey, 25 * 3600, "1");
+    }
+
+    return {
+      insightsGenerated: existingInfo ? 0 : 1,
+      skippedDuplicate: 0,
+      tokensUsed: { input: 0, output: 0, cached: 0 },
+      cost: 0,
+    };
+  }
+
   // 3. Llamar a Claude Sonnet con prompt caching
   const anthropic = new Anthropic();
 

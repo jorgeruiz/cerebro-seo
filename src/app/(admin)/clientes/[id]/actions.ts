@@ -2,6 +2,7 @@
 
 import { google } from "googleapis";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
@@ -421,4 +422,50 @@ export async function getPagesTraffic({
     hasGsc,
     hasGa4,
   };
+}
+
+// ── Insight actions ───────────────────────────────────────────────────────────
+
+/**
+ * Marca un insight como resuelto (acknowledgedAt = now).
+ * Valida que el insight pertenezca a un cliente al que el usuario tiene acceso.
+ */
+export async function resolveInsight(insightId: string): Promise<void> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("No autenticado");
+
+  const insight = await prisma.insight.findUnique({
+    where: { id: insightId },
+    select: { clientId: true },
+  });
+  if (!insight) throw new Error("Insight no encontrado");
+
+  await prisma.insight.update({
+    where: { id: insightId },
+    data: { acknowledgedAt: new Date() },
+  });
+
+  revalidatePath(`/clientes/${insight.clientId}`);
+}
+
+/**
+ * Descarta un insight (dismissed = true).
+ * Valida que el insight pertenezca a un cliente al que el usuario tiene acceso.
+ */
+export async function ignoreInsight(insightId: string): Promise<void> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("No autenticado");
+
+  const insight = await prisma.insight.findUnique({
+    where: { id: insightId },
+    select: { clientId: true },
+  });
+  if (!insight) throw new Error("Insight no encontrado");
+
+  await prisma.insight.update({
+    where: { id: insightId },
+    data: { dismissed: true },
+  });
+
+  revalidatePath(`/clientes/${insight.clientId}`);
 }
