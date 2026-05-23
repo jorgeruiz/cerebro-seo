@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-22 (Sesiones 15 y 16 completadas — bridge operativo, workers activos)
-**Fase actual:** Fase 2 — En curso. Bridge Cerebro **100% operativo**. Workers BullMQ activos. 3 módulos implementados.
-**Próximo hito:** Sesión 17 — Verificar primer sync:cerebro (6h) produjo JobLog + siguiente módulo Fase 2
+**Última actualización:** 2026-05-23 (Sesión 17 — InsightsAgent activado en piloto)
+**Fase actual:** Fase 2 — En curso. InsightsAgent **activo en piloto** (3 clientes: Molino Azteca, RFN, Aamsa). 4 módulos implementados.
+**Próximo hito:** Sesión 18 — Validar calidad de insights con Félix (1-2 semanas) → expandir a 12 SEO si aprueba
 
 ---
 
@@ -287,7 +287,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Bridge Cerebro web (`cerebro-bridge.ts` + workers sync) ✅ Sesiones 15–16 — **100% operativo**
 - [ ] Primer site audit técnico (crawler + PageSpeed Insights)
 - [ ] Sync con Notion: clientes, tareas, estrategia, bitácora (vía bridge)
-- [ ] InsightsAgent corriendo con datos reales (primer ciclo completo)
+- [~] InsightsAgent en piloto (Molino Azteca, RFN, Aamsa) ✅ Sesión 17 — pendiente validación Félix para expandir a 12 SEO
 - [ ] tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
 - [ ] Refactorizar `POST /api/clientes` → tRPC
 
@@ -314,7 +314,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
 | ~~Workers de sync Cerebro~~ | ~~Automático~~ | **RESUELTO (Sesión 16).** Workers `sync:cerebro` (6h) y `sync:cerebro-tasks` (15min) activos en producción. Verificar `JobLog` en Sesión 17. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
-| Planear Fase 2 | Jorge + Claude | Priorizar módulos, estimación de costos DataForSEO, diseño sync Notion. |
+| Validar calidad de insights | Félix (1-2 semanas) | Revisar insights generados en portada de Molino Azteca, RFN, Aamsa. Si son accionables → expandir a 12 SEO (cambio trivial: borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel). |
+| Configurar clientes piloto en Easypanel | Jorge | (1) Query BD para IDs de Molino Azteca/RFN/Aamsa. (2) Setear `INSIGHTS_PILOT_CLIENT_IDS` en env vars del servicio. (3) Trigger manual: `tsx scripts/trigger-insights.ts <clientId>`. |
 
 ---
 
@@ -333,6 +334,40 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 17 — 2026-05-23 ✅ COMPLETA
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ InsightsAgent activado en piloto. UI de insights operativa. 31/31 tests. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `src/env.ts`: `INSIGHTS_PILOT_CLIENT_IDS` opcional — lista de IDs para piloto.
+- `.env.example`: documentación de la nueva variable.
+- `schedulers.ts`: filtro piloto en `registerClientJobs` — si `INSIGHTS_PILOT_CLIENT_IDS` definido, solo registra insights job para esos clientes.
+- `insights-processor.ts`: guard de datos vacíos — si 0 keywords Y sin audit, crea insight INFO `"Análisis disponible cuando el tracking esté activo"` sin llamar a Claude (costo $0). Evita gastar tokens cuando no hay datos de posicionamiento.
+- `InsightCards.tsx`: reescrito — badges de severidad (CRITICAL/HIGH=rojo, MEDIUM=ámbar, LOW=azul), tipo (Alerta/Oportunidad/Logro/Info), timestamps relativos, botones "Resuelto" / "Ignorar" / "Ver detalle →".
+- `[id]/page.tsx`: insights section siempre visible para clientes SEO (no condicional a `insights.length > 0`), query filtra `acknowledgedAt: null`, `isPilotClient` derivado de `INSIGHTS_PILOT_CLIENT_IDS`.
+- `actions.ts`: `resolveInsight` (setea `acknowledgedAt`) e `ignoreInsight` (setea `dismissed: true`) con validación de sesión y `revalidatePath`.
+- `insights/[insightId]/page.tsx`: página de detalle — título, análisis completo, acción sugerida, keywords/URLs afectadas, evidencia `dataPoints` en JSON, acciones con `<form>`.
+- `scripts/trigger-insights.ts`: disparo manual de InsightsAgent vía BullMQ — para activar piloto sin esperar al cron de 6 AM.
+- Tests: `insights-worker.test.ts` (3 casos: happy path, JSON inválido, sin datos), `schedulers.test.ts` (4 casos: piloto, todos, vacío, idempotencia). Total: 31/31 verdes.
+
+**Decisiones técnicas:**
+- Schema usa `acknowledgedAt` (resuelto) y `dismissed` (ignorado) — sin nueva migración.
+- Costo piloto: ~$0.066/día (3 clientes × $0.022). Si no hay keywords/audit: $0 (guard activado).
+- Criterio de expansión: Félix valida insights accionables → borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel.
+
+**Costo de APIs:** $0 (sin llamadas a Claude aún — se activa post-configuración en Easypanel).
+
+**Commits:** `48f1049` (feat: InsightsAgent piloto + UI cards + detalle)
+
+**Tareas para Jorge antes del primer ciclo:**
+1. Query en pgWeb: `SELECT id, name FROM "Client" WHERE name ILIKE '%molino%' OR name ILIKE '%rfn%' OR name ILIKE '%aamsa%';`
+2. Setear `INSIGHTS_PILOT_CLIENT_IDS=id1,id2,id3` en Easypanel → env vars → servicio `cerebro-seo`.
+3. Verificar `ANTHROPIC_API_KEY` tiene crédito en console.anthropic.com.
+4. Trigger manual: Easypanel Console (Shell) → `tsx scripts/trigger-insights.ts <clientId>`.
+5. Verificar en portada del cliente que aparece al menos 1 insight.
+
+---
 
 ### Sesión 16 — 2026-05-21 ✅ COMPLETA
 **Participantes:** Jorge + Claude Code
