@@ -88,6 +88,7 @@ model Client {
   events           TimelineEvent[]
   clientUsers      ClientUser[]
   aiSearchVisibility AiSearchVisibility[]
+  audits           Audit[]
 }
 
 model Site {
@@ -198,17 +199,50 @@ model Competitor {
 
 model Audit {
   id               String   @id @default(cuid())
+  clientId         String?
+  client           Client?  @relation(fields: [clientId], references: [id])
   siteId           String
   site             Site     @relation(fields: [siteId], references: [id])
+  type             String   @default("complete") // "quick" | "complete"
+  status           String   @default("completed") // "pending" | "running" | "completed" | "failed"
   date             DateTime @default(now())
-  scoreOverall     Int
-  scoreTechnical   Int
-  scorePerformance Int
-  scoreContent     Int
-  issues           Json
-  pagesCrawled     Int
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  scoreOverall     Int      @default(0)
+  scoreTechnical   Int      @default(0)
+  scorePerformance Int      @default(0)
+  scoreContent     Int      @default(0)
+  accessibilityScore Int?
+  seoScore         Int?
+  issues           Json     @default("[]")
+  pagesCrawled     Int      @default(0)
+  pagesIndexable   Int      @default(0)
+  brokenPages      Int      @default(0)
+  redirectPages    Int      @default(0)
   cwvData          Json?
   summary          String?  @db.Text
+  error            String?  @db.Text
+
+  auditIssues AuditIssue[]
+
+  @@index([clientId, date])
+  @@index([siteId, date])
+}
+
+model AuditIssue {
+  id          String   @id @default(cuid())
+  auditId     String
+  audit       Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  category    String   // "technical" | "performance" | "content" | "seo" | "accessibility"
+  severity    String   // "critical" | "high" | "medium" | "low" | "info"
+  type        String   // e.g. "missing_meta_description", "broken_link", "slow_lcp"
+  title       String
+  description String   @db.Text
+  affectedUrl String?
+  count       Int      @default(1)
+  data        Json?
+
+  @@index([auditId, severity])
 }
 
 model Backlink {

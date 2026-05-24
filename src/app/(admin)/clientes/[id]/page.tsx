@@ -95,7 +95,7 @@ const MODULES = [
   { label: "Keyword Ideas",        icon: Globe,        href: "keywords",          color: "text-indigo-500", requiresSeo: true,  active: false },
   { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-cyan-500",   requiresSeo: false, active: true  },
   { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-orange-500", requiresSeo: false, active: false },
-  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-red-500",    requiresSeo: false, active: false },
+  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-red-500",    requiresSeo: false, active: true  },
   { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-yellow-500", requiresSeo: true,  active: false },
   { label: "Backlinks",            icon: Link2,        href: "backlinks",         color: "text-pink-500",   requiresSeo: true,  active: false },
 ];
