@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-23 (Sesión 17 — InsightsAgent activado en piloto)
-**Fase actual:** Fase 2 — En curso. InsightsAgent **activo en piloto** (3 clientes: Molino Azteca, RFN, Aamsa). 4 módulos implementados.
-**Próximo hito:** Sesión 18 — Validar calidad de insights con Félix (1-2 semanas) → expandir a 12 SEO si aprueba
+**Última actualización:** 2026-05-24 (Sesión 17 cerrada — insights reales verificados en producción)
+**Fase actual:** Fase 2 — En curso. InsightsAgent **activo en piloto** (Molino Azteca, RFN, Aamsa). Insights reales verificados visualmente. 4GB swap activo en VPS.
+**Próximo hito:** Sesión 18 — Site audit técnico (crawler + PageSpeed Insights)
 
 ---
 
@@ -135,7 +135,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-14 | **Dockerfile estructurado para invalidar caché correctamente**: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` para que la capa Prisma sea independiente del código fuente. Cualquier cambio en `src/` invalida solo las capas posteriores. |
 | 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
 | 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
-| 2026-05-21 | **`NODE_OPTIONS=--max-old-space-size=2048` (no 4096).** Build de Next.js requiere heap extra — el default Node (~1.5GB) agota el heap a los ~270s. El valor correcto es **2048 MB**: el VPS tiene solo 3.8GB RAM total SIN swap, y con 4096 el OOM Killer del kernel mataba el proceso de build silenciosamente en ~4-8 min. Confirmado con `free -h` en contenedor (`MemTotal: 4009208 kB`, `Swap: 0`). Decisión 2026-05-15 (4096) **superada** — usar siempre 2048 en este VPS. |
+| 2026-05-21 | **`NODE_OPTIONS=--max-old-space-size=2048` (no 4096).** Build de Next.js requiere heap extra — el default Node (~1.5GB) agota el heap a los ~270s. El valor correcto era **2048 MB** porque el VPS tenía solo 3.8GB RAM SIN swap, y con 4096 el OOM Killer del kernel mataba el proceso silenciosamente en ~4-8 min. |
+| 2026-05-24 | **4GB de swap configurados en VPS (`/swapfile`). Persistente en `/etc/fstab`.** Resuelve definitivamente los OOM kills de builds y prepara terreno para el crawler de site audit (Sesión 18). Con swap disponible, `--max-old-space-size=4096` volvería a ser viable técnicamente — pero **se mantiene en 2048 por estabilidad** hasta que haya razón para subirlo. Swap = red de seguridad, no licencia para inflar el heap. |
 | 2026-05-15 | **REDIS_URL en producción usa hostname interno `apps_cerebro-seo-redis`** — Easypanel genera hostnames con formato `<proyecto>_<servicio>`: underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. El error original era un hostname incompleto (sin prefijo `apps_`), no los guiones en sí. |
 | 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
 | 2026-05-16 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs, con database strategy recibe un UUID opaco y falla silenciosamente. PrismaAdapter sigue activo para persistir User y Account. |
@@ -314,8 +315,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
 | ~~Workers de sync Cerebro~~ | ~~Automático~~ | **RESUELTO (Sesión 16).** Workers `sync:cerebro` (6h) y `sync:cerebro-tasks` (15min) activos en producción. Verificar `JobLog` en Sesión 17. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
-| Validar calidad de insights | Félix (1-2 semanas) | Revisar insights generados en portada de Molino Azteca, RFN, Aamsa. Si son accionables → expandir a 12 SEO (cambio trivial: borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel). |
-| Configurar clientes piloto en Easypanel | Jorge | (1) Query BD para IDs de Molino Azteca/RFN/Aamsa. (2) Setear `INSIGHTS_PILOT_CLIENT_IDS` en env vars del servicio. (3) Trigger manual: `tsx scripts/trigger-insights.ts <clientId>`. |
+| Validar calidad de insights (**en curso**) | Félix (1-2 semanas) | Insights reales generados y verificados visualmente en producción (Sesión 17). Félix debe revisar si son accionables. Si sí → expandir a 12 SEO (borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel). |
 
 ---
 
@@ -356,16 +356,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - Costo piloto: ~$0.066/día (3 clientes × $0.022). Si no hay keywords/audit: $0 (guard activado).
 - Criterio de expansión: Félix valida insights accionables → borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel.
 
-**Costo de APIs:** $0 (sin llamadas a Claude aún — se activa post-configuración en Easypanel).
+**Costo de APIs:** ~$2/mes proyectado (3 clientes × $0.022/día × 30 días). Insights reales verificados visualmente en producción post-deploy.
 
-**Commits:** `48f1049` (feat: InsightsAgent piloto + UI cards + detalle)
-
-**Tareas para Jorge antes del primer ciclo:**
-1. Query en pgWeb: `SELECT id, name FROM "Client" WHERE name ILIKE '%molino%' OR name ILIKE '%rfn%' OR name ILIKE '%aamsa%';`
-2. Setear `INSIGHTS_PILOT_CLIENT_IDS=id1,id2,id3` en Easypanel → env vars → servicio `cerebro-seo`.
-3. Verificar `ANTHROPIC_API_KEY` tiene crédito en console.anthropic.com.
-4. Trigger manual: Easypanel Console (Shell) → `tsx scripts/trigger-insights.ts <clientId>`.
-5. Verificar en portada del cliente que aparece al menos 1 insight.
+**Commits:** `48f1049` (feat: InsightsAgent piloto + UI cards + detalle), `3ce92b4` (docs: bitácora sesión 17)
 
 ---
 
