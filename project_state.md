@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-24 (Sesión 17 cerrada — insights reales verificados en producción)
-**Fase actual:** Fase 2 — En curso. InsightsAgent **activo en piloto** (Molino Azteca, RFN, Aamsa). Insights reales verificados visualmente. 4GB swap activo en VPS.
-**Próximo hito:** Sesión 18 — Site audit técnico (crawler + PageSpeed Insights)
+**Última actualización:** 2026-05-24 (Sesión 18 cerrada — site audit técnico implementado)
+**Fase actual:** Fase 2 — En curso. Site Audit activo. InsightsAgent en piloto. 4GB swap activo en VPS.
+**Próximo hito:** Sesión 19 — Ranking tracking (DataForSEO SERP) o expansión de InsightsAgent a todos los clientes SEO
 
 ---
 
@@ -286,7 +286,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo Términos de búsqueda (GSC) ✅ Sesión 13
 - [x] Módulo Tráfico de páginas (GA4 + GSC) ✅ Sesión 14
 - [x] Bridge Cerebro web (`cerebro-bridge.ts` + workers sync) ✅ Sesiones 15–16 — **100% operativo**
-- [ ] Primer site audit técnico (crawler + PageSpeed Insights)
+- [x] Primer site audit técnico (crawler + PageSpeed Insights) ✅ Sesión 18
 - [ ] Sync con Notion: clientes, tareas, estrategia, bitácora (vía bridge)
 - [~] InsightsAgent en piloto (Molino Azteca, RFN, Aamsa) ✅ Sesión 17 — pendiente validación Félix para expandir a 12 SEO
 - [ ] tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
@@ -334,6 +334,33 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 18 — 2026-05-24 ✅ COMPLETA
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Site Audit técnico implementado. 50/50 tests. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `prisma/schema.prisma`: extiende `Audit` (clientId, type, status, accessibilityScore, seoScore, pagesIndexable/brokenPages/redirectPages, completedAt, error) + nuevo `AuditIssue` (category, severity, type, title, description, affectedUrl, count, data). Migración `extend_audit_model`.
+- `src/server/providers/pagespeed.ts`: PSI API v5 — scores 0-100 (performance/a11y/best-practices/seo), CWV (LCP/FCP/CLS/TBT/INP con field data > lighthouse), top-10 oportunidades.
+- `src/server/crawler/site-crawler.ts`: Cheerio BFS 50 págs, respeta robots.txt. 12 tipos de issues: missing_title, missing_meta_description, missing_h1, multiple_h1, thin_content, noindex, missing_canonical, images_missing_alt, slow_ttfb, not_found, server_error, fetch_error.
+- `src/server/jobs/processors/audit-processor.ts`: modo quick (PSI only, ~15s) + complete (crawl + PSI mobile+desktop). Score ponderado (technical 30% + performance 30% + content 20% + seo 10% + a11y 10%). Issues agrupados y deduplicados. Marca audit running → completed/failed.
+- `audit-quick-worker.ts` + `audit-complete-worker.ts`: workers BullMQ, registrados en `init.ts`.
+- Schedulers ya tenían `crawler:audit-quick` (miércoles 2AM) y `crawler:audit` (1ro mes 1AM).
+- `src/app/(admin)/clientes/[id]/audit/page.tsx`: score cards, CWV con colores good/needs-improvement/poor, stats de crawl, issues por severidad.
+- `src/app/(admin)/clientes/[id]/page.tsx`: módulo Site Audit activado (active: true).
+- `scripts/trigger-audit.ts`: `tsx scripts/trigger-audit.ts <clientId> [quick|complete]`.
+- Tests: pagespeed (7), site-crawler (6), audit-processor (5). Total: 50/50 verdes.
+
+**Decisiones técnicas:**
+- Sin Playwright (RAM insuficiente en VPS). Solo Cheerio. SPAs tendrán datos incompletos — aceptable v1.
+- PSI falla → audit completa con scores 0, no falla el job. Crawler data sigue siendo útil.
+- `Prisma.JsonNull` para `cwvData` nullable JSON (Prisma v5).
+
+**Costo de APIs:** $0/audit. PageSpeed API gratuita (25k req/día). Sin DataForSEO.
+
+**Commit:** `53c0268` (feat: site audit técnico — crawler + PageSpeed + UI)
+
+---
 
 ### Sesión 17 — 2026-05-23 ✅ COMPLETA
 **Participantes:** Jorge + Claude Code
