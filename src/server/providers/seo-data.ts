@@ -94,7 +94,7 @@ export interface SeoDataProvider {
     language: string;
   }): Promise<RankingResult>;
 
-  bulkGetRankings(keywords: KeywordQuery[]): Promise<RankingResult[]>;
+  bulkGetRankings(keywords: KeywordQuery[], depth?: number): Promise<RankingResult[]>;
 
   // Backlinks
   getBacklinks(domain: string, options?: BacklinkOptions): Promise<BacklinkResult[]>;

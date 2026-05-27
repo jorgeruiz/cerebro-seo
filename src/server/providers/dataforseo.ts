@@ -186,10 +186,12 @@ export class DataForSeoProvider implements SeoDataProvider {
 
   // ── bulkGetRankings ────────────────────────────────────────────────────────
   // SERP API, Standard Queue. Usado para tracking masivo programado.
-  // Costo: $0.0006/req. 3.3x más barato que Live.
+  // Costo por depth: base $0.0006 (depth:10) + $0.0015 × (depth-10)/10
+  //   depth:30 ≈ $0.00195/req  ← default para tracking
+  //   depth:100 ≈ $0.0051/req  ← evitar en bulk
   // Envía las tasks y luego hace polling hasta que completan.
 
-  async bulkGetRankings(keywords: KeywordQuery[]): Promise<RankingResult[]> {
+  async bulkGetRankings(keywords: KeywordQuery[], depth = 30): Promise<RankingResult[]> {
     if (keywords.length === 0) return [];
 
     // 1. Post tasks in batches of 100
@@ -204,7 +206,7 @@ export class DataForSeoProvider implements SeoDataProvider {
           keyword: kw.keyword,
           location_code: locationCode(kw.country),
           language_code: kw.language,
-          depth: 100,
+          depth,
         }))
       );
 

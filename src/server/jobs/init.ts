@@ -22,6 +22,7 @@ export async function initJobs(): Promise<void> {
   await import("./workers/insights-worker");
   await import("./workers/audit-quick-worker");
   await import("./workers/audit-complete-worker");
+  await import("./workers/rank-tracking-worker");
 
   // Workers de bridge Cerebro: construidos, listos para procesar cuando se activen los schedulers.
   // Los schedulers correspondientes están comentados en schedulers.ts con TODO.
