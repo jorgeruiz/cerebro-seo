@@ -10,10 +10,10 @@ import { CycleStatus, ClientStatus, UserRole } from "@prisma/client";
 import { ServiceToggle } from "./ServiceToggle";
 
 const SERVICE_LABEL: Record<string, { label: string; color: string }> = {
-  seo:        { label: "SEO",       color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  google_ads: { label: "Ads",       color: "bg-blue-50 text-blue-700 border-blue-200" },
-  meta_ads:   { label: "Meta",      color: "bg-pink-50 text-pink-700 border-pink-200" },
-  contenidos: { label: "Contenido", color: "bg-green-50 text-green-700 border-green-200" },
+  seo:        { label: "SEO",       color: "bg-primary/10 border-ds-gd text-ds-green" },
+  google_ads: { label: "Ads",       color: "bg-ds-blue/10 border-ds-blue/40 text-ds-blue" },
+  meta_ads:   { label: "Meta",      color: "bg-destructive/10 border-destructive/30 text-destructive" },
+  contenidos: { label: "Contenido", color: "bg-ds-yellow/10 border-ds-yellow/40 text-ds-yellow" },
 };
 
 async function getClients(_role: UserRole, _userEmail: string, filterSeo: boolean) {
@@ -59,14 +59,14 @@ export default async function ClientesPage({
 
 function CycleStatusBadge({ status }: { status: CycleStatus }) {
   const config = {
-    ACTIVE: { label: "Activo", class: "bg-green-50 text-green-700 border-green-200" },
-    PLANNING: { label: "Planificando", class: "bg-blue-50 text-blue-700 border-blue-200" },
-    CLOSING: { label: "Cerrando", class: "bg-orange-50 text-orange-700 border-orange-200" },
-    CLOSED: { label: "Cerrado", class: "bg-gray-50 text-gray-600 border-gray-200" },
+    ACTIVE: { label: "Activo", class: "bg-primary/10 border-ds-gd text-ds-green" },
+    PLANNING: { label: "Planificando", class: "bg-ds-blue/10 border-ds-blue/40 text-ds-blue" },
+    CLOSING: { label: "Cerrando", class: "bg-ds-orange/10 border-ds-orange/40 text-ds-orange" },
+    CLOSED: { label: "Cerrado", class: "bg-muted border-border text-muted-foreground" },
   }[status];
 
   return (
-    <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border ${config.class}`}>
+    <span className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${config.class}`}>
       {config.label}
     </span>
   );
@@ -84,8 +84,8 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Clientes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="font-heading font-bold text-2xl text-foreground tracking-tight">Clientes</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 font-mono">
             {clients.length} {clients.length === 1 ? "cliente" : "clientes"}
             {filterSeo ? " con SEO" : " activos"}
           </p>
@@ -95,7 +95,7 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
           {isAdmin && (
             <Link
               href="/clientes/nuevo"
-              className={buttonVariants({ variant: "default" }) + " bg-[#6366f1] hover:bg-[#4f52d4] text-white gap-2"}
+              className={buttonVariants({ variant: "default" }) + " gap-2"}
             >
               <Plus className="h-4 w-4" />
               Nuevo cliente
@@ -107,17 +107,17 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
       {/* Grid de clientes */}
       {clients.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center mb-4">
-            <Plus className="h-6 w-6 text-indigo-400" />
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Plus className="h-6 w-6 text-primary" />
           </div>
-          <p className="text-gray-900 font-medium">Sin clientes aún</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-foreground font-medium">Sin clientes aún</p>
+          <p className="text-sm text-muted-foreground mt-1">
             Agrega tu primer cliente para empezar a trackear su SEO.
           </p>
           {isAdmin && (
             <Link
               href="/clientes/nuevo"
-              className={buttonVariants({ variant: "default" }) + " mt-4 bg-[#6366f1] hover:bg-[#4f52d4] text-white"}
+              className={buttonVariants({ variant: "default" }) + " mt-4"}
             >
               Agregar cliente
             </Link>
@@ -134,14 +134,14 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
               <Link
                 key={client.id}
                 href={`/clientes/${client.id}`}
-                className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-150"
+                className="group block rounded-xl border border-border bg-card p-5 hover:border-primary/40 transition-all duration-150"
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between mb-3">
                   <div
-                    className="h-9 w-9 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    className="h-9 w-9 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0"
                     style={{
-                      background: client.brandColor ?? "linear-gradient(135deg, #6366f1, #3b82f6)",
+                      background: client.brandColor ?? "var(--primary)",
                     }}
                   >
                     {client.name.slice(0, 2).toUpperCase()}
@@ -150,18 +150,18 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
                 </div>
 
                 {/* Name & domain */}
-                <h2 className="font-semibold text-gray-900 text-[15px] leading-tight group-hover:text-indigo-700 transition-colors">
+                <h2 className="font-semibold text-foreground text-[15px] leading-tight group-hover:text-primary transition-colors">
                   {client.name}
                 </h2>
-                <p className="text-xs text-gray-400 mt-0.5">{client.domain}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 font-mono">{client.domain}</p>
 
                 {/* Badges de servicios */}
                 {client.services.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {client.services.map((slug) => {
-                      const cfg = SERVICE_LABEL[slug] ?? { label: slug, color: "bg-gray-50 text-gray-500 border-gray-200" };
+                      const cfg = SERVICE_LABEL[slug] ?? { label: slug, color: "bg-muted text-muted-foreground border-border" };
                       return (
-                        <span key={slug} className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${cfg.color}`}>
+                        <span key={slug} className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded border ${cfg.color}`}>
                           {cfg.label}
                         </span>
                       );
@@ -170,28 +170,28 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
                 )}
 
                 {/* Indicators */}
-                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-50">
+                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
                   {criticalAlerts > 0 ? (
-                    <span className="flex items-center gap-1.5 text-xs text-red-600">
+                    <span className="flex items-center gap-1.5 text-xs text-destructive">
                       <AlertCircle className="h-3.5 w-3.5" />
                       {criticalAlerts} alerta{criticalAlerts > 1 ? "s" : ""}
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 text-xs text-green-600">
+                    <span className="flex items-center gap-1.5 text-xs text-ds-green">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Sin alertas
                     </span>
                   )}
 
                   {pendingTasks > 0 && (
-                    <span className="flex items-center gap-1.5 text-xs text-amber-600">
+                    <span className="flex items-center gap-1.5 text-xs text-ds-yellow">
                       <Clock className="h-3.5 w-3.5" />
                       {pendingTasks} tarea{pendingTasks > 1 ? "s" : ""} pendiente{pendingTasks > 1 ? "s" : ""}
                     </span>
                   )}
 
                   {!cycle && (
-                    <span className="text-xs text-gray-400">Sin ciclo activo</span>
+                    <span className="text-xs text-muted-foreground font-mono">Sin ciclo activo</span>
                   )}
                 </div>
               </Link>

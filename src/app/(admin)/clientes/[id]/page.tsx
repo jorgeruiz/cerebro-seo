@@ -78,25 +78,25 @@ function getDateRange(daysBack: number) {
 }
 
 const CYCLE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: "Mes activo", color: "bg-green-50 text-green-700 border-green-200" },
-  PLANNING: { label: "Planificando", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  CLOSING: { label: "Cerrando mes", color: "bg-orange-50 text-orange-700 border-orange-200" },
-  CLOSED: { label: "Cerrado", color: "bg-gray-50 text-gray-500 border-gray-200" },
+  ACTIVE: { label: "Mes activo", color: "bg-primary/10 border-ds-gd text-ds-green" },
+  PLANNING: { label: "Planificando", color: "bg-ds-blue/10 border-ds-blue/40 text-ds-blue" },
+  CLOSING: { label: "Cerrando mes", color: "bg-ds-orange/10 border-ds-orange/40 text-ds-orange" },
+  CLOSED: { label: "Cerrado", color: "bg-muted border-border text-muted-foreground" },
 };
 
 const MODULES = [
   // active: true = módulo implementado y linkeable
   // requiresSeo: false = disponible para todos los clientes activos
   // requiresSeo: true  = solo clientes con servicio SEO contratado
-  { label: "Términos de búsqueda", icon: Search,     href: "terminos-busqueda", color: "text-blue-500",   requiresSeo: false, active: true  },
-  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-purple-500", requiresSeo: true,  active: false },
-  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-green-500",  requiresSeo: true,  active: false },
-  { label: "Keywords objetivo",    icon: TrendingUp,   href: "keywords",          color: "text-indigo-500", requiresSeo: true,  active: true  },
-  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-cyan-500",   requiresSeo: false, active: true  },
-  { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-orange-500", requiresSeo: false, active: false },
-  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-red-500",    requiresSeo: false, active: true  },
-  { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-yellow-500", requiresSeo: true,  active: false },
-  { label: "Backlinks",            icon: Link2,        href: "backlinks",         color: "text-pink-500",   requiresSeo: true,  active: false },
+  { label: "Términos de búsqueda", icon: Search,     href: "terminos-busqueda", color: "text-ds-blue",        requiresSeo: false, active: true  },
+  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-ds-yellow",      requiresSeo: true,  active: false },
+  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-ds-green",       requiresSeo: true,  active: false },
+  { label: "Keywords objetivo",    icon: TrendingUp,  href: "keywords",          color: "text-primary",        requiresSeo: true,  active: true  },
+  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-ds-blue",        requiresSeo: false, active: true  },
+  { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-ds-orange",      requiresSeo: false, active: false },
+  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-destructive",    requiresSeo: false, active: true  },
+  { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-ds-yellow",      requiresSeo: true,  active: false },
+  { label: "Backlinks",            icon: Link2,       href: "backlinks",         color: "text-muted-foreground", requiresSeo: true, active: false },
 ];
 
 export default async function ClienteDetallePage({
@@ -180,46 +180,46 @@ export default async function ClienteDetallePage({
   return (
     <div className="min-h-full">
       {/* Hero header del cliente */}
-      <div className="border-b border-gray-100 bg-white px-8 py-6">
+      <div className="border-b border-border bg-card px-8 py-6">
         <div className="flex items-start gap-4">
           <div
-            className="h-12 w-12 rounded-xl flex items-center justify-center text-white text-lg font-bold shrink-0 shadow-sm"
+            className="h-12 w-12 rounded-xl flex items-center justify-center text-primary-foreground text-lg font-bold shrink-0"
             style={{
-              background: client.brandColor ?? "linear-gradient(135deg, #6366f1, #3b82f6)",
+              background: client.brandColor ?? "var(--primary)",
             }}
           >
             {client.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
+              <h1 className="font-heading font-bold text-xl text-foreground">{client.name}</h1>
               {cycleStatus && (
                 <span
-                  className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border ${cycleStatus.color}`}
+                  className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleStatus.color}`}
                 >
                   {cycleStatus.label} {cycle?.yearMonth && `· ${cycle.yearMonth}`}
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-400 mt-0.5">{client.domain}</p>
+            <p className="text-sm text-muted-foreground mt-0.5 font-mono">{client.domain}</p>
           </div>
 
           {/* KPIs rápidos */}
           <div className="flex items-center gap-6 shrink-0">
             {criticalInsights.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-sm text-red-600">
+              <div className="flex items-center gap-1.5 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4" />
                 <span className="font-medium">{criticalInsights.length}</span>
                 <span className="text-xs">alertas</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-sm text-green-600">
+              <div className="flex items-center gap-1.5 text-sm text-ds-green">
                 <CheckCircle2 className="h-4 w-4" />
                 <span className="text-xs">Sin alertas</span>
               </div>
             )}
             {pendingTasks.length > 0 && (
-              <div className="flex items-center gap-1.5 text-sm text-amber-600">
+              <div className="flex items-center gap-1.5 text-sm text-ds-yellow">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">{pendingTasks.length}</span>
                 <span className="text-xs">tareas</span>
@@ -233,7 +233,7 @@ export default async function ClienteDetallePage({
         {/* Snapshot GSC 28d — solo si hay propiedad configurada y datos */}
         {gscSnapshot && (
           <section>
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
               Orgánico · últimos 28 días
             </h2>
             <GscSnapshotCards snapshot={gscSnapshot} />
@@ -242,12 +242,10 @@ export default async function ClienteDetallePage({
 
         {/* Gráfica principal GSC */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Tráfico orgánico
-            </h2>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
+            Tráfico orgánico
+          </h2>
+          <div className="bg-card rounded-xl border border-border p-6">
             {site?.gscProperty ? (
               <ClientPortadaChart data={gscData} />
             ) : (
@@ -258,25 +256,23 @@ export default async function ClienteDetallePage({
 
         {/* GA4 snapshot 28d con deltas */}
         <section>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
             Analytics · últimos 28 días
           </h2>
           {ga4Snapshot ? (
             <Ga4SnapshotCards snapshot={ga4Snapshot} />
           ) : site?.ga4Property ? (
-            // Property configurada pero sin datos (token sin scope o error API)
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
-              <p className="text-sm font-medium text-gray-500">Sin datos de Analytics disponibles</p>
-              <p className="text-xs text-gray-400 max-w-xs">
+            <div className="bg-card rounded-xl border border-border p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-muted-foreground">Sin datos de Analytics disponibles</p>
+              <p className="text-xs text-muted-foreground/60 max-w-xs">
                 No se pudieron cargar los datos de GA4. Si acabas de reconectar, vuelve a cargar.
               </p>
             </div>
           ) : (
-            // Sin ga4Property configurado
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
-              <Activity className="h-6 w-6 text-gray-300" />
-              <p className="text-sm font-medium text-gray-500">Google Analytics no configurado</p>
-              <p className="text-xs text-gray-400 max-w-xs">
+            <div className="bg-card rounded-xl border border-border p-6 h-32 flex flex-col items-center justify-center gap-2 text-center">
+              <Activity className="h-6 w-6 text-muted-foreground/30" />
+              <p className="text-sm font-medium text-muted-foreground">Google Analytics no configurado</p>
+              <p className="text-xs text-muted-foreground/60 max-w-xs">
                 Agrega el ID de propiedad GA4 en los ajustes del cliente para ver datos de Analytics.
               </p>
             </div>
@@ -286,7 +282,7 @@ export default async function ClienteDetallePage({
         {/* Insights proactivos */}
         {hasSeo && (
           <section>
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
               Insights del sistema
             </h2>
             <InsightCards
@@ -299,53 +295,53 @@ export default async function ClienteDetallePage({
 
         {/* Operativa del mes */}
         <section>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
             Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
             {/* Bloque 1 — Estrategia del mes */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estrategia</p>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Estrategia</p>
               {cycle?.focus ? (
                 <>
-                  <p className="text-sm font-medium text-gray-800 mb-2">{cycle.focus}</p>
+                  <p className="text-sm font-medium text-foreground mb-2">{cycle.focus}</p>
                   {(cycle.goals ?? []).length > 0 && (
                     <ul className="space-y-1">
                       {(cycle.goals ?? []).map((g, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                          <span className="text-indigo-400 shrink-0 mt-0.5">·</span>
+                        <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <span className="text-primary shrink-0 mt-0.5">·</span>
                           {g}
                         </li>
                       ))}
                     </ul>
                   )}
                   {cycle.strategySummary && (
-                    <p className="text-xs text-gray-400 mt-3 leading-relaxed">{cycle.strategySummary}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-3 leading-relaxed">{cycle.strategySummary}</p>
                   )}
                 </>
               ) : (
-                <p className="text-xs text-gray-400 leading-relaxed">
+                <p className="text-xs text-muted-foreground/60 leading-relaxed">
                   Sin estrategia capturada en Notion para este mes.
                 </p>
               )}
             </div>
 
             {/* Bloque 2 — Tareas activas */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Tareas activas</p>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Tareas activas</p>
               {pendingTasks.length === 0 ? (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground/60">
                   Sin tareas activas para este mes.
                 </p>
               ) : (
                 <ul className="space-y-2">
                   {pendingTasks.slice(0, 5).map((task) => {
                     const statusColors: Record<string, string> = {
-                      IN_PROGRESS: "bg-blue-50 text-blue-700",
-                      BLOCKED:     "bg-red-50 text-red-700",
-                      PENDING:     "bg-gray-50 text-gray-600",
-                      DONE:        "bg-green-50 text-green-700",
+                      IN_PROGRESS: "bg-ds-blue/10 text-ds-blue",
+                      BLOCKED:     "bg-destructive/10 text-destructive",
+                      PENDING:     "bg-muted text-muted-foreground",
+                      DONE:        "bg-primary/10 text-ds-green",
                     };
                     const statusLabels: Record<string, string> = {
                       IN_PROGRESS: "En curso",
@@ -355,20 +351,20 @@ export default async function ClienteDetallePage({
                     };
                     return (
                       <li key={task.id} className="flex items-start gap-2">
-                        <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${statusColors[task.status] ?? "bg-gray-50 text-gray-500"}`}>
+                        <span className={`shrink-0 text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded mt-0.5 ${statusColors[task.status] ?? "bg-muted text-muted-foreground"}`}>
                           {statusLabels[task.status] ?? task.status}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-gray-800 leading-tight truncate">{task.title}</p>
+                          <p className="text-xs font-medium text-foreground leading-tight truncate">{task.title}</p>
                           {task.assignedTo && (
-                            <p className="text-[10px] text-gray-400 mt-0.5">{task.assignedTo}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{task.assignedTo}</p>
                           )}
                         </div>
                       </li>
                     );
                   })}
                   {pendingTasks.length > 5 && (
-                    <li className="text-xs text-indigo-500 pt-1">
+                    <li className="text-xs text-primary pt-1 font-mono">
                       +{pendingTasks.length - 5} tareas más
                     </li>
                   )}
@@ -377,20 +373,20 @@ export default async function ClienteDetallePage({
             </div>
 
             {/* Bloque 3 — Hipótesis del mes */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hipótesis</p>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Hipótesis</p>
               {(cycle?.hypotheses ?? []).length === 0 ? (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground/60">
                   Sin hipótesis registradas para este ciclo.
                 </p>
               ) : (
                 <ul className="space-y-2">
                   {(cycle?.hypotheses ?? []).slice(0, 5).map((h) => {
                     const validColors: Record<string, string> = {
-                      PENDING:   "bg-yellow-50 text-yellow-700",
-                      VALIDATED: "bg-green-50 text-green-700",
-                      REFUTED:   "bg-red-50 text-red-700",
-                      PARTIAL:   "bg-orange-50 text-orange-700",
+                      PENDING:   "bg-ds-yellow/10 text-ds-yellow",
+                      VALIDATED: "bg-primary/10 text-ds-green",
+                      REFUTED:   "bg-destructive/10 text-destructive",
+                      PARTIAL:   "bg-ds-orange/10 text-ds-orange",
                     };
                     const validLabels: Record<string, string> = {
                       PENDING:   "Pendiente",
@@ -400,10 +396,10 @@ export default async function ClienteDetallePage({
                     };
                     return (
                       <li key={h.id} className="flex items-start gap-2">
-                        <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${validColors[h.validation] ?? "bg-gray-50 text-gray-500"}`}>
+                        <span className={`shrink-0 text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded mt-0.5 ${validColors[h.validation] ?? "bg-muted text-muted-foreground"}`}>
                           {validLabels[h.validation] ?? h.validation}
                         </span>
-                        <p className="text-xs text-gray-700 leading-tight line-clamp-2">{h.statement}</p>
+                        <p className="text-xs text-muted-foreground leading-tight line-clamp-2">{h.statement}</p>
                       </li>
                     );
                   })}
@@ -415,7 +411,7 @@ export default async function ClienteDetallePage({
 
         {/* Los 9 módulos */}
         <section>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
             Módulos de análisis
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -426,12 +422,12 @@ export default async function ClienteDetallePage({
               const inner = (
                 <>
                   <div className="flex items-center justify-between w-full">
-                    <div className={`h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center ${locked ? "text-gray-300" : color}`}>
+                    <div className={`h-8 w-8 rounded-lg bg-muted flex items-center justify-center ${locked ? "text-muted-foreground/30" : color}`}>
                       <Icon className="h-4 w-4" />
                     </div>
-                    {locked && <Lock className="h-3 w-3 text-gray-300 shrink-0" />}
+                    {locked && <Lock className="h-3 w-3 text-muted-foreground/30 shrink-0" />}
                   </div>
-                  <span className={`text-xs font-medium leading-tight ${locked ? "text-gray-400" : "text-gray-700"}`}>{label}</span>
+                  <span className={`text-xs font-medium leading-tight ${locked ? "text-muted-foreground/40" : "text-foreground"}`}>{label}</span>
                 </>
               );
 
@@ -440,7 +436,7 @@ export default async function ClienteDetallePage({
                   <Link
                     key={href}
                     href={moduleUrl}
-                    className="flex flex-col items-start gap-3 rounded-xl border border-gray-100 bg-white p-4 text-left shadow-sm transition-all duration-150 hover:shadow-md hover:border-indigo-200"
+                    className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all duration-150 hover:border-primary/40 hover:bg-card"
                   >
                     {inner}
                   </Link>
@@ -451,10 +447,8 @@ export default async function ClienteDetallePage({
                 <button
                   key={href}
                   className={[
-                    "flex flex-col items-start gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition-all duration-150",
-                    locked
-                      ? "border-gray-100 cursor-not-allowed opacity-50"
-                      : "border-gray-100 cursor-not-allowed opacity-60",
+                    "flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all duration-150",
+                    locked ? "cursor-not-allowed opacity-40" : "cursor-not-allowed opacity-50",
                   ].join(" ")}
                   disabled
                   title={locked ? "Este cliente no tiene servicio SEO contratado." : "Disponible próximamente"}
@@ -464,7 +458,7 @@ export default async function ClienteDetallePage({
               );
             })}
           </div>
-          <p className="text-xs text-gray-400 mt-3 text-center">
+          <p className="text-xs text-muted-foreground/60 mt-3 text-center font-mono">
             Los módulos restantes se activarán conforme avance la Fase 2.
           </p>
         </section>

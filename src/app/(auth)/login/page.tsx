@@ -13,18 +13,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-indigo-50">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#6366f1] via-[#3b82f6] to-[#ec4899] mb-4 shadow-lg shadow-indigo-200" />
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Cerebro <span className="text-[#6366f1]">SEO</span>
+          <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center mb-4">
+            <span className="text-primary-foreground font-mono font-bold text-sm leading-none">CS</span>
+          </div>
+          <h1 className="font-heading font-bold text-2xl text-foreground tracking-tight">
+            Cerebro <span className="text-primary">SEO</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Click Society</p>
+          <p className="text-sm text-muted-foreground mt-1 font-mono uppercase tracking-wider text-xs">Click Society</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+        <div className="bg-card rounded-2xl border border-border p-8">
           <Button
             type="button"
             variant="outline"
@@ -54,7 +56,7 @@ export default function LoginPage() {
           </Button>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-6 font-mono">
           Click Society — Monterrey, México
         </p>
       </div>

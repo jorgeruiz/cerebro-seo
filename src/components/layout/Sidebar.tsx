@@ -37,12 +37,14 @@ export function Sidebar() {
     .toUpperCase() ?? "CS";
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r border-gray-100 bg-white">
+    <aside className="flex h-screen w-60 flex-col border-r border-sidebar-border bg-sidebar">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 px-5 border-b border-gray-100">
-        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-[#6366f1] via-[#3b82f6] to-[#ec4899]" />
-        <span className="text-[15px] font-semibold text-gray-900 tracking-tight">
-          Cerebro <span className="text-[#6366f1]">SEO</span>
+      <div className="flex h-16 items-center gap-2.5 px-5 border-b border-sidebar-border">
+        <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+          <span className="text-primary-foreground font-mono font-bold text-[11px] leading-none">CS</span>
+        </div>
+        <span className="font-heading font-bold text-[15px] text-foreground tracking-tight">
+          Cerebro <span className="text-primary">SEO</span>
         </span>
       </div>
 
@@ -57,8 +59,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -69,28 +71,28 @@ export function Sidebar() {
       </nav>
 
       {/* User menu */}
-      <div className="border-t border-gray-100 p-3">
+      <div className="border-t border-sidebar-border p-3">
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-gray-50 transition-colors cursor-pointer bg-transparent border-none outline-none">
+          <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent transition-colors cursor-pointer bg-transparent border-none outline-none">
               <Avatar className="h-7 w-7">
                 <AvatarImage src={session?.user?.image ?? undefined} />
-                <AvatarFallback className="bg-gradient-to-br from-[#6366f1] to-[#ec4899] text-white text-[10px] font-bold">
+                <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 text-left min-w-0">
-                <p className="truncate text-xs font-medium text-gray-900">
+                <p className="truncate text-xs font-medium text-foreground">
                   {session?.user?.name ?? session?.user?.email}
                 </p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-mono">
                   {session?.user?.role ?? ""}
                 </p>
               </div>
-              <ChevronDown className="h-3 w-3 text-gray-400 shrink-0" />
+              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem
-              className="text-red-600 cursor-pointer"
+              className="text-destructive cursor-pointer"
               onClick={() => signOut({ callbackUrl: "/login" })}
             >
               <LogOut className="h-4 w-4 mr-2" />

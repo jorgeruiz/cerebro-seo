@@ -28,17 +28,17 @@ const TYPE_CONFIG: Record<
   InsightType,
   { icon: typeof AlertCircle; bg: string; border: string; iconColor: string; label: string }
 > = {
-  WARNING:     { icon: AlertCircle, bg: "bg-red-50",    border: "border-red-100",    iconColor: "text-red-500",    label: "Alerta" },
-  OPPORTUNITY: { icon: TrendingUp,  bg: "bg-green-50",  border: "border-green-100",  iconColor: "text-green-500",  label: "Oportunidad" },
-  WIN:         { icon: Trophy,      bg: "bg-yellow-50", border: "border-yellow-100", iconColor: "text-yellow-500", label: "Logro" },
-  INFO:        { icon: Info,        bg: "bg-blue-50",   border: "border-blue-100",   iconColor: "text-blue-500",   label: "Info" },
+  WARNING:     { icon: AlertCircle, bg: "bg-destructive/10", border: "border-destructive/20", iconColor: "text-destructive",  label: "Alerta" },
+  OPPORTUNITY: { icon: TrendingUp,  bg: "bg-primary/10",     border: "border-ds-gd",          iconColor: "text-ds-green",     label: "Oportunidad" },
+  WIN:         { icon: Trophy,      bg: "bg-ds-yellow/10",   border: "border-ds-yellow/20",   iconColor: "text-ds-yellow",    label: "Logro" },
+  INFO:        { icon: Info,        bg: "bg-ds-blue/10",     border: "border-ds-blue/20",     iconColor: "text-ds-blue",      label: "Info" },
 };
 
 const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700 border border-red-200",
-  high:     "bg-red-50 text-red-600 border border-red-100",
-  medium:   "bg-amber-50 text-amber-700 border border-amber-200",
-  low:      "bg-blue-50 text-blue-600 border border-blue-100",
+  critical: "bg-destructive/15 text-destructive border border-destructive/30",
+  high:     "bg-destructive/10 text-destructive border border-destructive/20",
+  medium:   "bg-ds-yellow/10 text-ds-yellow border border-ds-yellow/30",
+  low:      "bg-ds-blue/10 text-ds-blue border border-ds-blue/20",
 };
 
 function relativeTime(date: Date): string {
@@ -77,18 +77,18 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
         <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${config.iconColor}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${severityClass}`}>
-              {insight.severity.toUpperCase()}
+            <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${severityClass}`}>
+              {insight.severity}
             </span>
-            <span className="text-[10px] text-gray-400 font-medium">{config.label}</span>
-            <span className="text-[10px] text-gray-300 ml-auto">{relativeTime(insight.generatedAt)}</span>
+            <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wide">{config.label}</span>
+            <span className="text-[10px] text-muted-foreground/60 ml-auto font-mono">{relativeTime(insight.generatedAt)}</span>
           </div>
-          <p className="text-sm font-medium text-gray-900 leading-snug">{insight.title}</p>
-          <p className="text-xs text-gray-600 mt-1 leading-relaxed line-clamp-3">
+          <p className="text-sm font-medium text-foreground leading-snug">{insight.title}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-3">
             {insight.description}
           </p>
           {insight.suggestedAction && (
-            <p className="text-xs font-medium text-gray-700 mt-2">
+            <p className="text-xs font-medium text-ds-dim mt-2">
               → {insight.suggestedAction}
             </p>
           )}
@@ -96,10 +96,10 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-1 border-t border-black/5">
+      <div className="flex items-center gap-2 pt-1 border-t border-border/50">
         <Link
           href={`/clientes/${clientId}/insights/${insight.id}`}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           Ver detalle <ArrowRight className="h-3 w-3" />
         </Link>
@@ -107,7 +107,7 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
         <button
           onClick={handleResolve}
           disabled={loading !== null}
-          className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1 text-xs text-ds-green hover:text-primary disabled:opacity-50 transition-colors"
         >
           <CheckCheck className="h-3 w-3" />
           {loading === "resolve" ? "..." : "Resuelto"}
@@ -115,7 +115,7 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
         <button
           onClick={handleIgnore}
           disabled={loading !== null}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
         >
           <EyeOff className="h-3 w-3" />
           {loading === "ignore" ? "..." : "Ignorar"}
@@ -128,18 +128,18 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
 export function InsightCards({ insights, clientId, isPilotClient }: InsightCardsProps) {
   if (!isPilotClient) {
     return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 text-center">
-        <p className="text-sm text-gray-500 font-medium">Insights proactivos en fase piloto</p>
-        <p className="text-xs text-gray-400 mt-1">Disponibles próximamente para este cliente.</p>
+      <div className="rounded-xl border border-border bg-muted/50 p-5 text-center">
+        <p className="text-sm text-muted-foreground font-medium">Insights proactivos en fase piloto</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">Disponibles próximamente para este cliente.</p>
       </div>
     );
   }
 
   if (insights.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 text-center">
-        <p className="text-sm text-gray-500 font-medium">Sin insights pendientes</p>
-        <p className="text-xs text-gray-400 mt-1">El agente revisa diariamente a las 6 AM.</p>
+      <div className="rounded-xl border border-border bg-muted/50 p-5 text-center">
+        <p className="text-sm text-muted-foreground font-medium">Sin insights pendientes</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">El agente revisa diariamente a las 6 AM.</p>
       </div>
     );
   }
