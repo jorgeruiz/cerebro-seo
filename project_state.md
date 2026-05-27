@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-24 (Sesión 18 cerrada — site audit técnico implementado)
+**Última actualización:** 2026-05-27 (Sesión 19 cerrada — RankTrackingAgent activado + módulo Keywords)
 **Fase actual:** Fase 2 — En curso. Site Audit activo. InsightsAgent en piloto. 4GB swap activo en VPS.
-**Próximo hito:** Sesión 19 — Ranking tracking (DataForSEO SERP) o expansión de InsightsAgent a todos los clientes SEO
+**Próximo hito:** Sesión 20 — InsightsAgent para 12 clientes SEO, o Sync Notion via bridge
 
 ---
 
@@ -165,7 +165,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 1. **SSO entre Cerebro y Cerebro SEO para el equipo**: ¿cookie en dominio padre `clicksociety.mx` o login separado con mismas credenciales? *Resolver antes de que Fase 2 esté en producción.*
 2. **AI Search Visibility provider**: DataForSEO LLM APIs vs Profound vs stack propio. *Resolver en Fase 4.*
-3. **Profundidad de SERP en tracking producción**: depth:10 ($0.0006/req Standard Queue) vs depth:100 ($0.0047/req estimado). Decidir al implementar RankTrackingAgent en Fase 2.
+3. ~~**Profundidad de SERP en tracking producción**~~ ✅ RESUELTO 2026-05-27: depth:30 Standard Queue (~$0.00195/req). Todos los clientes SEO directos (12).
 
 ---
 
@@ -297,7 +297,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - Módulo Backlinks
 - Módulo Eventos / Timeline (con cruce de tareas y conversaciones de Cerebro)
 - **Análisis on-demand de Claude**: botón en panel que abre análisis pre-cargado con TODO el contexto del cliente. NO es chat full-featured.
-- RankTrackingAgent, BacklinksAgent, CompetitorAgent activados
+- [x] RankTrackingAgent ✅ Sesión 19
+- BacklinksAgent, CompetitorAgent activados
 
 ### Fase 4 — IA y reportes
 - Módulo AI Search Visibility
@@ -335,6 +336,31 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ## 8. Bitácora de sesiones
 
+
+### Sesión 19 — 2026-05-27 ✅ COMPLETA
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ RankTrackingAgent activado. Módulo Keywords con tabla + gráfica. 59/59 tests. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `dataforseo.ts` + `seo-data.ts`: `bulkGetRankings` acepta `depth` configurable (default 30, Standard Queue ~$0.00195/query).
+- `rank-tracking-processor.ts`: idempotencia diaria (saltar keywords ya trackeadas hoy), delta prev-curr (positivo = subió), insights algorítmicos (priority >5 posiciones, bulk >10). Caída masiva requiere mínimo 3 keywords (evita falsos positivos con clientes de 1 keyword).
+- `rank-tracking-worker.ts`: concurrency 2, encolado en "data-collection". Routing por job.name (tracking:rankings-priority | tracking:rankings-bulk).
+- `init.ts`: 3 workers nuevos registrados al startup (audit-quick, audit-complete, rank-tracking).
+- `/clientes/[id]/keywords/page.tsx`: servidor dinámico. Calcula delta7d/delta30d/visibilityScore. Expone `KeywordRow` type.
+- `KeywordsTable.tsx`: filtros (tipo all/priority/bulk + rango top3/10/30/fuera), columnas ordenables, badges de posición y delta, paginación >50 filas.
+- `KeywordEvolutionChart.tsx`: multi-select hasta 5 keywords, Recharts LineChart con eje Y invertido [1,31], `connectNulls=false`, tooltip customizado.
+- `/clientes/[id]/page.tsx`: módulo "Keywords objetivo" activado (active: true, icono TrendingUp).
+- `scripts/trigger-rank-tracking.ts`: disparo manual con estimación de costo y tip SQL para ver resultados.
+- Tests: dataforseo polling (4, con `vi.useFakeTimers` + `vi.runAllTimersAsync()`), rank-tracking-worker (5). Total sesión: 9 nuevos. Total proyecto: 59/59.
+
+**Decisiones técnicas:**
+- depth:30 Standard Queue — equilibrio costo/cobertura. $0.00195/query.
+- 12 clientes SEO directos (sin piloto). Scheduler ya tenía los cron jobs en `schedulers.ts`.
+- Insights algorítmicos (sin Claude). Umbral diferenciado: priority 5 pos, bulk 10 pos.
+- Caída masiva: mínimo 3 keywords para activar (1 keyword nunca es "masiva").
+- Tests de polling: `vi.useFakeTimers()` solo no basta — hay que arrancar la promise, luego `await vi.runAllTimersAsync()`, luego `await promise`.
+
+**Costo de APIs:** Por sesión: $0 (tests solo, sin llamadas reales a DataForSEO). En producción: ~$0.00195/keyword/día (priority diario) + ~$0.00195/keyword/semana (bulk).
 ### Sesión 18 — 2026-05-24 ✅ COMPLETA
 **Participantes:** Jorge + Claude Code
 **Resultado:** ✅ Site Audit técnico implementado. 50/50 tests. Build limpio. Push a main.
