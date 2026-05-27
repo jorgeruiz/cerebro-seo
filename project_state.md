@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-27 (Sesión 19 cerrada — RankTrackingAgent activado + módulo Keywords)
+**Última actualización:** 2026-05-27 (Sesión 13 design system parte 1 aplicada — Sesión 19 cerrada — RankTrackingAgent activado + módulo Keywords)
 **Fase actual:** Fase 2 — En curso. Site Audit activo. InsightsAgent en piloto. 4GB swap activo en VPS.
-**Próximo hito:** Sesión 20 — InsightsAgent para 12 clientes SEO, o Sync Notion via bridge
+**Próximo hito:** Sesión 14 — Rediseño visual parte 2 (Sidebar, login, listado, detalle, componentes KpiCard/SectionHeader)
 
 ---
 
@@ -336,6 +336,30 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ## 8. Bitácora de sesiones
 
+
+
+### Sesión 13 — 2026-05-27 ✅ COMPLETA (Design System parte 1)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Click Society Dark UI aplicado en base. Build limpio. Push a main.
+
+**Trabajo realizado:**
+- `src/app/layout.tsx`: tres fuentes via next/font (Syne `--font-display`, Inter `--font-body`, JetBrains Mono `--font-mono`). Clase `dark` permanente en `<html>`.
+- `tailwind.config.ts`: `darkMode: "class"`, fontFamily (display/heading/sans/mono), tokens `ds-*` crudos del DS, borderRadius con `--radius: 0.75rem`.
+- `src/app/globals.css`: tokens dark en `:root` en formato oklch. Sin bloque `.dark` — la app es permanentemente dark. `--font-heading: var(--font-display)` para Syne en headings de cards.
+- `button.tsx`: default=verde lima (`bg-primary`), secondary=cream→verde (`bg-ds-cream`), nueva variante `outline-mono` (borde verde translúcido).
+- `badge.tsx`: default=pill verde tenue (`bg-primary/10 border-ds-gd text-ds-green font-mono uppercase`), variantes warning/info añadidas.
+- `card.tsx`: `border-border` en vez de `ring-1 ring-foreground/10`, `rounded-lg` (0.75rem), CardTitle usa `font-heading` (Syne bold).
+- `input.tsx`: `bg-secondary` (s3 oscuro), `font-mono`, sin overrides `dark:bg-input`.
+- `label.tsx`: `font-mono uppercase tracking-wider text-muted-foreground`.
+- `select.tsx`: SelectTrigger `bg-secondary` consistente con input.
+
+**Decisiones técnicas:**
+- Format oklch para CSS variables (consistente con shadcn base-nova preexistente).
+- Tokens raw `--ds-*` en `:root` + en tailwind como `ds-*` para uso directo en componentes de Sesión 14.
+- Sin bloque `.dark` en globals.css — valores dark en `:root`, clase `dark` en html activa variantes `dark:` de shadcn.
+- Las páginas se verán parcialmente rotas (esperado) — Sesión 14 reimplementa Sidebar + páginas.
+
+**Pendiente Sesión 14:** Sidebar, login, listado de clientes, wizard, vista detalle, KpiCard, SectionHeader, ConclusionCard.
 
 ### Sesión 19 — 2026-05-27 ✅ COMPLETA
 **Participantes:** Jorge + Claude Code
