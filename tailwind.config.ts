@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,6 +10,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ── Semantic (shadcn) ─────────────────────────────────────────
         background: "var(--background)",
         foreground: "var(--foreground)",
         card: {
@@ -51,6 +53,27 @@ const config: Config = {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
+        // ── Raw DS tokens — for ds-* utility classes ──────────────────
+        "ds-bg":      "var(--ds-bg)",
+        "ds-surface": "var(--ds-surface)",
+        "ds-s2":      "var(--ds-s2)",
+        "ds-s3":      "var(--ds-s3)",
+        "ds-line":    "var(--ds-line)",
+        "ds-cream":   "var(--ds-cream)",
+        "ds-dim":     "var(--ds-dim)",
+        "ds-muted":   "var(--ds-muted)",
+        "ds-green":   "var(--ds-green)",
+        "ds-gd":      "var(--ds-gd)",
+        "ds-orange":  "var(--ds-orange)",
+        "ds-red":     "var(--ds-red)",
+        "ds-yellow":  "var(--ds-yellow)",
+        "ds-blue":    "var(--ds-blue)",
+      },
+      fontFamily: {
+        display: ["var(--font-display)", "Syne", "sans-serif"],
+        heading: ["var(--font-display)", "Syne", "sans-serif"],
+        sans:    ["var(--font-body)", "Inter", "sans-serif"],
+        mono:    ["var(--font-mono)", "JetBrains Mono", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",

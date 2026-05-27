@@ -1,9 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Syne, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/layout/SessionProvider";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["500", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Cerebro SEO — Click Society",
@@ -16,8 +35,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={inter.variable}>
-      <body className="font-sans antialiased bg-gray-50">
+    <html
+      lang="es"
+      className={`dark ${syne.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="font-sans antialiased bg-background text-foreground">
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
