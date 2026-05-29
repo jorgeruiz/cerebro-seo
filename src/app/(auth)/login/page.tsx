@@ -20,13 +20,13 @@ export default function LoginPage() {
           <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center mb-4">
             <span className="text-primary-foreground font-mono font-bold text-sm leading-none">CS</span>
           </div>
-          <h1 className="font-heading font-bold text-2xl text-foreground tracking-tight">
+          <h1 className="font-display font-extrabold text-2xl text-foreground tracking-tight">
             Cerebro <span className="text-primary">SEO</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1 font-mono uppercase tracking-wider text-xs">Click Society</p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-8">
+        <div className="bg-card rounded-lg border border-border p-8">
           <Button
             type="button"
             variant="outline"

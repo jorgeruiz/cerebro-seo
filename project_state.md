@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-27 (Sesión 13 design system parte 1 aplicada — Sesión 19 cerrada — RankTrackingAgent activado + módulo Keywords)
+**Última actualización:** 2026-05-29 (Sesión 14 design system parte 2 completa — Dark UI 100% aplicado)
 **Fase actual:** Fase 2 — En curso. Site Audit activo. InsightsAgent en piloto. 4GB swap activo en VPS.
-**Próximo hito:** Sesión 14 — Rediseño visual parte 2 (Sidebar, login, listado, detalle, componentes KpiCard/SectionHeader)
+**Próximo hito:** Sesión 15 — Validar acceso Félix en producción, expandir InsightsAgent a 12 SEO
 
 ---
 
@@ -337,6 +337,34 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ## 8. Bitácora de sesiones
 
 
+
+### Sesión 14 — 2026-05-29 ✅ COMPLETA (Design System parte 2 — UI completo)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Click Society Dark UI 100% aplicado. Build limpio. 10 archivos + 4 nuevos.
+
+**Trabajo realizado:**
+- `src/components/ui-darkui/KpiCard.tsx`: componente DS para KPIs (label/value/delta/icon/variant).
+- `src/components/ui-darkui/SectionHeader.tsx`: separador `// label ————` con línea extendida.
+- `src/components/ui-darkui/ConclusionCard.tsx`: alert card con borde izquierdo de color (success/warning/error/info).
+- `src/components/ui-darkui/index.ts`: barrel export.
+- `src/components/layout/Sidebar.tsx`: dot nav (sin íconos), font-display brand, footer con usuario/rol + dropdown.
+- `src/app/(admin)/clientes/ServiceToggle.tsx`: pill toggle oscuro (bg-card border-border rounded-full).
+- `src/app/(admin)/clientes/page.tsx`: page header DS (font-display extrabold clamp), sin avatar de iniciales.
+- `src/app/(admin)/clientes/[id]/page.tsx`: sin hero section, header inline con font-display + pills de estado, SectionHeader en todas las secciones.
+- `src/app/(admin)/clientes/[id]/GscSnapshotCards.tsx`: usa KpiCard + DeltaBadge con DS tokens.
+- `src/app/(admin)/clientes/[id]/Ga4SnapshotCards.tsx`: usa KpiCard + DeltaBadge con DS tokens.
+- `src/app/(admin)/clientes/[id]/InsightCards.tsx`: usa ConclusionCard, preserva acciones resolve/ignore.
+- `src/app/(admin)/clientes/[id]/ClientPortadaChart.tsx`: colores DS dark (indigo-400, blue-400, pink-400, emerald-400), grid/ticks con rgba, tooltip dark, tabs como pills DS.
+- `src/app/(admin)/clientes/[id]/GscConnectSection.tsx`: sin indigo/gray/white, DS tokens (primary, border, muted-foreground, destructive).
+- `src/app/(admin)/clientes/nuevo/page.tsx`: header font-display, stepper con dots DS, contenedor bg-card, hints font-mono.
+- `src/app/(auth)/login/page.tsx`: font-display extrabold, rounded-lg (no rounded-2xl).
+
+**Bug fix:** `SectionHeader.tsx`: `//` texto causaba `react/jsx-no-comment-textnodes` → envuelto en `{"//"}`.
+
+**Decisiones técnicas:**
+- `client.brandColor` ya no se renderiza en JSX (campo permanece en schema). Avatares eliminados.
+- Recharts no acepta CSS vars en SVG fill → colores hex específicos (dark-friendly palette).
+- `// label ————` patrón implementado como componente reutilizable, `//` escapado como JSX expression.
 
 ### Sesión 13 — 2026-05-27 ✅ COMPLETA (Design System parte 1)
 **Participantes:** Jorge + Claude Code

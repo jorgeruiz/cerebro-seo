@@ -84,7 +84,7 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="font-heading font-bold text-2xl text-foreground tracking-tight">Clientes</h1>
+          <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">Clientes</h1>
           <p className="text-sm text-muted-foreground mt-0.5 font-mono">
             {clients.length} {clients.length === 1 ? "cliente" : "clientes"}
             {filterSeo ? " con SEO" : " activos"}
@@ -136,24 +136,14 @@ function CycleStatusBadge({ status }: { status: CycleStatus }) {
                 href={`/clientes/${client.id}`}
                 className="group block rounded-xl border border-border bg-card p-5 hover:border-primary/40 transition-all duration-150"
               >
-                {/* Top row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div
-                    className="h-9 w-9 rounded-lg flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0"
-                    style={{
-                      background: client.brandColor ?? "var(--primary)",
-                    }}
-                  >
-                    {client.name.slice(0, 2).toUpperCase()}
-                  </div>
+                {/* Top row: name + cycle badge */}
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h2 className="font-display font-semibold text-foreground text-[15px] leading-tight group-hover:text-primary transition-colors flex-1 min-w-0">
+                    {client.name}
+                  </h2>
                   {cycle && <CycleStatusBadge status={cycle.status} />}
                 </div>
-
-                {/* Name & domain */}
-                <h2 className="font-semibold text-foreground text-[15px] leading-tight group-hover:text-primary transition-colors">
-                  {client.name}
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5 font-mono">{client.domain}</p>
+                <p className="text-xs text-muted-foreground mb-3 font-mono">{client.domain}</p>
 
                 {/* Badges de servicios */}
                 {client.services.length > 0 && (

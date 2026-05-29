@@ -25,6 +25,7 @@ import { GscConnectSection } from "./GscConnectSection";
 import { GscSnapshotCards } from "./GscSnapshotCards";
 import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
+import { SectionHeader } from "@/components/ui-darkui";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { GscSnapshot, Ga4Snapshot } from "./actions";
@@ -179,72 +180,51 @@ export default async function ClienteDetallePage({
 
   return (
     <div className="min-h-full">
-      {/* Hero header del cliente */}
-      <div className="border-b border-border bg-card px-8 py-6">
-        <div className="flex items-start gap-4">
-          <div
-            className="h-12 w-12 rounded-xl flex items-center justify-center text-primary-foreground text-lg font-bold shrink-0"
-            style={{
-              background: client.brandColor ?? "var(--primary)",
-            }}
-          >
-            {client.name.slice(0, 2).toUpperCase()}
+      <div className="p-8 space-y-8">
+        {/* Inline page header */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
+              {client.name}
+            </h1>
+            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">{client.domain}</p>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="font-heading font-bold text-xl text-foreground">{client.name}</h1>
-              {cycleStatus && (
-                <span
-                  className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleStatus.color}`}
-                >
-                  {cycleStatus.label} {cycle?.yearMonth && `· ${cycle.yearMonth}`}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-0.5 font-mono">{client.domain}</p>
-          </div>
-
-          {/* KPIs rápidos */}
-          <div className="flex items-center gap-6 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            {cycleStatus && (
+              <span className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleStatus.color}`}>
+                {cycleStatus.label}{cycle?.yearMonth ? ` · ${cycle.yearMonth}` : ""}
+              </span>
+            )}
             {criticalInsights.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4" />
-                <span className="font-medium">{criticalInsights.length}</span>
-                <span className="text-xs">alertas</span>
-              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border bg-destructive/10 border-destructive/30 text-destructive">
+                <AlertCircle className="h-2.5 w-2.5" />
+                {criticalInsights.length} alertas
+              </span>
             ) : (
-              <div className="flex items-center gap-1.5 text-sm text-ds-green">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-xs">Sin alertas</span>
-              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border bg-primary/10 border-ds-gd text-ds-green">
+                <CheckCircle2 className="h-2.5 w-2.5" />
+                Sin alertas
+              </span>
             )}
             {pendingTasks.length > 0 && (
-              <div className="flex items-center gap-1.5 text-sm text-ds-yellow">
-                <Clock className="h-4 w-4" />
-                <span className="font-medium">{pendingTasks.length}</span>
-                <span className="text-xs">tareas</span>
-              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border bg-ds-yellow/10 border-ds-yellow/40 text-ds-yellow">
+                <Clock className="h-2.5 w-2.5" />
+                {pendingTasks.length} tareas
+              </span>
             )}
           </div>
         </div>
-      </div>
-
-      <div className="p-8 space-y-8">
         {/* Snapshot GSC 28d — solo si hay propiedad configurada y datos */}
         {gscSnapshot && (
           <section>
-            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-              Orgánico · últimos 28 días
-            </h2>
+            <SectionHeader>Orgánico · últimos 28 días</SectionHeader>
             <GscSnapshotCards snapshot={gscSnapshot} />
           </section>
         )}
 
         {/* Gráfica principal GSC */}
         <section>
-          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-            Tráfico orgánico
-          </h2>
+          <SectionHeader>Tráfico orgánico</SectionHeader>
           <div className="bg-card rounded-xl border border-border p-6">
             {site?.gscProperty ? (
               <ClientPortadaChart data={gscData} />
@@ -256,9 +236,7 @@ export default async function ClienteDetallePage({
 
         {/* GA4 snapshot 28d con deltas */}
         <section>
-          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-            Analytics · últimos 28 días
-          </h2>
+          <SectionHeader>Analytics · últimos 28 días</SectionHeader>
           {ga4Snapshot ? (
             <Ga4SnapshotCards snapshot={ga4Snapshot} />
           ) : site?.ga4Property ? (
@@ -282,9 +260,7 @@ export default async function ClienteDetallePage({
         {/* Insights proactivos */}
         {hasSeo && (
           <section>
-            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-              Insights del sistema
-            </h2>
+            <SectionHeader>Insights del sistema</SectionHeader>
             <InsightCards
               insights={client.insights}
               clientId={client.id}
@@ -295,9 +271,7 @@ export default async function ClienteDetallePage({
 
         {/* Operativa del mes */}
         <section>
-          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-            Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}
-          </h2>
+          <SectionHeader>Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}</SectionHeader>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
             {/* Bloque 1 — Estrategia del mes */}
@@ -411,9 +385,7 @@ export default async function ClienteDetallePage({
 
         {/* Los 9 módulos */}
         <section>
-          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-            Módulos de análisis
-          </h2>
+          <SectionHeader>Módulos de análisis</SectionHeader>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {MODULES.map(({ label, icon: Icon, href, color, requiresSeo, active }) => {
               const locked = requiresSeo && !hasSeo;

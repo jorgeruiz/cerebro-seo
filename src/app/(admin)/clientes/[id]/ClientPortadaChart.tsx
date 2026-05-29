@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 
 const METRICS = [
-  { key: "clicks", label: "Clics", color: "#6366f1", format: (v: number) => v.toLocaleString("es-MX") },
-  { key: "impressions", label: "Impresiones", color: "#3b82f6", format: (v: number) => v.toLocaleString("es-MX") },
-  { key: "position", label: "Posición prom.", color: "#ec4899", format: (v: number) => `#${v}` },
-  { key: "ctr", label: "CTR", color: "#10b981", format: (v: number) => `${v}%` },
+  { key: "clicks",      label: "Clics",         color: "#818cf8", format: (v: number) => v.toLocaleString("es-MX") },
+  { key: "impressions", label: "Impresiones",    color: "#60a5fa", format: (v: number) => v.toLocaleString("es-MX") },
+  { key: "position",    label: "Posición prom.", color: "#f472b6", format: (v: number) => `#${v}` },
+  { key: "ctr",         label: "CTR",            color: "#34d399", format: (v: number) => `${v}%` },
 ];
 
 const RANGES = ["28d", "90d", "12m"] as const;
@@ -36,8 +36,8 @@ export function ClientPortadaChart({ data }: Props) {
   if (!data || data.length === 0) {
     return (
       <div className="h-48 flex flex-col items-center justify-center gap-2 text-center">
-        <p className="text-sm font-medium text-gray-500">Sin datos de tráfico orgánico</p>
-        <p className="text-xs text-gray-400 max-w-xs">
+        <p className="text-sm font-medium text-muted-foreground">Sin datos de tráfico orgánico</p>
+        <p className="text-xs text-muted-foreground/50 max-w-xs">
           No hay datos GSC disponibles para este período. Si acabas de conectar la propiedad,
           vuelve a cargar la página.
         </p>
@@ -60,28 +60,32 @@ export function ClientPortadaChart({ data }: Props) {
               key={m.key}
               onClick={() => setMetric(m.key)}
               className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                "px-3 py-1.5 rounded-md font-mono text-xs transition-colors border",
                 metric === m.key
-                  ? "text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                  ? "border-transparent"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               )}
-              style={metric === m.key ? { backgroundColor: m.color } : {}}
+              style={
+                metric === m.key
+                  ? { backgroundColor: m.color + "22", color: m.color, borderColor: m.color + "55" }
+                  : {}
+              }
             >
               {m.label}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-1 bg-gray-50 rounded-lg p-0.5">
+        <div className="flex gap-1 bg-card border border-border rounded-lg p-0.5">
           {RANGES.map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={cn(
-                "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                "px-3 py-1 rounded-md font-mono text-xs transition-colors",
                 range === r
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
               {r}
@@ -94,16 +98,16 @@ export function ClientPortadaChart({ data }: Props) {
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
               tickLine={false}
               axisLine={false}
               interval={range === "28d" ? 3 : range === "90d" ? 6 : 30}
             />
             <YAxis
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) =>
@@ -114,14 +118,16 @@ export function ClientPortadaChart({ data }: Props) {
               contentStyle={{
                 fontSize: 12,
                 borderRadius: 8,
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                backgroundColor: "hsl(var(--card))",
+                color: "hsl(var(--foreground))",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
               }}
               formatter={(v) => [
                 typeof v === "number" ? activeMetric.format(v) : String(v),
                 activeMetric.label,
               ]}
-              labelStyle={{ color: "#64748b", marginBottom: 4 }}
+              labelStyle={{ color: "rgba(255,255,255,0.4)", marginBottom: 4 }}
             />
             <Line
               type="monotone"
@@ -135,7 +141,7 @@ export function ClientPortadaChart({ data }: Props) {
         </ResponsiveContainer>
       </div>
 
-      <p className="text-[10px] text-gray-400 mt-3 text-center">
+      <p className="text-[10px] text-muted-foreground/40 mt-3 text-center font-mono">
         Fuente: Google Search Console · Cache 24h
       </p>
     </div>

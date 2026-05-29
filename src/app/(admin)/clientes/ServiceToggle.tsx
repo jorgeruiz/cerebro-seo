@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "cerebroseo:clientFilter";
 
@@ -11,14 +12,12 @@ export function ServiceToggle() {
   const searchParams = useSearchParams();
   const [filter, setFilter] = useState<"seo" | "all">("seo");
 
-  // Inicializar desde localStorage en mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as "seo" | "all" | null;
     const urlFilter = searchParams.get("filter") as "seo" | "all" | null;
     const active = urlFilter ?? stored ?? "seo";
     setFilter(active);
     if (!urlFilter) {
-      // Sincronizar URL con preferencia almacenada
       const params = new URLSearchParams(searchParams.toString());
       params.set("filter", active);
       router.replace(`${pathname}?${params.toString()}`);
@@ -34,28 +33,28 @@ export function ServiceToggle() {
   }
 
   return (
-    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+    <div className="inline-flex items-center bg-card border border-border rounded-full p-0.5">
       <button
         onClick={() => toggle("seo")}
-        className={[
-          "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+        className={cn(
+          "px-3 py-1 font-mono text-[0.65rem] uppercase tracking-wide rounded-full transition-colors",
           filter === "seo"
-            ? "bg-white text-gray-900 shadow-sm"
-            : "text-gray-500 hover:text-gray-700",
-        ].join(" ")}
+            ? "bg-primary/15 text-ds-green border border-ds-gd"
+            : "text-muted-foreground hover:text-foreground"
+        )}
       >
         SEO
       </button>
       <button
         onClick={() => toggle("all")}
-        className={[
-          "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+        className={cn(
+          "px-3 py-1 font-mono text-[0.65rem] uppercase tracking-wide rounded-full transition-colors",
           filter === "all"
-            ? "bg-white text-gray-900 shadow-sm"
-            : "text-gray-500 hover:text-gray-700",
-        ].join(" ")}
+            ? "bg-primary/15 text-ds-green border border-ds-gd"
+            : "text-muted-foreground hover:text-foreground"
+        )}
       >
-        Todos los activos
+        Todos
       </button>
     </div>
   );

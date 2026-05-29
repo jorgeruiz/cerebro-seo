@@ -84,7 +84,7 @@ function Step1({
           value={data.domain}
           onChange={(e) => onChange({ domain: e.target.value })}
         />
-        <p className="text-xs text-gray-400">Sin https:// ni slash final</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Sin https:// ni slash final</p>
       </div>
 
       <div className="space-y-1.5">
@@ -112,9 +112,9 @@ function Step1({
             id="color"
             value={data.brandColor || "#6366f1"}
             onChange={(e) => onChange({ brandColor: e.target.value })}
-            className="h-9 w-14 rounded border border-gray-200 cursor-pointer"
+            className="h-9 w-14 rounded border border-border cursor-pointer bg-transparent"
           />
-          <span className="text-sm text-gray-500">{data.brandColor || "#6366f1"}</span>
+          <span className="text-xs font-mono text-muted-foreground">{data.brandColor || "#6366f1"}</span>
         </div>
       </div>
     </div>
@@ -130,7 +130,7 @@ function Step2({
 }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-lg bg-blue-50 border border-blue-100 p-4 text-sm text-blue-700">
+      <div className="rounded-lg bg-ds-blue/5 border border-ds-blue/20 p-4 text-xs font-mono text-ds-blue">
         Estas propiedades se conectarán al cliente para obtener datos de Google Search Console y GA4.
         Puedes dejarlos vacíos y configurarlos después.
       </div>
@@ -143,7 +143,7 @@ function Step2({
           value={data.gscProperty}
           onChange={(e) => onChange({ gscProperty: e.target.value })}
         />
-        <p className="text-xs text-gray-400">Property ID en formato sc-domain:dominio.com o https://dominio.com</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Property ID en formato sc-domain:dominio.com o https://dominio.com</p>
       </div>
 
       <div className="space-y-1.5">
@@ -154,7 +154,7 @@ function Step2({
           value={data.ga4Property}
           onChange={(e) => onChange({ ga4Property: e.target.value })}
         />
-        <p className="text-xs text-gray-400">Property ID en formato properties/XXXXXXXXX</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Property ID en formato properties/XXXXXXXXX</p>
       </div>
     </div>
   );
@@ -178,7 +178,7 @@ function Step3({
           value={data.keywords}
           onChange={(e) => onChange({ keywords: e.target.value })}
         />
-        <p className="text-xs text-gray-400">Separadas por coma. Estas se trackearán diariamente.</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Separadas por coma. Estas se trackearán diariamente.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -190,7 +190,7 @@ function Step3({
           value={data.competitors}
           onChange={(e) => onChange({ competitors: e.target.value })}
         />
-        <p className="text-xs text-gray-400">Separados por coma. Máximo 5.</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Separados por coma. Máximo 5.</p>
       </div>
     </div>
   );
@@ -244,8 +244,10 @@ export default function NuevoClientePage() {
     <div className="p-8 max-w-xl">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Nuevo cliente</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
+          Nuevo cliente
+        </h1>
+        <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
           Paso {step + 1} de {STEPS.length} — {STEPS[step].label}
         </p>
       </div>
@@ -256,40 +258,40 @@ export default function NuevoClientePage() {
           <div key={i} className="flex items-center gap-2">
             <div
               className={cn(
-                "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
+                "h-6 w-6 rounded-full flex items-center justify-center font-mono text-[0.6rem] font-bold transition-colors border",
                 i < step
-                  ? "bg-green-500 text-white"
+                  ? "bg-ds-green/10 text-ds-green border-ds-green/40"
                   : i === step
-                  ? "bg-[#6366f1] text-white"
-                  : "bg-gray-100 text-gray-400"
+                  ? "bg-primary/15 text-primary border-primary/40"
+                  : "bg-muted text-muted-foreground border-border"
               )}
             >
-              {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              {i < step ? <Check className="h-3 w-3" /> : i + 1}
             </div>
             <span
               className={cn(
-                "text-xs font-medium hidden sm:block",
-                i === step ? "text-gray-900" : "text-gray-400"
+                "font-mono text-[0.6rem] hidden sm:block",
+                i === step ? "text-foreground" : "text-muted-foreground/50"
               )}
             >
               {s.label}
             </span>
             {i < STEPS.length - 1 && (
-              <div className={cn("h-px w-8 mx-1", i < step ? "bg-green-300" : "bg-gray-200")} />
+              <div className={cn("h-px w-8 mx-1", i < step ? "bg-ds-green/40" : "bg-border")} />
             )}
           </div>
         ))}
       </div>
 
       {/* Contenido del paso */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
+      <div className="bg-card rounded-xl border border-border p-6 mb-6">
         {step === 0 && <Step1 data={data} onChange={update} />}
         {step === 1 && <Step2 data={data} onChange={update} />}
         {step === 2 && <Step3 data={data} onChange={update} />}
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 mb-4">{error}</p>
+        <p className="text-sm text-destructive mb-4 font-mono">{error}</p>
       )}
 
       {/* Navegación */}
@@ -298,7 +300,7 @@ export default function NuevoClientePage() {
           variant="outline"
           onClick={() => (step > 0 ? setStep(step - 1) : router.back())}
           disabled={submitting}
-          className="gap-2"
+          className="gap-2 font-mono text-xs"
         >
           <ChevronLeft className="h-4 w-4" />
           {step === 0 ? "Cancelar" : "Anterior"}
@@ -308,7 +310,7 @@ export default function NuevoClientePage() {
           <Button
             onClick={handleSubmit}
             disabled={!canProceed() || submitting}
-            className="bg-[#6366f1] hover:bg-[#4f52d4] text-white gap-2"
+            className="gap-2 font-mono text-xs"
           >
             {submitting ? "Creando..." : "Crear cliente"}
             <Check className="h-4 w-4" />
@@ -317,7 +319,7 @@ export default function NuevoClientePage() {
           <Button
             onClick={() => setStep(step + 1)}
             disabled={!canProceed()}
-            className="bg-[#6366f1] hover:bg-[#4f52d4] text-white gap-2"
+            className="gap-2 font-mono text-xs"
           >
             Siguiente
             <ChevronRight className="h-4 w-4" />
