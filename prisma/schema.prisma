@@ -161,17 +161,22 @@ model Hypothesis {
 }
 
 model Keyword {
-  id         String  @id @default(cuid())
+  id         String    @id @default(cuid())
   clientId   String
-  client     Client  @relation(fields: [clientId], references: [id])
+  client     Client    @relation(fields: [clientId], references: [id])
   term       String
-  country    String  @default("MX")
-  language   String  @default("es")
+  country    String    @default("MX")
+  language   String    @default("es")
   targetUrl  String?
-  isPriority Boolean @default(false)
+  isPriority Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
 
   rankings        KeywordRanking[]
   affectedByTasks Task[]
+
+  @@index([clientId, isPriority])
+  @@index([clientId, deletedAt])
 }
 
 model KeywordRanking {
@@ -195,6 +200,8 @@ model Competitor {
   domainAuthority Int?
   lastAnalyzed    DateTime?
   snapshotData    Json?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
 }
 
 model Audit {

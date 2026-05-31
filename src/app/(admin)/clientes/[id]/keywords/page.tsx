@@ -3,9 +3,14 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { ArrowLeft, TrendingUp, Target, Star } from "lucide-react";
+import { getSession } from "@/lib/auth";
+import { UserRole } from "@prisma/client";
+import { ArrowLeft, TrendingUp, Target, Star, Settings } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { SectionHeader } from "@/components/ui-darkui";
 import { KeywordsTable } from "./KeywordsTable";
 import { KeywordEvolutionChart } from "./KeywordEvolutionChart";
+import { TriggerTrackingButton } from "./TriggerTrackingButton";
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
@@ -18,6 +23,7 @@ async function getKeywordsData(clientId: string) {
       domain: true,
       brandColor: true,
       keywords: {
+        where: { deletedAt: null },
         orderBy: [{ isPriority: "desc" }, { term: "asc" }],
         include: {
           rankings: {
@@ -104,8 +110,13 @@ function calcVisibilityScore(rows: KeywordRow[]): number {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function KeywordsPage({ params }: { params: { id: string } }) {
-  const client = await getKeywordsData(params.id);
+  const [client, session] = await Promise.all([
+    getKeywordsData(params.id),
+    getSession(),
+  ]);
   if (!client) notFound();
+
+  const isAdmin = session?.user?.role === UserRole.ADMIN;
 
   const rows = buildKeywordRows(client.keywords);
   const totalKeywords = rows.length;
@@ -134,50 +145,64 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
 
   return (
     <div className="min-h-full">
-      {/* Header */}
-      <div className="border-b border-gray-100 bg-white px-8 py-5">
-        <div className="flex items-center gap-3">
-          <Link href={`/clientes/${client.id}`} className="text-gray-400 hover:text-gray-700 transition-colors">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-indigo-500" />
+      <div className="p-8 space-y-8">
+
+        {/* Page header */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3">
+            <Link href={`/clientes/${client.id}`} className="text-muted-foreground hover:text-foreground transition-colors mt-1">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">Keywords objetivo</h1>
-              <p className="text-xs text-gray-400">
-                {client.name} · {totalKeywords} keywords
-                {priorityKeywords > 0 && ` · ${priorityKeywords} priority`}
+              <div className="flex items-center gap-2 mb-0.5">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                <h1 className="font-display font-extrabold text-[clamp(1.4rem,2.5vw,2rem)] tracking-tight leading-[1.05] text-foreground">
+                  Keywords objetivo
+                </h1>
+              </div>
+              <p className="font-mono text-[0.65rem] text-muted-foreground">
+                {client.name} · {totalKeywords} keywords{priorityKeywords > 0 && ` · ${priorityKeywords} priority`}
               </p>
             </div>
           </div>
-          {/* Visibilidad score */}
-          {totalKeywords > 0 && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-gray-400">Visibilidad</span>
-              <span className={`text-lg font-bold ${
-                visibilityScore >= 60 ? "text-green-600"
-                : visibilityScore >= 30 ? "text-amber-600"
-                : "text-red-600"
-              }`}>
-                {visibilityScore}
+          <div className="flex items-center gap-2 mt-1">
+            {totalKeywords > 0 && (
+              <span className={[
+                "text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border",
+                visibilityScore >= 60
+                  ? "bg-primary/10 border-ds-gd text-ds-green"
+                  : visibilityScore >= 30
+                  ? "bg-ds-yellow/10 border-ds-yellow/40 text-ds-yellow"
+                  : "bg-destructive/10 border-destructive/30 text-destructive",
+              ].join(" ")}>
+                Visibilidad {visibilityScore}
               </span>
-            </div>
-          )}
+            )}
+            <Link
+              href={`/clientes/${client.id}/configuracion`}
+              className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2"}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Configurar keywords
+            </Link>
+            {isAdmin && <TriggerTrackingButton clientId={client.id} />}
+          </div>
         </div>
-      </div>
-
-      <div className="p-8 space-y-8">
 
         {/* Sin keywords */}
         {totalKeywords === 0 && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center">
-              <Target className="h-7 w-7 text-indigo-400" />
+          <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center gap-4 text-center">
+            <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
+              <Target className="h-7 w-7 text-muted-foreground/40" />
             </div>
             <div>
-              <p className="text-base font-semibold text-gray-800">Sin keywords configuradas</p>
-              <p className="text-sm text-gray-400 mt-1 max-w-sm">
-                Agrega keywords objetivo en el wizard de alta del cliente para comenzar a trackear posiciones.
+              <p className="text-base font-semibold text-foreground">Sin keywords configuradas</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Agrega keywords objetivo en{" "}
+                <Link href={`/clientes/${client.id}/configuracion`} className="text-primary hover:underline">
+                  Configuración
+                </Link>{" "}
+                para comenzar a trackear posiciones.
               </p>
             </div>
           </div>
@@ -187,26 +212,24 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
           <>
             {/* KPI cards */}
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-                Posiciones actuales
-              </h2>
+              <SectionHeader>Posiciones actuales</SectionHeader>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: "Top 3", value: inTop3, color: "text-green-700 bg-green-50 border-green-200" },
-                  { label: "Top 10", value: inTop10, color: "text-blue-700 bg-blue-50 border-blue-200" },
-                  { label: "Top 30", value: inTop30, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
-                  { label: "Fuera top 30", value: outTop30, color: outTop30 > 0 ? "text-red-700 bg-red-50 border-red-200" : "text-gray-500 bg-gray-50 border-gray-200" },
+                  { label: "Top 3",        value: inTop3,    color: "text-ds-green  bg-primary/10  border-ds-gd" },
+                  { label: "Top 10",       value: inTop10,   color: "text-ds-blue   bg-ds-blue/10  border-ds-blue/30" },
+                  { label: "Top 30",       value: inTop30,   color: "text-primary   bg-primary/10  border-primary/30" },
+                  { label: "Fuera top 30", value: outTop30,  color: outTop30 > 0 ? "text-destructive bg-destructive/10 border-destructive/30" : "text-muted-foreground bg-muted border-border" },
                 ].map(({ label, value, color }) => (
                   <div key={label} className={`rounded-xl border p-4 flex flex-col items-center gap-1 ${color}`}>
-                    <span className="text-3xl font-bold">{value}</span>
-                    <span className="text-xs font-medium">{label}</span>
+                    <span className="font-display text-3xl font-bold">{value}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wide">{label}</span>
                   </div>
                 ))}
               </div>
             </section>
 
             {/* Info de última actualización */}
-            <div className="flex items-center gap-6 text-xs text-gray-400">
+            <div className="flex items-center gap-6 text-xs font-mono text-muted-foreground/60">
               {lastPriorityDate && (
                 <span className="flex items-center gap-1.5">
                   <Star className="h-3 w-3" />
@@ -223,19 +246,15 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
 
             {/* Tabla de keywords */}
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-                Todas las keywords
-              </h2>
+              <SectionHeader>Todas las keywords</SectionHeader>
               <KeywordsTable rows={rows} />
             </section>
 
             {/* Gráfica de evolución */}
             {rows.some((r) => r.history.length > 1) && (
               <section>
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-                  Evolución de posiciones
-                </h2>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <SectionHeader>Evolución de posiciones</SectionHeader>
+                <div className="bg-card rounded-xl border border-border p-6">
                   <KeywordEvolutionChart rows={rows.filter((r) => r.history.length > 1)} />
                 </div>
               </section>

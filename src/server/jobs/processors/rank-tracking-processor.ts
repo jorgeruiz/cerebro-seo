@@ -161,6 +161,7 @@ export async function runRankTrackingProcessor(
     where: {
       clientId,
       isPriority: mode === "priority",
+      deletedAt: null,
     },
     select: { id: true, term: true, country: true, language: true },
   });

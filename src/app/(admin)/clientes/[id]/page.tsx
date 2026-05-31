@@ -18,14 +18,16 @@ import {
   Zap,
   Activity,
   FileSearch,
+  Settings,
+  Lock,
 } from "lucide-react";
-import { Lock } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
 import { GscSnapshotCards } from "./GscSnapshotCards";
 import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
 import { SectionHeader } from "@/components/ui-darkui";
+import { buttonVariants } from "@/components/ui/button";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { GscSnapshot, Ga4Snapshot } from "./actions";
@@ -190,6 +192,13 @@ export default async function ClienteDetallePage({
             <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">{client.domain}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-1">
+            <Link
+              href={`/clientes/${client.id}/configuracion`}
+              className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2"}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Configuración
+            </Link>
             {cycleStatus && (
               <span className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleStatus.color}`}>
                 {cycleStatus.label}{cycle?.yearMonth ? ` · ${cycle.yearMonth}` : ""}
