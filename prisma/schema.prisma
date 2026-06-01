@@ -89,6 +89,8 @@ model Client {
   clientUsers      ClientUser[]
   aiSearchVisibility AiSearchVisibility[]
   audits           Audit[]
+  backlinks        Backlink[]
+  backlinkSnapshots BacklinkSnapshot[]
 }
 
 model Site {
@@ -253,18 +255,44 @@ model AuditIssue {
 }
 
 model Backlink {
-  id              String        @id @default(cuid())
-  siteId          String
-  site            Site          @relation(fields: [siteId], references: [id])
+  id              String         @id @default(cuid())
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id])
+  siteId          String?
+  site            Site?          @relation(fields: [siteId], references: [id])
   sourceDomain    String
   sourceUrl       String
   targetUrl       String
   anchorText      String?
-  followType      String
-  domainAuthority Int?
+  followType      String         // "follow" | "nofollow" | "ugc" | "sponsored"
+  domainAuthority Int?           // DA del dominio fuente (0-100)
   firstSeen       DateTime
   lastSeen        DateTime
-  status          BacklinkStatus
+  lostAt          DateTime?      // fecha en que se marcó LOST
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  status          BacklinkStatus @default(ACTIVE)
+
+  @@unique([clientId, sourceUrl, targetUrl])
+  @@index([clientId, status])
+  @@index([clientId, sourceDomain])
+  @@index([clientId, firstSeen])
+}
+
+model BacklinkSnapshot {
+  id             String   @id @default(cuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id])
+  totalBacklinks Int
+  uniqueDomains  Int
+  avgDomainRank  Float?
+  dofollowCount  Int
+  nofollowCount  Int
+  gainedThisWeek Int      @default(0)
+  lostThisWeek   Int      @default(0)
+  capturedAt     DateTime @default(now())
+
+  @@index([clientId, capturedAt])
 }
 
 model PageMetric {

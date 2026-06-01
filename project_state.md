@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-05-29 (Sesión 14 design system parte 2 completa — Dark UI 100% aplicado)
-**Fase actual:** Fase 2 — En curso. Site Audit activo. InsightsAgent en piloto. 4GB swap activo en VPS.
-**Próximo hito:** Sesión 15 — Validar acceso Félix en producción, expandir InsightsAgent a 12 SEO
+**Última actualización:** 2026-06-01 (Sesión 21 — Módulo Backlinks: BacklinksAgent + vista + insights semanales)
+**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (semanal jueves 5 AM).
+**Próximo hito:** Sesión 22 — Módulo Competencia (CompetitorAgent + vista)
 
 ---
 
@@ -86,6 +86,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Bridge Cerebro web | ✅ Operativo | `cerebro-bridge.ts`, workers sync clientes y tareas activos (cada 6h y 15min). Endpoint `/api/internal/cerebro/.../monthly-summary` disponible. |
 | Sección Operativa del mes | ✅ Implementado | 3 bloques en portada: Estrategia (focus+goals), Tareas (status badges), Hipótesis (validation badges). Estado vacío con "(Sync pendiente)". |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
+| Configuración editable del cliente | ✅ Completo | `/clientes/[id]/configuracion`. CRUD keywords (soft delete, priority cap 10, bulk paste 100), CRUD competidores (cap 5), edición GSC/GA4. Sesión 20. |
+| Módulo Keywords — trigger manual | ✅ Completo | Botones "Trackear priority/bulk" visibles solo para ADMIN en `/clientes/[id]/keywords`. Enqueuean job BullMQ inmediato. Sesión 20. |
+| Módulo Backlinks | ✅ Activo | `/clientes/[id]/backlinks`. BacklinksAgent semanal (jueves 5 AM). KPI cards, gráfica evolución, top 20, cambios semana. Insights algorítmicos. Sesión 21. |
 
 ---
 
@@ -158,6 +161,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-21 | **Bridge Cerebro: workers construidos pero NO schedulados.** Bloqueador: 3 endpoints en Cerebro web no existen aún (`/api/internal/seo/clients`, `…/tasks/active`, `…/strategy/current`). Activar descomentando TODO en `src/server/jobs/schedulers.ts` cuando Cerebro web los exponga. | ~~SUPERADA — ver decisión 2026-05-21 abajo~~ |
 | 2026-05-21 | **Bridge Cerebro 100% operativo.** Workers `sync:cerebro` (cada 6h) y `sync:cerebro-tasks` (cada 15min × cliente SEO) schedulados y activos en producción desde Sesión 16. `schedulers.ts` restaurado — ya no hay bloque TODO comentado. `CEREBRO_BASE_URL` es **variable de entorno requerida en producción** (Easypanel → env vars del servicio `cerebro-seo`). Sin ella los workers arrancan pero todos los requests al bridge fallan silenciosamente con `console.warn`. |
 | 2026-05-21 | **`ClientStatus.PAUSED`** = cliente que ya no aparece en Cerebro (eliminado/desactivado). `ClientStatus.INACTIVE` no existe en el schema — usar `PAUSED`. |
+| 2026-05-31 | **Soft delete en `Keyword` y `Competitor`**: `deletedAt DateTime?` — no borrar filas de BD, solo setear timestamp. Toda query activa filtra `deletedAt: null`. Migración `add_keyword_softdelete_competitor_timestamps`. `rank-tracking-processor` actualizado con `deletedAt: null`. |
+| 2026-05-31 | **Configuración del cliente en página dedicada `/configuracion`**: las keywords y competidores se gestionan ahí, no en el wizard de alta (que solo hace alta inicial). El wizard mantiene su lógica actual — no se modifica. |
+| 2026-05-31 | **`Array.from(new Set(...))` en vez de `[...new Set(...)]`** en server actions TypeScript. El spread de iterables requiere `downlevelIteration` o target ES2015+ — `Array.from()` es seguro con cualquier target. |
 
 ---
 
@@ -287,9 +293,16 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo Tráfico de páginas (GA4 + GSC) ✅ Sesión 14
 - [x] Bridge Cerebro web (`cerebro-bridge.ts` + workers sync) ✅ Sesiones 15–16 — **100% operativo**
 - [x] Primer site audit técnico (crawler + PageSpeed Insights) ✅ Sesión 18
+- [x] Configuración editable del cliente (keywords + competidores + GSC/GA4) ✅ Sesión 20
+- [x] Trigger manual de rank tracking (ADMIN) en módulo Keywords ✅ Sesión 20
 - [ ] Sync con Notion: clientes, tareas, estrategia, bitácora (vía bridge)
-- [~] InsightsAgent en piloto (Molino Azteca, RFN, Aamsa) ✅ Sesión 17 — pendiente validación Félix para expandir a 12 SEO
+- [x] InsightsAgent activo para los 12 clientes SEO ✅ (`INSIGHTS_PILOT_CLIENT_IDS` no definido en Easypanel → todos activos)
 - [ ] tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
+
+### Fase 3 — Módulos SEO + Análisis
+- [x] RankTrackingAgent ✅ Sesión 19
+- [x] Módulo Backlinks (BacklinksAgent + vista + insights) ✅ Sesión 21
+- [ ] Módulo Competencia
 - [ ] Refactorizar `POST /api/clientes` → tRPC
 
 ### Fase 3 — Módulos SEO + Análisis on-demand de Claude
@@ -336,7 +349,59 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ## 8. Bitácora de sesiones
 
+### Sesión 21 — 2026-06-01 ✅ COMPLETA (Módulo Backlinks)
+**Participantes:** Jorge + Claude Code
+**Commit:** `feat: módulo Backlinks — BacklinksAgent + vista + insights semanales (Sesión 21)`
+**Resultado:** ✅ BacklinksAgent operativo. Vista `/clientes/[id]/backlinks` con KPIs, gráfica, top 20, cambios. Build limpio. Push + deploy pendiente.
 
+**Trabajo realizado:**
+- `prisma/schema.prisma`: relaciones inversas `backlinks Backlink[]` y `backlinkSnapshots BacklinkSnapshot[]` agregadas a `Client`. Migración `add_backlinks_module`.
+- `dataforseo.ts`: implementación real de `getBacklinks()` vía `/v3/backlinks/backlinks/live`. Cache Redis 24h. Log a `ApiUsage`. Tipos `DfsBacklinkItem`, `DfsBacklinksLiveResult`.
+- `backlinks-worker.ts` (nuevo): worker BullMQ `createWorker` pattern. Job `analysis:backlinks`. Reconciliación upsert/LOST, BacklinkSnapshot semanal, insights algorítmicos (`WIN`/`WARNING`/`HIGH`/`MEDIUM`). Concurrencia 2.
+- `init.ts`: `await import("./workers/backlinks-worker")` activado.
+- `backlinks/actions.ts` (nuevo): `actionTriggerBacklinksCrawl` — solo ADMIN, encola job inmediato, `revalidatePath`.
+- `backlinks/BacklinksEvolutionChart.tsx` (nuevo): client component Recharts AreaChart. Colores DS (verde #7fc15e, azul #5ea8e0). Fallback si < 2 snapshots.
+- `backlinks/page.tsx` (nuevo): server page `force-dynamic`. KPI cards (4), gráfica evolución, tabla top 20 con DA badge, sección cambios semana (ganados/perdidos), empty state con trigger. Botón "Disparar crawl" solo ADMIN.
+- `clientes/[id]/page.tsx`: módulo Backlinks activado (`active: true`, color `text-ds-blue`).
+- `scripts/trigger-backlinks.ts` (nuevo): script CLI manual.
+
+**Decisiones técnicas:**
+- Adaptar al schema real (`domainAuthority`/`followType`/`firstSeen`/`lastSeen`) en vez de los nombres del prompt (que usaba `domainRank`/`isDofollow`). Los tipos ya existían en `seo-data.ts`.
+- `InsightType.WIN` para backlinks ganados (no `SUCCESS` que no existe en el enum).
+- `avgDomainRank` calculado del top 200 fetched (no el DA del sitio destino del summary).
+- `uniqueDomains` ← `summary.referringDomains` al crear el snapshot.
+
+**Costo de APIs:** $0 (sin DataForSEO en esta sesión — primer crawl real al hacer trigger manual en producción).
+
+---
+
+### Sesión 20 — 2026-05-31 ✅ COMPLETA (Configuración editable del cliente)
+**Participantes:** Jorge + Claude Code
+**Commit:** `525e3d1`
+**Resultado:** ✅ Página `/configuracion` operativa. CRUD keywords + competidores + GSC/GA4. Trigger manual de tracking para ADMIN. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `prisma/schema.prisma`: `Keyword.deletedAt DateTime?`, `Keyword.createdAt DateTime @default(now())`, 2 indexes `[clientId, isPriority]` y `[clientId, deletedAt]`. `Competitor.deletedAt DateTime?`, `Competitor.createdAt DateTime @default(now())`. Migración `add_keyword_softdelete_competitor_timestamps`.
+- `configuracion/actions.ts` (nuevo): 8 server actions — `actionCreateKeyword`, `actionToggleKeywordPriority`, `actionDeleteKeyword`, `actionBulkCreateKeywords` (hasta 100, dedupe, cap priority), `actionAddCompetitor` (strip http/www/paths, cap 5), `actionDeleteCompetitor`, `actionUpdateGscProperty` (validación formato), `actionUpdateGa4Property` (validación formato).
+- `configuracion/KeywordsManager.tsx` (nuevo): client component con estado local optimista. Star toggle priority (max 10, cursor-not-allowed si lleno). Soft delete con hover reveal. Formulario add individual (term/country/language/isPriority). Panel bulk paste colapsable (textarea, hasta 100, dedupe).
+- `configuracion/CompetitorsManager.tsx` (nuevo): client component optimista. Add con auto-strip http/www. Delete hover reveal. Cap 5 con mensaje inline.
+- `configuracion/page.tsx` (nuevo): server page `force-dynamic`. 4 secciones con `SectionHeader`: Datos generales (read-only grid), GSC/GA4 (forms con server actions void wrappers), Keywords (KeywordsManager), Competidores (CompetitorsManager). Link a Cerebro si `cerebroClientId` presente.
+- `keywords/actions.ts` (nuevo): `actionTriggerRankTracking(clientId, mode)` — verifica ADMIN, encola job BullMQ `data-collection`.
+- `keywords/TriggerTrackingButton.tsx` (nuevo): dos botones (priority/bulk) con feedback inline. Solo visible si `isAdmin`.
+- `keywords/page.tsx`: migrado a Dark UI (DS tokens + SectionHeader × 3). Filtro `deletedAt: null` en query de keywords. Botón "Configurar keywords" → `/configuracion`. `TriggerTrackingButton` renderizado si `isAdmin`.
+- `[id]/page.tsx`: botón "Configuración" en pills del header → `/configuracion`. Import `buttonVariants` + `Settings` icon.
+- `rank-tracking-processor.ts`: filtro `deletedAt: null` agregado en query de keywords — bug fix crítico (keywords eliminadas ya no se trackean).
+
+**Fix de build:** `[...new Set(...)]` → `Array.from(new Set(...))` en `actions.ts` (spread de iterables requiere target ES2015+). Form `action` en RSC debe retornar `void` — wrapped en funciones locales con `"use server"`.
+
+**Decisiones técnicas:**
+- Soft delete en vez de hard delete — preserva historial de rankings relacionados.
+- Server actions para forms simples (GSC/GA4) — no necesitan estado cliente. CRUD interactivo usa server actions + `router.refresh()` para hidratación.
+- Configuración separada del wizard — wizard solo maneja alta inicial, `/configuracion` es gestión continua.
+
+**Costo de APIs:** $0 (sin DataForSEO ni Claude).
+
+---
 
 ### Sesión 14 — 2026-05-29 ✅ COMPLETA (Design System parte 2 — UI completo)
 **Participantes:** Jorge + Claude Code

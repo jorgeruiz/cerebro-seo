@@ -30,9 +30,9 @@ export async function initJobs(): Promise<void> {
   await import("./workers/cerebro-sync-worker");
   await import("./workers/cerebro-tasks-sync-worker");
 
+  await import("./workers/backlinks-worker");
+
   // Resto de workers se agregarán aquí según se implementen en las siguientes fases:
-  // await import("./workers/rank-tracking-worker");
-  // await import("./workers/backlinks-worker");
   // await import("./workers/competitor-worker");
   // await import("./workers/ai-search-worker");
   // await import("./workers/cycle-close-worker");

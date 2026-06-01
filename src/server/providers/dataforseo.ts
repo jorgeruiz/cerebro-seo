@@ -329,14 +329,44 @@ export class DataForSeoProvider implements SeoDataProvider {
     return rank;
   }
 
-  // ── getBacklinks (summary) ─────────────────────────────────────────────────
-  // Backlinks API — Summary endpoint.
-  // Costo: ~$0.05/req. Cache: 24 horas.
+  // ── getBacklinks (full list) ───────────────────────────────────────────────
+  // Backlinks API — Live list endpoint.
+  // Costo: ~$0.10/req. Cache: 24 horas.
 
-  async getBacklinks(_domain: string, _options?: BacklinkOptions): Promise<BacklinkResult[]> {
-    // For the summary endpoint, return an array with the summary data
-    // Full backlink list (Live endpoint) is a separate higher-cost call — stub for now
-    throw new Error("getBacklinks (full list): use getBacklinksSummary for overview. Full list not implemented yet.");
+  async getBacklinks(domain: string, options?: BacklinkOptions): Promise<BacklinkResult[]> {
+    const limit = options?.limit ?? 100;
+    const cacheKey = `cache:dataforseo:backlinks:${domain}:list:${limit}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as BacklinkResult[];
+    } catch { /* Redis caído — continuar sin caché */ }
+
+    const { data, cost } = await dfsPost<DfsBacklinksLiveResult>(
+      "/backlinks/backlinks/live",
+      [{ target: domain, limit, mode: "as_is", order_by: ["domain_from_rank,desc"] }]
+    );
+
+    void logUsage({ endpoint: "backlinks/live", cost: cost || 0.10 });
+
+    const items: DfsBacklinkItem[] = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: BacklinkResult[] = items.map((item) => ({
+      sourceDomain: item.domain_from ?? "",
+      sourceUrl: item.url_from ?? "",
+      targetUrl: item.url_to ?? "",
+      anchorText: item.anchor ?? null,
+      followType: item.dofollow ? "follow" : "nofollow",
+      domainAuthority: item.domain_from_rank ?? null,
+      firstSeen: item.first_seen ? new Date(item.first_seen) : new Date(),
+      lastSeen: item.last_seen ? new Date(item.last_seen) : new Date(),
+    }));
+
+    try {
+      await redis.setex(cacheKey, 24 * 3600, JSON.stringify(results));
+    } catch { /* Redis caído — devolver datos sin cachear */ }
+
+    return results;
   }
 
   async getBacklinksSummary(domain: string): Promise<BacklinksSummary> {
@@ -449,4 +479,19 @@ interface DfsBacklinkSummaryResult {
   referring_domains?: number;
   rank?: number;
   spam_score?: number;
+}
+
+interface DfsBacklinkItem {
+  domain_from?: string;
+  url_from?: string;
+  url_to?: string;
+  anchor?: string | null;
+  dofollow?: boolean;
+  domain_from_rank?: number | null;
+  first_seen?: string | null;
+  last_seen?: string | null;
+}
+
+interface DfsBacklinksLiveResult {
+  items?: DfsBacklinkItem[];
 }
