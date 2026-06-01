@@ -91,6 +91,8 @@ model Client {
   audits           Audit[]
   backlinks        Backlink[]
   backlinkSnapshots BacklinkSnapshot[]
+  competitorSnapshots    CompetitorSnapshot[]
+  competitorKeywordGaps  CompetitorKeywordGap[]
 }
 
 model Site {
@@ -204,6 +206,52 @@ model Competitor {
   snapshotData    Json?
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
+
+  snapshots   CompetitorSnapshot[]
+  keywordGaps CompetitorKeywordGap[]
+}
+
+model CompetitorSnapshot {
+  id                 String     @id @default(cuid())
+  clientId           String
+  client             Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  competitorId       String
+  competitor         Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  domainRank         Int?
+  totalBacklinks     Int?
+  uniqueDomains      Int?
+  rankedKeywords     Int?
+  estimatedTraffic   Int?
+
+  shareOfVoicePct    Float?
+  sharedKeywordsCount Int?
+  gapsCount          Int?
+
+  capturedAt         DateTime   @default(now())
+
+  @@index([clientId, capturedAt])
+  @@index([competitorId, capturedAt])
+}
+
+model CompetitorKeywordGap {
+  id                 String     @id @default(cuid())
+  clientId           String
+  client             Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  competitorId       String
+  competitor         Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  keyword            String
+  competitorPosition Int
+  searchVolume       Int?
+  keywordDifficulty  Int?
+  intent             String?
+
+  capturedAt         DateTime   @default(now())
+
+  @@index([clientId, capturedAt])
+  @@index([competitorId, capturedAt])
+  @@index([clientId, searchVolume])
 }
 
 model Audit {

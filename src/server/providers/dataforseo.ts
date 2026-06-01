@@ -401,6 +401,131 @@ export class DataForSeoProvider implements SeoDataProvider {
     return summary;
   }
 
+  // ── getDomainRankOverview ──────────────────────────────────────────────────
+  // DataForSEO Labs — Domain Rank Overview (para análisis de competidores).
+  // Costo: ~$0.02/req. Cache: 7 días.
+
+  async getDomainRankOverview(
+    domain: string,
+    clientId?: string
+  ): Promise<DomainRankOverview> {
+    const cacheKey = `cache:dataforseo:domain:${domain}:overview`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as DomainRankOverview;
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsDomainRankOverviewResult>(
+      "/dataforseo_labs/google/domain_rank_overview/live",
+      [{ target: domain, location_name: "Mexico", language_name: "Spanish" }]
+    );
+
+    void logUsage({ endpoint: "labs/domain_rank_overview", cost: cost || 0.02, clientId });
+
+    const item = data.tasks?.[0]?.result?.[0]?.items?.[0];
+    const overview: DomainRankOverview = {
+      domain,
+      domainRank: item?.rank_group ?? null,
+      rankedKeywords: item?.metrics?.organic?.count ?? 0,
+      estimatedTraffic: item?.metrics?.organic?.etv ?? 0,
+    };
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(overview));
+    } catch { /* Redis caído */ }
+
+    return overview;
+  }
+
+  // ── getKeywordGaps ─────────────────────────────────────────────────────────
+  // DataForSEO Labs — Domain Intersection (keyword gaps entre cliente y competidor).
+  // Costo: ~$0.02/req. Cache: 7 días.
+
+  async getKeywordGaps(
+    clientDomain: string,
+    competitorDomain: string,
+    options?: {
+      limit?: number;
+      minSearchVolume?: number;
+    },
+    clientId?: string
+  ): Promise<KeywordGapResult> {
+    const limit = options?.limit ?? 100;
+    const minVol = options?.minSearchVolume ?? 10;
+    const cacheKey = `cache:dataforseo:gaps:${clientDomain}:${competitorDomain}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as KeywordGapResult;
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsDomainIntersectionResult>(
+      "/dataforseo_labs/google/domain_intersection/live",
+      [{
+        target1: clientDomain,
+        target2: competitorDomain,
+        location_name: "Mexico",
+        language_name: "Spanish",
+        limit,
+        intersections: true,
+        include_intersections: true,
+      }]
+    );
+
+    void logUsage({ endpoint: "labs/domain_intersection", cost: cost || 0.02, clientId });
+
+    const items: DfsDomainIntersectionItem[] = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const competitorOnly: KeywordGapResult["competitorOnly"] = [];
+    const both: KeywordGapResult["both"] = [];
+    const clientOnly: KeywordGapResult["clientOnly"] = [];
+
+    for (const item of items) {
+      const vol = item.keyword_data?.search_volume ?? null;
+      const kd = item.keyword_data?.keyword_difficulty ?? null;
+      const intent = item.keyword_data?.search_intent ?? null;
+      const kw = item.keyword ?? "";
+
+      const t1Pos = item.first_position ?? null;   // cliente
+      const t2Pos = item.second_position ?? null;  // competidor
+
+      if (t2Pos !== null && t1Pos === null) {
+        // competidor rankea, cliente no → gap
+        if ((vol ?? 0) >= minVol) {
+          competitorOnly.push({
+            keyword: kw,
+            competitorPosition: t2Pos,
+            searchVolume: vol,
+            keywordDifficulty: kd,
+            intent,
+          });
+        }
+      } else if (t1Pos !== null && t2Pos !== null) {
+        both.push({
+          keyword: kw,
+          clientPosition: t1Pos,
+          competitorPosition: t2Pos,
+          searchVolume: vol,
+        });
+      } else if (t1Pos !== null && t2Pos === null) {
+        clientOnly.push({
+          keyword: kw,
+          clientPosition: t1Pos,
+          searchVolume: vol,
+        });
+      }
+    }
+
+    const result: KeywordGapResult = { competitorOnly, both, clientOnly };
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(result));
+    } catch { /* Redis caído */ }
+
+    return result;
+  }
+
   // ── Stubs ──────────────────────────────────────────────────────────────────
 
   async getKeywordSuggestions(_seed: string, _country: string): Promise<KeywordSuggestion[]> {
@@ -494,4 +619,65 @@ interface DfsBacklinkItem {
 
 interface DfsBacklinksLiveResult {
   items?: DfsBacklinkItem[];
+}
+
+// ─── Competitor analysis types ─────────────────────────────────────────────
+
+export interface DomainRankOverview {
+  domain: string;
+  domainRank: number | null;
+  rankedKeywords: number;
+  estimatedTraffic: number;
+}
+
+export interface KeywordGapResult {
+  competitorOnly: {
+    keyword: string;
+    competitorPosition: number;
+    searchVolume: number | null;
+    keywordDifficulty: number | null;
+    intent: string | null;
+  }[];
+  both: {
+    keyword: string;
+    clientPosition: number;
+    competitorPosition: number;
+    searchVolume: number | null;
+  }[];
+  clientOnly: {
+    keyword: string;
+    clientPosition: number;
+    searchVolume: number | null;
+  }[];
+}
+
+interface DfsDomainRankOverviewItem {
+  rank_group?: number;
+  metrics?: {
+    organic?: {
+      count?: number;
+      etv?: number;
+    };
+  };
+}
+
+interface DfsDomainRankOverviewResult {
+  items?: DfsDomainRankOverviewItem[];
+}
+
+interface DfsDomainIntersectionKeywordData {
+  search_volume?: number | null;
+  keyword_difficulty?: number | null;
+  search_intent?: string | null;
+}
+
+interface DfsDomainIntersectionItem {
+  keyword?: string;
+  first_position?: number | null;
+  second_position?: number | null;
+  keyword_data?: DfsDomainIntersectionKeywordData;
+}
+
+interface DfsDomainIntersectionResult {
+  items?: DfsDomainIntersectionItem[];
 }
