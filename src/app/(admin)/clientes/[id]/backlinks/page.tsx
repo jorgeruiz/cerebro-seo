@@ -5,11 +5,11 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
-import { ArrowLeft, Link2, CheckCircle2, XCircle, Zap } from "lucide-react";
+import { ArrowLeft, Link2, CheckCircle2, XCircle } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard } from "@/components/ui-darkui";
 import { BacklinksEvolutionChart } from "./BacklinksEvolutionChart";
-import { actionTriggerBacklinksCrawl } from "./actions";
+import { TriggerCrawlButton } from "./TriggerCrawlButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -139,20 +139,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
             </p>
           </div>
           {isAdmin && hasAnyData && (
-            <form
-              action={async () => {
-                "use server";
-                await actionTriggerBacklinksCrawl(client.id);
-              }}
-            >
-              <button
-                type="submit"
-                className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-1.5"}
-              >
-                <Zap className="h-3.5 w-3.5" />
-                Disparar crawl ahora
-              </button>
-            </form>
+            <TriggerCrawlButton clientId={client.id} />
           )}
         </div>
 
@@ -168,20 +155,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
               </p>
             </div>
             {isAdmin && (
-              <form
-                action={async () => {
-                  "use server";
-                  await actionTriggerBacklinksCrawl(client.id);
-                }}
-              >
-                <button
-                  type="submit"
-                  className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-1.5"}
-                >
-                  <Zap className="h-3.5 w-3.5" />
-                  Disparar crawl ahora
-                </button>
-              </form>
+              <TriggerCrawlButton clientId={client.id} />
             )}
           </div>
         )}
