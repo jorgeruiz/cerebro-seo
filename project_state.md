@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-01 (Sesión 21 — Módulo Backlinks: BacklinksAgent + vista + insights semanales)
-**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (semanal jueves 5 AM).
-**Próximo hito:** Sesión 22 — Módulo Competencia (CompetitorAgent + vista)
+**Última actualización:** 2026-06-01 (Sesión 22 — Módulo Competencia: CompetitorAgent + vista + SoV + keyword gaps)
+**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (jueves 5 AM). Competencia activo (días 1 y 15, 7 AM).
+**Próximo hito:** Sesión 23 — Módulo AI Search Visibility o Análisis on-demand Claude (por definir)
 
 ---
 
@@ -89,6 +89,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Configuración editable del cliente | ✅ Completo | `/clientes/[id]/configuracion`. CRUD keywords (soft delete, priority cap 10, bulk paste 100), CRUD competidores (cap 5), edición GSC/GA4. Sesión 20. |
 | Módulo Keywords — trigger manual | ✅ Completo | Botones "Trackear priority/bulk" visibles solo para ADMIN en `/clientes/[id]/keywords`. Enqueuean job BullMQ inmediato. Sesión 20. |
 | Módulo Backlinks | ✅ Activo | `/clientes/[id]/backlinks`. BacklinksAgent semanal (jueves 5 AM). KPI cards, gráfica evolución, top 20, cambios semana. Insights algorítmicos. Sesión 21. |
+| Módulo Competencia | ✅ Activo | `/clientes/[id]/competencia`. CompetitorAgent quincenal (días 1 y 15, 7 AM). SoV chart, cards por competidor, tabla keyword gaps. Insights algorítmicos. Sesión 22. |
 
 ---
 
@@ -302,7 +303,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ### Fase 3 — Módulos SEO + Análisis
 - [x] RankTrackingAgent ✅ Sesión 19
 - [x] Módulo Backlinks (BacklinksAgent + vista + insights) ✅ Sesión 21
-- [ ] Módulo Competencia
+- [x] Módulo Competencia (CompetitorAgent + vista + SoV + gaps) ✅ Sesión 22
 - [ ] Refactorizar `POST /api/clientes` → tRPC
 
 ### Fase 3 — Módulos SEO + Análisis on-demand de Claude
@@ -348,6 +349,32 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 22 — 2026-06-01 ✅ COMPLETA (Módulo Competencia)
+**Participantes:** Jorge + Claude Code
+**Commit:** `bfce7aa` — `feat: módulo Análisis de Competencia — CompetitorAgent + vista + SoV + keyword gaps (Sesión 22)`
+**Resultado:** ✅ CompetitorAgent operativo. Vista `/clientes/[id]/competencia` completa. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `prisma/schema.prisma`: modelos `CompetitorSnapshot` y `CompetitorKeywordGap`. Relaciones inversas en `Client` y `Competitor`. Migración `add_competitor_analysis`.
+- `dataforseo.ts`: nuevos métodos `getDomainRankOverview(domain, clientId?)` — labs domain_rank_overview, cache 7d. `getKeywordGaps(clientDomain, competitorDomain, options?, clientId?)` — labs domain_intersection, cache 7d. Tipos exportados `DomainRankOverview` y `KeywordGapResult`.
+- `competitor-worker.ts` (nuevo): worker BullMQ `createWorker` pattern. Job `analysis:competitors`. Por cada competidor: domain rank overview + keyword gaps, persiste `CompetitorSnapshot` + reemplaza `CompetitorKeywordGap`, actualiza `competitor.lastAnalyzed`. Insights algorítmicos: brecha creciente, SoV del competidor cayendo, gaps de alto volumen (≥500 búsquedas). Concurrencia 1.
+- `init.ts`: `await import("./workers/competitor-worker")` activado.
+- `competencia/actions.ts` (nuevo): `actionTriggerCompetitorAnalysis` — solo ADMIN, encola job inmediato.
+- `competencia/SovChart.tsx` (nuevo): Recharts BarChart horizontal. SoV % por competidor. Colores DS. Labels con %. Altura dinámica.
+- `competencia/TriggerCompetitorButton.tsx` (nuevo): `useTransition` + spinner loading state.
+- `competencia/page.tsx` (nuevo): server page `force-dynamic`. 3 empty states (sin competidores / con competidores sin datos / con datos). KPI cards (4), SoV chart, cards por competidor con métricas, tabla top 30 keyword gaps con KD badge + intent + posición.
+- `clientes/[id]/page.tsx`: módulo Competencia activado (`active: true`).
+- `scripts/trigger-competitor-analysis.ts` (nuevo): CLI con soporte `all` para todos los SEO activos.
+
+**Decisiones técnicas:**
+- Métodos nuevos fuera de la interfaz `SeoDataProvider` (no rompen stubs existentes en `getCompetitorOverview`).
+- SoV = % del pool total (competitorOnly + both + clientOnly) donde rankea el competidor.
+- `CompetitorKeywordGap` se elimina y recrea en cada run (no acumulativo — mantiene solo la foto más reciente).
+
+**Costo de APIs:** $0 en esta sesión. Primer análisis real al hacer trigger manual o esperar al día 1/15.
+
+---
 
 ### Sesión 21 — 2026-06-01 ✅ COMPLETA (Módulo Backlinks)
 **Participantes:** Jorge + Claude Code
