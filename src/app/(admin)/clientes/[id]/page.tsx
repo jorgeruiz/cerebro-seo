@@ -94,7 +94,7 @@ const MODULES = [
   // requiresSeo: true  = solo clientes con servicio SEO contratado
   { label: "Términos de búsqueda", icon: Search,     href: "terminos-busqueda", color: "text-ds-blue",        requiresSeo: false, active: true  },
   { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-ds-yellow",      requiresSeo: true,  active: true  },
-  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-ds-green",       requiresSeo: true,  active: false },
+  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-ds-green",       requiresSeo: true,  active: true  },
   { label: "Keywords objetivo",    icon: TrendingUp,  href: "keywords",          color: "text-primary",        requiresSeo: true,  active: true  },
   { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-ds-blue",        requiresSeo: false, active: true  },
   { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-ds-orange",      requiresSeo: false, active: false },
