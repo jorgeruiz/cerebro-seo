@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-01 (Sesión 22 — Módulo Competencia: CompetitorAgent + vista + SoV + keyword gaps)
-**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (jueves 5 AM). Competencia activo (días 1 y 15, 7 AM).
-**Próximo hito:** Sesión 23 — Módulo AI Search Visibility o Análisis on-demand Claude (por definir)
+**Última actualización:** 2026-06-02 (Sesión 25 — Módulo SEO Opportunities: detección algorítmica GSC + 5 tipos)
+**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (jueves 5 AM). Competencia activo (días 1 y 15, 7 AM). AI Search activo. Análisis Claude activo.
+**Próximo hito:** Sesión 26 — por definir (posibles: reporte mensual auto-generado, Módulo Eventos/Timeline, cierre de Fase 3)
 
 ---
 
@@ -90,6 +90,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo Keywords — trigger manual | ✅ Completo | Botones "Trackear priority/bulk" visibles solo para ADMIN en `/clientes/[id]/keywords`. Enqueuean job BullMQ inmediato. Sesión 20. |
 | Módulo Backlinks | ✅ Activo | `/clientes/[id]/backlinks`. BacklinksAgent semanal (jueves 5 AM). KPI cards, gráfica evolución, top 20, cambios semana. Insights algorítmicos. Sesión 21. |
 | Módulo Competencia | ✅ Activo | `/clientes/[id]/competencia`. CompetitorAgent quincenal (días 1 y 15, 7 AM). SoV chart, cards por competidor, tabla keyword gaps. Insights algorítmicos. Sesión 22. |
+| Módulo AI Search Visibility | ✅ Activo | `/clientes/[id]/ai-search`. AI-search worker semanal. Tasa de mención Claude Haiku, gráfica semanal, breakdown por LLM, detalle por query. Sesión 23. |
+| Módulo Análisis Claude | ✅ Activo | `/clientes/[id]/analisis`. Análisis on-demand Sonnet 4.6. Contexto completo de BD (ciclo, keywords, backlinks, competidores, AI search, insights). JSON estructurado (oportunidades + riesgos + recomendaciones). Sesión 24. |
+| Módulo SEO Opportunities | ✅ Activo | `/clientes/[id]/oportunidades`. Análisis algorítmico GSC 28d. 5 tipos: quick wins (pos 4-10), CTR bajo query, sin cobertura, posición pobre, CTR bajo página. Sin APIs externas — usa solo datos GSC. Sesión 25. |
 
 ---
 
@@ -304,15 +307,10 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] RankTrackingAgent ✅ Sesión 19
 - [x] Módulo Backlinks (BacklinksAgent + vista + insights) ✅ Sesión 21
 - [x] Módulo Competencia (CompetitorAgent + vista + SoV + gaps) ✅ Sesión 22
+- [x] Módulo AI Search Visibility (worker Haiku + vista + chart semanal) ✅ Sesión 23
+- [x] Módulo Análisis Claude on-demand (Sonnet 4.6 + contexto completo + JSON estructurado) ✅ Sesión 24
+- [x] Módulo SEO Opportunities (algorítmico, 5 tipos, sin APIs externas) ✅ Sesión 25
 - [ ] Refactorizar `POST /api/clientes` → tRPC
-
-### Fase 3 — Módulos SEO + Análisis on-demand de Claude
-- Módulo Análisis de competencia
-- Módulo Backlinks
-- Módulo Eventos / Timeline (con cruce de tareas y conversaciones de Cerebro)
-- **Análisis on-demand de Claude**: botón en panel que abre análisis pre-cargado con TODO el contexto del cliente. NO es chat full-featured.
-- [x] RankTrackingAgent ✅ Sesión 19
-- BacklinksAgent, CompetitorAgent activados
 
 ### Fase 4 — IA y reportes
 - Módulo AI Search Visibility
@@ -349,6 +347,32 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 25 — 2026-06-02 ✅ COMPLETA (Módulo SEO Opportunities)
+**Participantes:** Jorge + Claude Code
+**Commit:** `7bc4272` — `feat: módulo SEO Opportunities — detección algorítmica + 5 tipos de oportunidades (Sesión 25)`
+**Resultado:** ✅ Módulo SEO Opportunities operativo. Sin nuevas APIs — usa solo datos GSC ya disponibles. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `src/lib/seo-opportunities.ts` (nuevo): librería de detección algorítmica. 5 funciones `detect*` + `buildOpportunitiesReport`. Tipos `SeoOpportunity`, `OpportunityType`, `OpportunityPriority`, `OpportunitiesReport`. Sin llamadas externas — procesa `GscQueryRow[]` y `GscPageRow[]`.
+  - `detectQuickWins`: pos 4-10, ≥50 impresiones, score=(10-pos)*2+1)*impressions, top 15.
+  - `detectLowCtrQueries`: pos ≤3, CTR < 60% benchmark (28.5%/15.7%/11.0%), top 10.
+  - `detectNoCoverage`: keywords prioritarias sin presencia en GSC o pos>50, siempre prioridad "alta".
+  - `detectPoorPosition`: pos ≥21, ≥200 impresiones, score=impressions/position, top 10.
+  - `detectLowCtrPages`: ≥100 impresiones, CTR < 2%, score=impressions*(2-ctr), top 10.
+- `src/app/(admin)/clientes/[id]/oportunidades/page.tsx` (nuevo): server page `force-dynamic`. Empty state si no hay GSC o OAuth. Fetch GSC queries (28d, 1000 rows) + pages (500 rows) + keywords prioritarias de BD. KPI cards (total, alta prioridad, quick wins, sin cobertura). 5 `OpportunitySection` (una por tipo). `OpportunityCard` con icono DS, badge de prioridad, métricas y acción concreta. Footer con rango fechas + count queries.
+- `clientes/[id]/page.tsx`: módulo SEO Opportunities activado (`active: true`).
+
+**Fix de build:** Ternarios de prioridad inferidos como `string` por TypeScript strict — añadido `as OpportunityPriority` en las 4 funciones `detect*` con prioridad variable.
+
+**Decisiones técnicas:**
+- Módulo 100% server-side — no requiere workers ni jobs. Datos GSC ya están en caché Redis 24h. Costo = $0.
+- Detección algorítmica vs Claude: preferida para oportunidades estructuradas (deterministas, instantáneas). Claude Análisis es para insight ejecutivo narrativo.
+- `priorityKeywords` viene de `isPriority: true` en la BD local, no de GSC.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 22 — 2026-06-01 ✅ COMPLETA (Módulo Competencia)
 **Participantes:** Jorge + Claude Code
