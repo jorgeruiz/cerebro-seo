@@ -87,6 +87,7 @@ model Client {
   insights         Insight[]
   events           TimelineEvent[]
   clientUsers      ClientUser[]
+  analyses         ClientAnalysis[]
   aiSearchVisibility AiSearchVisibility[]
   audits           Audit[]
   backlinks        Backlink[]
@@ -399,6 +400,21 @@ model AiSearchVisibility {
   mentioned Boolean
   position  Int?
   context   String?  @db.Text
+}
+
+model ClientAnalysis {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id])
+  content      String   @db.Text  // JSON stringificado con el análisis estructurado
+  model        String              // "claude-sonnet-4-6"
+  inputTokens  Int
+  outputTokens Int
+  cost         Decimal  @db.Decimal(10, 6)
+  triggeredBy  String?             // email del usuario que lo generó
+  createdAt    DateTime @default(now())
+
+  @@index([clientId, createdAt])
 }
 
 model ClientUser {

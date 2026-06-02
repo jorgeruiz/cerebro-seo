@@ -20,6 +20,7 @@ import {
   FileSearch,
   Settings,
   Lock,
+  Sparkles,
 } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
@@ -100,6 +101,7 @@ const MODULES = [
   { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-destructive",    requiresSeo: false, active: true  },
   { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-ds-yellow",      requiresSeo: true,  active: true  },
   { label: "Backlinks",            icon: Link2,       href: "backlinks",         color: "text-ds-blue",        requiresSeo: true,  active: true  },
+  { label: "Análisis Claude",      icon: Sparkles,    href: "analisis",          color: "text-primary",        requiresSeo: true,  active: true  },
 ];
 
 export default async function ClienteDetallePage({
