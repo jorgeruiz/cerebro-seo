@@ -88,6 +88,7 @@ model Client {
   events           TimelineEvent[]
   clientUsers      ClientUser[]
   analyses         ClientAnalysis[]
+  monthlyReports   MonthlyReport[]
   aiSearchVisibility AiSearchVisibility[]
   audits           Audit[]
   backlinks        Backlink[]
@@ -415,6 +416,22 @@ model ClientAnalysis {
   createdAt    DateTime @default(now())
 
   @@index([clientId, createdAt])
+}
+
+model MonthlyReport {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id])
+  yearMonth    String              // "2026-06" (YYYY-MM)
+  content      String   @db.Text  // JSON estructurado del reporte
+  model        String              // "claude-sonnet-4-6"
+  inputTokens  Int
+  outputTokens Int
+  cost         Decimal  @db.Decimal(10, 6)
+  triggeredBy  String?
+  createdAt    DateTime @default(now())
+
+  @@index([clientId, yearMonth])
 }
 
 model ClientUser {
