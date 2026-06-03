@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronUp, ChevronDown, Star, TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react";
+import { ChevronUp, ChevronDown, Star, TrendingUp, TrendingDown, Minus, ExternalLink, Download } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -143,6 +143,39 @@ export function KeywordsTable({ rows }: Props) {
   const pageData = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
 
+  function exportCSV() {
+    const headers = ["Keyword", "Tipo", "País", "Posición", "7d", "30d", "URL rankeando", "Actualizado"];
+    const fmtDate = (d: Date | null) =>
+      d ? new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" }).format(d) : "";
+    const escape = (v: string | number | null) => {
+      const s = v === null ? "" : String(v);
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [
+      headers.join(","),
+      ...sorted.map((r) =>
+        [
+          escape(r.term),
+          escape(r.isPriority ? "Priority" : "Bulk"),
+          escape(r.country),
+          escape(r.currentPosition),
+          escape(r.delta7d),
+          escape(r.delta30d),
+          escape(r.rankingUrl),
+          escape(fmtDate(r.lastTracked)),
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `keywords-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function SortIcon({ field }: { field: SortField }) {
     if (sortField !== field) return <ChevronUp className="h-3 w-3 text-gray-300" />;
     return sortDir === "asc"
@@ -175,7 +208,16 @@ export function KeywordsTable({ rows }: Props) {
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-gray-400">{sorted.length} keywords</span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-gray-400">{sorted.length} keywords</span>
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            <Download className="h-3 w-3" />
+            CSV
+          </button>
+        </div>
       </div>
 
       {/* Table */}
