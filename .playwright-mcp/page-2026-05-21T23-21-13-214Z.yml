@@ -1,0 +1,349 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e6]:
+          - generic [ref=e7]:
+            - link [ref=e507] [cursor=pointer]:
+              - /url: /
+              - img [ref=e508]
+            - generic [ref=e10]:
+              - generic [ref=e11]: Easypanel
+              - generic [ref=e12]:
+                - generic [ref=e13]: v2.30.1
+                - button [ref=e14] [cursor=pointer]:
+                  - img [ref=e15]
+                - combobox [ref=e20]
+          - generic [ref=e21]:
+            - link [ref=e509] [cursor=pointer]:
+              - /url: /
+              - img [ref=e23]
+              - generic [ref=e26]: Panel
+            - link [ref=e510] [cursor=pointer]:
+              - /url: /actions
+              - img [ref=e28]
+              - generic [ref=e30]: "\"Acciones\""
+            - link [ref=e511] [cursor=pointer]:
+              - /url: /monitor
+              - img [ref=e32]
+              - generic [ref=e34]: Monitor
+            - link [ref=e512] [cursor=pointer]:
+              - /url: /domains
+              - img [ref=e36]
+              - generic [ref=e39]: Dominios
+            - link [ref=e513] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e41]
+              - generic [ref=e44]: Ajustes
+          - generic [ref=e46]:
+            - link [ref=e514] [cursor=pointer]:
+              - /url: https://easypanel.io/docs
+              - img [ref=e48]
+              - generic [ref=e50]: Documentación
+              - img [ref=e52]
+            - link [ref=e515] [cursor=pointer]:
+              - /url: https://discord.gg/9bcDSXcZQ7
+              - img [ref=e516]
+              - generic [ref=e59]: Discord
+              - img [ref=e61]
+            - link [ref=e517] [cursor=pointer]:
+              - /url: https://my.easypanel.io/feedback
+              - img [ref=e66]
+              - generic [ref=e68]: Comentarios
+              - img [ref=e70]
+            - link [ref=e518] [cursor=pointer]:
+              - /url: https://my.easypanel.io/changelog
+              - img [ref=e75]
+              - generic [ref=e78]: Registro de cambios
+              - img [ref=e80]
+          - link [ref=e519] [cursor=pointer]:
+            - /url: /buy-license
+            - img [ref=e85]
+            - generic [ref=e89]: Comprar licencia
+          - button [ref=e520] [cursor=pointer]:
+            - img [ref=e91]
+            - generic [ref=e94]: Búsqueda rápida
+            - generic [ref=e96]: ⌘ K
+          - generic [ref=e97]:
+            - heading [level=2] [ref=e521]: Command Palette
+            - paragraph [ref=e99]: Search for a command to run...
+          - button [ref=e522] [cursor=pointer]:
+            - img [ref=e101]
+            - generic [ref=e105]: 76.13.121.6
+            - img [ref=e107]
+          - generic [ref=e110]:
+            - img [ref=e111]
+            - generic [ref=e113]: Modo oscuro
+            - generic [ref=e114]:
+              - switch [ref=e523]
+              - checkbox [ref=e116]
+          - button [ref=e524] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e121]: Cerrar sesión
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - button [ref=e525] [cursor=pointer]:
+              - img [ref=e127]
+              - generic [ref=e130]: apps
+              - img [ref=e131]
+            - generic [ref=e134]:
+              - generic [ref=e135]: Servicios
+              - link [ref=e136] [cursor=pointer]:
+                - /url: /projects/apps/create
+                - img [ref=e137]
+            - generic [ref=e141]:
+              - link [ref=e526] [cursor=pointer]:
+                - /url: /projects/apps/app/ads-dashboard
+                - generic [ref=e146]: ads-dashboard
+              - link [ref=e527] [cursor=pointer]:
+                - /url: /projects/apps/app/bni-celta
+                - generic [ref=e151]: bni-celta
+              - link [ref=e528] [cursor=pointer]:
+                - /url: /projects/apps/postgres/cerebro-db
+                - generic [ref=e156]: cerebro-db
+              - link [ref=e529] [cursor=pointer]:
+                - /url: /projects/apps/app/cerebro-seo
+                - generic [ref=e161]: cerebro-seo
+              - link [ref=e530] [cursor=pointer]:
+                - /url: /projects/apps/redis/cerebro-seo-redis
+                - generic [ref=e166]: cerebro-seo-redis
+              - link [ref=e531] [cursor=pointer]:
+                - /url: /projects/apps/app/cerebro-web
+                - generic [ref=e171]: cerebro-web
+              - link [ref=e532] [cursor=pointer]:
+                - /url: /projects/apps/app/elementor-builder
+                - generic [ref=e176]: elementor-builder
+              - link [ref=e533] [cursor=pointer]:
+                - /url: /projects/apps/app/facturacion
+                - generic [ref=e181]: facturacion
+          - generic [ref=e187]:
+            - link [ref=e534] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo
+              - generic [ref=e190]:
+                - img [ref=e192]
+                - text: Resumen
+            - link [ref=e535] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/source
+              - generic [ref=e195]:
+                - img [ref=e197]
+                - text: Fuente
+            - link [ref=e536] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/deployments
+              - generic [ref=e202]:
+                - img [ref=e204]
+                - text: Implementaciones
+            - link [ref=e537] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/environment
+              - generic [ref=e211]:
+                - img [ref=e213]
+                - text: Entorno
+            - link [ref=e538] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/domains
+              - generic [ref=e218]:
+                - img [ref=e220]
+                - text: Dominios
+            - link [ref=e539] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/redirects
+              - generic [ref=e225]:
+                - img [ref=e227]
+                - text: Redirecciones
+            - link [ref=e540] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/scripts
+              - generic [ref=e231]:
+                - img [ref=e233]
+                - text: Scripts
+            - link [ref=e541] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/security
+              - generic [ref=e238]:
+                - img [ref=e240]
+                - text: Seguridad
+            - link [ref=e542] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/resources
+              - generic [ref=e246]:
+                - img [ref=e248]
+                - text: Recursos
+            - link [ref=e543] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/maintenance
+              - generic [ref=e253]:
+                - img [ref=e255]
+                - text: Mantenimiento
+            - link [ref=e544] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/storage
+              - generic [ref=e259]:
+                - img [ref=e261]
+                - text: Almacenamiento
+            - link [ref=e545] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/advanced
+              - generic [ref=e265]:
+                - img [ref=e267]
+                - text: "\"Avanzado\""
+      - generic [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]:
+            - link [ref=e546] [cursor=pointer]:
+              - /url: /projects/apps
+              - text: apps
+            - generic [ref=e275]: /
+            - generic [ref=e276]: cerebro-seo
+            - generic [ref=e277]: app
+            - button [ref=e547] [cursor=pointer]:
+              - img [ref=e280]
+          - generic [ref=e283]:
+            - link [ref=e548] [cursor=pointer]:
+              - /url: /projects/apps/create
+              - img [ref=e286]
+              - text: Servicio
+            - link [ref=e549] [cursor=pointer]:
+              - /url: /projects/apps/create?tab=templates
+              - img [ref=e289]
+              - text: Plantillas
+            - link [ref=e550] [cursor=pointer]:
+              - /url: /projects/apps/settings
+              - img [ref=e293]
+        - generic [ref=e299]:
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - button [ref=e551] [cursor=pointer]: Implementar
+              - button [ref=e552] [cursor=pointer]:
+                - img [ref=e305]
+              - button [ref=e553] [cursor=pointer]:
+                - img [ref=e308]
+              - button [ref=e554] [cursor=pointer]:
+                - img [ref=e313]
+              - button [ref=e555] [cursor=pointer]:
+                - img [ref=e317]
+              - link [ref=e556] [cursor=pointer]:
+                - /url: https://apps-cerebro-seo.6lk5jx.easypanel.host/
+                - img [ref=e321]
+              - button [ref=e557] [cursor=pointer]:
+                - img [ref=e326]
+              - button [ref=e558] [cursor=pointer]:
+                - img [ref=e330]
+              - button [ref=e559] [cursor=pointer]:
+                - img [ref=e335]
+              - button [ref=e560] [cursor=pointer]:
+                - img [ref=e338]
+            - generic [ref=e341]:
+              - generic [ref=e342]:
+                - text: CPU
+                - generic [ref=e343]: 0.0%
+              - generic [ref=e344]: Memoria 72.5 MB
+              - generic [ref=e345]:
+                - text: E/S de red
+                - generic [ref=e346]: 31.8 KB / 9.0 KB
+          - generic [ref=e347]:
+            - paragraph [ref=e349]: Historial de implementaciones
+            - generic [ref=e351]:
+              - alert [ref=e352]:
+                - img [ref=e355]
+                - generic [ref=e357]: "Deploy service: fix: inicializar workers BullMQ al startup via instrumentation hook - middleware.ts: excluir /api/jobs y /api/internal del middleware de NextAuth (tienen su propio auth con x-internal-secret / Authorization: Bearer) - src/instrumentation.ts: Next.js instrumentation hook que llama initJobs() automáticamente al startup del servidor Node.js — reemplaza el patrón de /api/jobs/init que quedaba inaccesible por el middleware - next.config.mjs: habilitar experimental.instrumentationHook Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+                - generic [ref=e358]: 4 minutos
+                - generic [ref=e359]: /
+                - generic [ref=e360]: hace 17 minutos
+                - button [ref=e561] [cursor=pointer]:
+                  - img [ref=e362]
+                - button [ref=e562] [cursor=pointer]: Ver
+              - alert [ref=e366]:
+                - img [ref=e369]
+                - generic [ref=e371]: "Deploy service: fix: inicializar workers BullMQ al startup via instrumentation hook - middleware.ts: excluir /api/jobs y /api/internal del middleware de NextAuth (tienen su propio auth con x-internal-secret / Authorization: Bearer) - src/instrumentation.ts: Next.js instrumentation hook que llama initJobs() automáticamente al startup del servidor Node.js — reemplaza el patrón de /api/jobs/init que quedaba inaccesible por el middleware - next.config.mjs: habilitar experimental.instrumentationHook Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+                - generic [ref=e372]: 8 minutos
+                - generic [ref=e373]: /
+                - generic [ref=e374]: hace 1 hora
+                - button [ref=e563] [cursor=pointer]:
+                  - img [ref=e376]
+                - button [ref=e564] [cursor=pointer]: Ver
+              - alert [ref=e380]:
+                - img [ref=e383]
+                - generic [ref=e385]: "Deploy service: docs: bitácora sesión 16 — bridge activado, workers operativos, primer sync pendiente confirmación"
+                - generic [ref=e386]: 8 minutos
+                - generic [ref=e387]: /
+                - generic [ref=e388]: hace 2 horas
+                - button [ref=e565] [cursor=pointer]:
+                  - img [ref=e390]
+                - button [ref=e566] [cursor=pointer]: Ver
+              - alert [ref=e394]:
+                - img [ref=e397]
+                - generic [ref=e399]: "Deploy service: feat: activar workers de sync con Cerebro web (bridge operativo end-to-end) - schedulers.ts: syncQueue restaurado, registerGlobalJobs recibe seoClients, sync:cerebro (cada 6h) y sync:cerebro-tasks (cada 15min × cliente SEO) activos - page.tsx: \"(Sync pendiente)\" reemplazado por mensajes neutros PREREQUISITO DEPLOY: agregar en Easypanel env vars de cerebro-seo: CEREBRO_API_URL=https://cerebro.clicksociety.com.mx (o URL real de Cerebro web) CEREBRO_INTERNAL_SECRET=[secret compartido con Cerebro web] Sin estas vars, el worker arranca pero las llamadas devuelven [] (fallback graceful). Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+                - generic [ref=e400]: 46 minutos
+                - generic [ref=e401]: /
+                - generic [ref=e402]: hace 3 horas
+                - button [ref=e567] [cursor=pointer]:
+                  - img [ref=e404]
+                - button [ref=e568] [cursor=pointer]: Ver
+              - alert [ref=e408]:
+                - img [ref=e411]
+                - generic [ref=e413]: Deploy service
+                - generic [ref=e414]: 0 segundos
+                - generic [ref=e415]: /
+                - generic [ref=e416]: hace 1 día
+                - button [ref=e569] [cursor=pointer]:
+                  - img [ref=e418]
+                - button [ref=e570] [cursor=pointer]: Ver
+              - alert [ref=e422]:
+                - img [ref=e425]
+                - generic [ref=e427]: Deploy service
+                - generic [ref=e428]: 0 segundos
+                - generic [ref=e429]: /
+                - generic [ref=e430]: hace 1 día
+                - button [ref=e571] [cursor=pointer]:
+                  - img [ref=e432]
+                - button [ref=e572] [cursor=pointer]: Ver
+              - alert [ref=e436]:
+                - img [ref=e439]
+                - generic [ref=e441]: Deploy service
+                - generic [ref=e442]: 0 segundos
+                - generic [ref=e443]: /
+                - generic [ref=e444]: hace 1 día
+                - button [ref=e573] [cursor=pointer]:
+                  - img [ref=e446]
+                - button [ref=e574] [cursor=pointer]: Ver
+              - alert [ref=e450]:
+                - img [ref=e453]
+                - generic [ref=e455]: Deploy service
+                - generic [ref=e456]: 0 segundos
+                - generic [ref=e457]: /
+                - generic [ref=e458]: hace 1 día
+                - button [ref=e575] [cursor=pointer]:
+                  - img [ref=e460]
+                - button [ref=e576] [cursor=pointer]: Ver
+              - alert [ref=e464]:
+                - img [ref=e467]
+                - generic [ref=e469]: "Deploy service: docs: deuda de roles resuelta — ADMIN_EMAILS, ClientUser dormido, architecture v4 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+                - generic [ref=e470]: 15 minutos
+                - generic [ref=e471]: /
+                - generic [ref=e472]: hace 1 día
+                - button [ref=e577] [cursor=pointer]:
+                  - img [ref=e474]
+                - button [ref=e578] [cursor=pointer]: Ver
+              - alert [ref=e478]:
+                - img [ref=e481]
+                - generic [ref=e483]: "Deploy service: docs: deuda de roles resuelta — ADMIN_EMAILS, ClientUser dormido, architecture v4 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+                - generic [ref=e484]: 14 minutos
+                - generic [ref=e485]: /
+                - generic [ref=e486]: hace 2 días
+                - button [ref=e579] [cursor=pointer]:
+                  - img [ref=e488]
+                - button [ref=e580] [cursor=pointer]: Ver
+              - button [ref=e581] [cursor=pointer]: Cargar más
+          - generic [ref=e493]:
+            - paragraph [ref=e495]: Activación de implementación
+            - generic [ref=e497]:
+              - button [ref=e582] [cursor=pointer]:
+                - generic [ref=e500]: http://76.13.121.6:3000/api/deploy/e4474d133538465a4933464947c3493f1130a132e8f7c347
+                - img [ref=e502]
+              - generic [ref=e505]: Hacer una solicitud a esta URL activará una implementación para este servicio. Puedes usarla para integrar servicios externos con Easypanel.
+              - button [ref=e583] [cursor=pointer]: Actualizar token de implementación
+    - region "Notifications alt+T"
+  - generic:
+    - region "Notifications-top"
+    - region "Notifications-top-left"
+    - region "Notifications-top-right"
+    - region "Notifications-bottom-left"
+    - region "Notifications-bottom"
+    - region "Notifications-bottom-right"
+  - dialog "\"Acción\"" [ref=e587]:
+    - heading "\"Acción\"" [level=2] [ref=e589]
+    - code [ref=e592]: "Commit: fix: inicializar workers BullMQ al startup via instrumentation hook - middleware.ts: excluir /api/jobs y /api/internal del middleware de NextAuth (tienen su propio auth con x-internal-secret / Authorization: Bearer) - src/instrumentation.ts: Next.js instrumentation hook que llama initJobs() automáticamente al startup del servidor Node.js — reemplaza el patrón de /api/jobs/init que quedaba inaccesible por el middleware - next.config.mjs: habilitar experimental.instrumentationHook Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com> ########################################## ### Download Github Archive Started... ### Thu, 21 May 2026 23:04:32 GMT ########################################## #0 building with \"default\" instance using docker driver #1 [internal] load build definition from Dockerfile #1 transferring dockerfile: 1.65kB 0.0s done #1 DONE 0.1s #2 [internal] load metadata for docker.io/library/node:20-alpine #2 DONE 0.2s #3 [base 1/1] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 #3 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 0.0s done #3 DONE 0.0s #4 [internal] load .dockerignore #4 transferring context: 2B done #4 DONE 0.1s #5 [internal] load build context #5 transferring context: 1.10MB 0.1s done #5 DONE 0.1s #6 [5/9] RUN npm ci #6 CACHED #7 [6/9] COPY prisma ./prisma #7 CACHED #8 [7/9] RUN npx prisma generate #8 CACHED #9 [builder 1/6] WORKDIR /app #9 CACHED #10 [3/9] RUN apk add --no-cache libc6-compat openssl #10 CACHED #11 [4/9] COPY package.json package-lock.json ./ #11 CACHED #12 [8/9] COPY . . #12 CACHED #13 [9/9] RUN SKIP_ENV_VALIDATION=1 NODE_OPTIONS=\"--max-old-space-size=4096\" npm run build #13 0.707 #13 0.707 > cerebro-seo@0.1.0 build #13 0.707 > next build #13 0.707 #13 4.414 ▲ Next.js 14.2.35 #13 4.427 - Environments: .env #13 4.427 - Experiments (use with caution): #13 4.427 · instrumentationHook #13 4.427 #13 4.527 Creating an optimized production build ..."
+    - button "Close" [active] [ref=e593] [cursor=pointer]:
+      - img
+      - generic [ref=e594]: Close

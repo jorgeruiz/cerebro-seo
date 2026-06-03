@@ -1,0 +1,6 @@
+[   20919ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   20919ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   20919ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   20919ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   50736ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[   50736ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7

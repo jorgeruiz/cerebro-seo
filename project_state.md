@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-02 (Sesión 26 — Módulo Reporte Mensual: agregación BD + Claude Sonnet + render ejecutivo)
-**Fase actual:** Fase 3 — COMPLETA. Todos los módulos clave implementados y activos.
-**Próximo hito:** Sesión 27 — por definir (posibles: CycleCloseAgent, Módulo Eventos/Timeline, tRPC refactor, mejoras de UX)
+**Última actualización:** 2026-06-02 (Sesión 28 — Módulo Eventos/Timeline: timeline unificada de 7 fuentes)
+**Fase actual:** Fase 4 — EN CURSO. Keyword Ideas ✅ · Timeline ✅ · Pendiente: CycleCloseAgent, PDF exportable.
+**Próximo hito:** Sesión 29 — CycleCloseAgent o Reporte PDF exportable
 
 ---
 
@@ -315,11 +315,10 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [ ] Refactorizar `POST /api/clientes` → tRPC
 
 ### Fase 4 — IA y reportes
-- Módulo AI Search Visibility
-- Módulo Keyword ideas
-- Módulo SEO Opportunities
-- Reporte mensual auto-generado (ReportAgent + PDF)
-- CycleCloseAgent: cierre automático de ciclo + validación de hipótesis
+- [x] Módulo Keyword Ideas (DataForSEO Labs + AddKeywordButton) ✅ Sesión 27
+- [x] Módulo Eventos/Timeline (7 fuentes, agrupado por mes, EventCard) ✅ Sesión 28
+- [ ] CycleCloseAgent: cierre automático de ciclo + validación de hipótesis
+- [ ] Reporte PDF exportable
 
 ---
 
@@ -349,6 +348,52 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 28 — 2026-06-02 ✅ COMPLETA (Módulo Eventos/Timeline)
+**Participantes:** Jorge + Claude Code
+**Commit:** `64389f5` — `feat: módulo Eventos/Timeline — timeline unificada 7 fuentes, agrupada por mes (Sesión 28)`
+**Resultado:** ✅ Timeline operativa. 7 fuentes de datos en una vista cronológica. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `src/app/(admin)/clientes/[id]/timeline/page.tsx` (nuevo): server page `force-dynamic`. Fetch paralelo últimos 90 días de 7 fuentes: KeywordRanking (|delta|≥3), Task (status DONE + completedAt), Audit (date), BacklinkSnapshot (capturedAt), Insight (generatedAt), MonthlyReport (createdAt), ClientAnalysis (createdAt).
+  - Tipos: `TimelineEvent` (id, kind, date, title, detail, badge?, badgeColor?).
+  - `KIND_META`: mapea cada kind a icon + color + bg + border del DS.
+  - `EventCard`: icono circular, línea vertical (oculta en último), fecha relativa + fecha absoluta, badge opcional.
+  - `groupByMonth`: agrupa eventos en `Map<string, TimelineEvent[]>` por clave "mes año" en español.
+  - Leyenda de tipos de evento. Zero state si 0 eventos en 90 días.
+- `clientes/[id]/page.tsx`: módulo Eventos activado (`active: true`, href: `"timeline"`, icon `Clock`, color `text-ds-orange`). Reemplazó entrada anterior inactiva (href: `"eventos"`).
+
+**Fixes de build:**
+- `prisma.task` (no `prisma.monthlyCycleTask` — el modelo se llama `Task`).
+- Campo `date` en Audit (no `createdAt`).
+- Campos `scoreOverall` y `pagesCrawled` en Audit (no `score` e `issueCount`).
+- `completedAt` en Task (no `updatedAt`), con guard `if (!t.completedAt) continue`.
+
+**Decisiones técnicas:**
+- Ventana de 90 días: cubre ciclo actual + parte del anterior. Configurable en futuro.
+- Delta negativo en ranking = subió posiciones (pos 5 → pos 2 = delta -3 = mejora).
+- No se requieren nuevas APIs ni modelos de BD — todo viene de tablas existentes.
+
+**Costo de APIs:** $0.
+
+---
+
+### Sesión 27 — 2026-06-02 ✅ COMPLETA (Módulo Keyword Ideas)
+**Participantes:** Jorge + Claude Code
+**Commit:** (parte del mismo push post-sesión 26 con sesión 27+28)
+**Resultado:** ✅ Módulo Keyword Ideas operativo. DataForSEO Labs + AddKeywordButton. Build limpio.
+
+**Trabajo realizado:**
+- `src/server/providers/dataforseo.ts`: interfaz `KeywordIdea` exportada + método `getKeywordIdeas(seeds, options?, clientId?)`. Endpoint `/dataforseo_labs/google/keyword_suggestions/live`. Hasta 5 seeds en tasks paralelas. Caché Redis 7 días. Deduplica por keyword, ordena por volumen desc.
+- `src/app/(admin)/clientes/[id]/keyword-ideas/page.tsx` (nuevo): server page. Seeds = keywords prioritarias (máx 5). Empty state si no hay seeds. KPI cards (total, con volumen, KD≤30, alto volumen). Tabla: keyword, vol/mes, KD badge (verde/amarillo/rojo), CPC, intención, botón agregar. Marca "ya existe" (opacity-50) vs términos ya en BD. Máximo 200 resultados visibles.
+- `src/app/(admin)/clientes/[id]/keyword-ideas/AddKeywordButton.tsx` (nuevo): client component. `useTransition` + estado `added`. Llama `actionCreateKeyword({clientId, term, isPriority: false, country: "MX", language: "es"})`. Estados: Plus → Loader2 (pending) → Check (added).
+- `clientes/[id]/page.tsx`: módulo Keyword Ideas activado (`active: true`, icon `Lightbulb`, color `text-ds-yellow`).
+
+**Fix:** `actionCreateKeyword` recibe objeto único, no argumentos separados — corregida la llamada en AddKeywordButton.
+
+**Costo de APIs:** ~$0.025/req DataForSEO, cacheable 7 días → costo real ≈$0 en sesiones subsiguientes.
+
+---
 
 ### Sesión 26 — 2026-06-02 ✅ COMPLETA (Módulo Reporte Mensual)
 **Participantes:** Jorge + Claude Code

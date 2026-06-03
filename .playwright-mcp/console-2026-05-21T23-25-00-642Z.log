@@ -1,0 +1,15 @@
+[    1130ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1130ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1306ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1306ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1475ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1475ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1648ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1648ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1710ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1710ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   33411ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:0
+[   33411ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:0
+[   33536ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[   33536ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[ 1874407ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0

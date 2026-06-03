@@ -1,0 +1,38 @@
+[     955ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[     955ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1204ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[    1204ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[    1358ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1358ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1549ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1549ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1609ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1609ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   26750ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[   26750ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[  345639ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  570838ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  654934ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  854331ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  876014ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getServiceStats?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  876045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/services.app.deployService:0
+[  876061ms] TRPCClientError: Failed to fetch
+    at e.from (http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:8:173786)
+    at http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:8:177233
+[  877292ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  877733ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/services.common.getServiceError?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  877734ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  897983ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getServiceStats?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  898241ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[  899257ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/services.common.getServiceError?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  899700ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[57453911ms] [ERROR] WebSocket is already in CLOSING or CLOSED state. @ http://76.13.121.6:3000/assets/Term-6iapIY4u.js:49
+[57956781ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[58138359ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[58313504ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[58338273ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getServiceStats?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[58340709ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/services.common.getServiceError?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[58340710ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[58340711ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/subscription.onInvalidateActions?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[58356813ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[58356814ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0

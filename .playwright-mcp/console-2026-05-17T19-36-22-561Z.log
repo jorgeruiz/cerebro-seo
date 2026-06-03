@@ -1,0 +1,10 @@
+[     813ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[     813ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[     921ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[     921ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[    1100ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[    1100ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[    1212ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[    1212ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/postgres/cerebro-db:0
+[    1301ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/Term-6iapIY4u.js:45
+[    1301ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/Term-6iapIY4u.js:45

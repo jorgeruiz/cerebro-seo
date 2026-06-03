@@ -1,0 +1,19 @@
+[     250ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[     250ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[     478ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[     478ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[     894ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[     894ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[    1042ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1042ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1194ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1194ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1257ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[    1257ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo:0
+[ 1156896ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/services.common.getServiceError?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[ 1158642ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/monitorOld.getDockerTaskStats?input=%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%2C%22v%22%3A1%7D%7D:0
+[ 1833966ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:0
+[ 1833966ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:0
+[ 1834101ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[ 1834101ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/lib-Brr9PYy-.js:7
+[ 2011878ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ http://76.13.121.6:3000/api/trpc/actions.listActions?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%2C%22type%22%3A%22deployment%22%2C%22limit%22%3A1%7D%7D:0

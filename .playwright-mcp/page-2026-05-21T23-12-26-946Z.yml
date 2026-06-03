@@ -1,0 +1,279 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e6]:
+          - generic [ref=e7]:
+            - link "Home" [ref=e8] [cursor=pointer]:
+              - /url: /
+              - img "Home" [ref=e9]
+            - generic [ref=e10]:
+              - generic [ref=e11]: Easypanel
+              - generic [ref=e12]:
+                - generic [ref=e13]: v2.30.1
+                - button [ref=e14] [cursor=pointer]:
+                  - img [ref=e15]
+                - combobox [ref=e20]:
+                  - option "BR"
+                  - option "DA"
+                  - option "DE"
+                  - option "EN"
+                  - option "ES" [selected]
+                  - option "FA"
+                  - option "FR"
+                  - option "HI"
+                  - option "ID"
+                  - option "IT"
+                  - option "JA"
+                  - option "KA"
+                  - option "NL"
+                  - option "PL"
+                  - option "PT"
+                  - option "RO"
+                  - option "RU"
+                  - option "TH"
+                  - option "TR"
+                  - option "VI"
+                  - option "CN"
+          - generic [ref=e21]:
+            - link "Panel" [ref=e22] [cursor=pointer]:
+              - /url: /
+              - img [ref=e23]
+              - generic [ref=e26]: Panel
+            - link "1 \"Acciones\"" [ref=e27] [cursor=pointer]:
+              - /url: /actions
+              - generic [ref=e29]: "1"
+              - generic [ref=e30]: "\"Acciones\""
+            - link "Monitor" [ref=e31] [cursor=pointer]:
+              - /url: /monitor
+              - img [ref=e32]
+              - generic [ref=e34]: Monitor
+            - link "Dominios" [ref=e35] [cursor=pointer]:
+              - /url: /domains
+              - img [ref=e36]
+              - generic [ref=e39]: Dominios
+            - link "Ajustes" [ref=e40] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e41]
+              - generic [ref=e44]: Ajustes
+          - generic [ref=e46]:
+            - link "Documentación" [ref=e47] [cursor=pointer]:
+              - /url: https://easypanel.io/docs
+              - img [ref=e48]
+              - generic [ref=e50]: Documentación
+              - img [ref=e52]
+            - link "Discord Discord" [ref=e56] [cursor=pointer]:
+              - /url: https://discord.gg/9bcDSXcZQ7
+              - img "Discord" [ref=e57]
+              - generic [ref=e59]: Discord
+              - img [ref=e61]
+            - link "Comentarios" [ref=e65] [cursor=pointer]:
+              - /url: https://my.easypanel.io/feedback
+              - img [ref=e66]
+              - generic [ref=e68]: Comentarios
+              - img [ref=e70]
+            - link "Registro de cambios" [ref=e74] [cursor=pointer]:
+              - /url: https://my.easypanel.io/changelog
+              - img [ref=e75]
+              - generic [ref=e78]: Registro de cambios
+              - img [ref=e80]
+          - link "Comprar licencia" [ref=e84] [cursor=pointer]:
+            - /url: /buy-license
+            - img [ref=e85]
+            - generic [ref=e89]: Comprar licencia
+          - button "Búsqueda rápida ⌘ K" [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+            - generic [ref=e94]: Búsqueda rápida
+            - generic [ref=e96]: ⌘ K
+          - generic [ref=e97]:
+            - heading "Command Palette" [level=2] [ref=e98]
+            - paragraph [ref=e99]: Search for a command to run...
+          - button "76.13.121.6" [ref=e100] [cursor=pointer]:
+            - img [ref=e101]
+            - generic [ref=e105]: 76.13.121.6
+            - img [ref=e107]
+          - generic [ref=e110]:
+            - img [ref=e111]
+            - generic [ref=e113]: Modo oscuro
+            - generic [ref=e114]:
+              - switch "Modo oscuro" [ref=e115]
+              - checkbox [ref=e116]
+          - button "Cerrar sesión" [ref=e117] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e121]: Cerrar sesión
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - button "apps" [ref=e126] [cursor=pointer]:
+              - img [ref=e127]
+              - generic [ref=e130]: apps
+              - img [ref=e131]
+            - generic [ref=e134]:
+              - generic [ref=e135]: Servicios
+              - link [ref=e136] [cursor=pointer]:
+                - /url: /projects/apps/create
+                - img [ref=e137]
+            - generic [ref=e141]:
+              - link "ads-dashboard" [ref=e143] [cursor=pointer]:
+                - /url: /projects/apps/app/ads-dashboard
+                - generic [ref=e146]: ads-dashboard
+              - link "bni-celta" [ref=e148] [cursor=pointer]:
+                - /url: /projects/apps/app/bni-celta
+                - generic [ref=e151]: bni-celta
+              - link "cerebro-db" [ref=e153] [cursor=pointer]:
+                - /url: /projects/apps/postgres/cerebro-db
+                - generic [ref=e156]: cerebro-db
+              - link "cerebro-seo" [ref=e158] [cursor=pointer]:
+                - /url: /projects/apps/app/cerebro-seo
+                - generic [ref=e161]: cerebro-seo
+              - link "cerebro-seo-redis" [ref=e163] [cursor=pointer]:
+                - /url: /projects/apps/redis/cerebro-seo-redis
+                - generic [ref=e166]: cerebro-seo-redis
+              - link "cerebro-web" [ref=e168] [cursor=pointer]:
+                - /url: /projects/apps/app/cerebro-web
+                - generic [ref=e171]: cerebro-web
+              - link "elementor-builder" [ref=e173] [cursor=pointer]:
+                - /url: /projects/apps/app/elementor-builder
+                - generic [ref=e176]: elementor-builder
+              - link "facturacion" [ref=e178] [cursor=pointer]:
+                - /url: /projects/apps/app/facturacion
+                - generic [ref=e181]: facturacion
+          - generic [ref=e187]:
+            - link "Resumen" [ref=e188] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo
+              - generic [ref=e190]:
+                - img [ref=e192]
+                - text: Resumen
+            - link "Fuente" [ref=e193] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/source
+              - generic [ref=e195]:
+                - img [ref=e197]
+                - text: Fuente
+            - link "Implementaciones" [ref=e200] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/deployments
+              - generic [ref=e202]:
+                - img [ref=e204]
+                - text: Implementaciones
+            - link "Entorno" [ref=e209] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/environment
+              - generic [ref=e211]:
+                - img [ref=e213]
+                - text: Entorno
+            - link "Dominios" [ref=e216] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/domains
+              - generic [ref=e218]:
+                - img [ref=e220]
+                - text: Dominios
+            - link "Redirecciones" [ref=e223] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/redirects
+              - generic [ref=e225]:
+                - img [ref=e227]
+                - text: Redirecciones
+            - link "Scripts" [ref=e229] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/scripts
+              - generic [ref=e231]:
+                - img [ref=e233]
+                - text: Scripts
+            - link "Seguridad" [ref=e236] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/security
+              - generic [ref=e238]:
+                - img [ref=e240]
+                - text: Seguridad
+            - link "Recursos" [ref=e244] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/resources
+              - generic [ref=e246]:
+                - img [ref=e248]
+                - text: Recursos
+            - link "Mantenimiento" [ref=e251] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/maintenance
+              - generic [ref=e253]:
+                - img [ref=e255]
+                - text: Mantenimiento
+            - link "Almacenamiento" [ref=e257] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/storage
+              - generic [ref=e259]:
+                - img [ref=e261]
+                - text: Almacenamiento
+            - link "\"Avanzado\"" [ref=e263] [cursor=pointer]:
+              - /url: /projects/apps/app/cerebro-seo/advanced
+              - generic [ref=e265]:
+                - img [ref=e267]
+                - text: "\"Avanzado\""
+      - generic [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]:
+            - link "apps" [ref=e274] [cursor=pointer]:
+              - /url: /projects/apps
+            - generic [ref=e275]: /
+            - generic [ref=e276]: cerebro-seo
+            - generic [ref=e277]: app
+            - button "Rename" [ref=e279] [cursor=pointer]:
+              - img [ref=e280]
+          - generic [ref=e283]:
+            - link "Servicio" [ref=e284] [cursor=pointer]:
+              - /url: /projects/apps/create
+              - img [ref=e286]
+              - text: Servicio
+            - link "Plantillas" [ref=e287] [cursor=pointer]:
+              - /url: /projects/apps/create?tab=templates
+              - img [ref=e289]
+              - text: Plantillas
+            - link "Project Settings" [ref=e292] [cursor=pointer]:
+              - /url: /projects/apps/settings
+              - img [ref=e293]
+        - generic [ref=e299]:
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - button "Implementar" [ref=e303] [cursor=pointer]
+              - button "Stop" [ref=e304] [cursor=pointer]:
+                - img [ref=e305]
+              - button "restart" [ref=e307] [cursor=pointer]:
+                - img [ref=e308]
+              - button "Logs" [ref=e312] [cursor=pointer]:
+                - img [ref=e313]
+              - button "Console" [ref=e316] [cursor=pointer]:
+                - img [ref=e317]
+              - link "Open" [ref=e320] [cursor=pointer]:
+                - /url: https://apps-cerebro-seo.6lk5jx.easypanel.host/
+                - img [ref=e321]
+              - button "Notes" [ref=e325] [cursor=pointer]:
+                - img [ref=e326]
+              - button "restart" [ref=e329] [cursor=pointer]:
+                - img [ref=e330]
+              - button "Habilitar despliegue automático" [ref=e334] [cursor=pointer]:
+                - img [ref=e335]
+              - button "Destroy" [ref=e337] [cursor=pointer]:
+                - img [ref=e338]
+            - generic [ref=e341]:
+              - generic [ref=e342]:
+                - text: CPU
+                - generic [ref=e343]: 0.0%
+              - generic [ref=e344]: Memoria 141.8 MB
+              - generic [ref=e345]:
+                - text: E/S de red
+                - generic [ref=e346]: 20.9 KB / 9.0 KB
+          - generic [ref=e347]:
+            - generic [ref=e348]:
+              - paragraph [ref=e349]: Registros
+              - generic [ref=e350]:
+                - button "\"Agregar divisor\"" [ref=e351] [cursor=pointer]:
+                  - img [ref=e352]
+                - button "Actualizar" [ref=e353] [cursor=pointer]:
+                  - img [ref=e354]
+                - button "Toggle" [ref=e360] [cursor=pointer]:
+                  - img [ref=e361]
+            - textbox "Terminal input" [ref=e372]
+    - region "Notifications alt+T":
+      - list:
+        - listitem [ref=e375]:
+          - img [ref=e378]
+          - generic [ref=e380]:
+            - generic [ref=e381]: apps/cerebro-web
+            - generic [ref=e382]: "Deploy service: fix(google-ads): validar resourceName contra customerId del cliente, no MCC El customerId recibido por los builders puede ser el MCC (2494874866) cuando la cuenta del cliente no se resuelve por nombre en el MCC. La validación de prefijo rechazaba resourceNames correctos del cliente (9620190827) porque comparaba contra el MCC. Fix: extraer el customerId del propio resourceName con regex ^customers/(\\d+)/recommendations/.+$ y usarlo para la validación de formato, el refetch de getRecommendations y el customerId del payload de la propuesta. Así la mutación posterior también apunta a la cuenta correcta."
+          - button "View Logs" [ref=e383] [cursor=pointer]
+  - generic:
+    - region "Notifications-top"
+    - region "Notifications-top-left"
+    - region "Notifications-top-right"
+    - region "Notifications-bottom-left"
+    - region "Notifications-bottom"
+    - region "Notifications-bottom-right"

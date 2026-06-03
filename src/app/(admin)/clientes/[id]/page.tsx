@@ -29,6 +29,7 @@ import { GscConnectSection } from "./GscConnectSection";
 import { GscSnapshotCards } from "./GscSnapshotCards";
 import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
+import { CycleCloseButton } from "./CycleCloseButton";
 import { SectionHeader } from "@/components/ui-darkui";
 import { buttonVariants } from "@/components/ui/button";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
@@ -286,7 +287,14 @@ export default async function ClienteDetallePage({
 
         {/* Operativa del mes */}
         <section>
-          <SectionHeader>Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}</SectionHeader>
+          <div className="flex items-center gap-2.5 font-mono text-[0.6rem] text-muted-foreground uppercase tracking-[0.1em] mb-5">
+            <span className="text-primary">{"//"}</span>
+            <span>Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}</span>
+            <span className="flex-1 h-px bg-border" />
+            {session?.user?.role === "ADMIN" && cycle && (cycle.status === "ACTIVE" || cycle.status === "CLOSING") && (
+              <CycleCloseButton clientId={client.id} yearMonth={cycle.yearMonth} />
+            )}
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
             {/* Bloque 1 — Estrategia del mes */}

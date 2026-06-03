@@ -1,0 +1,18 @@
+[     250ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[     250ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[     696ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[     696ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1037ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/assets/index-DiKZtAnj.js:348
+[    1037ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/assets/index-DiKZtAnj.js:348
+[    1062ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1062ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1102ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1102ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1202ms] [WARNING] Failed to decode downloaded font: http://76.13.121.6:3000/assets/files/inter-latin-wght-normal.woff2 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[    1202ms] [WARNING] OTS parsing error: invalid sfntVersion: 1008821359 @ http://76.13.121.6:3000/projects/apps/app/cerebro-seo/deployments:0
+[  189942ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/apps.listDeployments?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  224966ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/apps.getDeploymentLog?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  225028ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/apps.deploymentLog?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  225089ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/services.getDeploymentLog?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  225150ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/deployments.getLog?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
+[  225211ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://76.13.121.6:3000/api/trpc/apps.getDeployments?input=%7B%22json%22%3A%7B%22projectName%22%3A%22apps%22%2C%22serviceName%22%3A%22cerebro-seo%22%7D%7D:0
