@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCheck, EyeOff, ArrowRight } from "lucide-react";
+import { CheckCheck, EyeOff, ArrowRight, History } from "lucide-react";
 import { resolveInsight, ignoreInsight } from "./actions";
 import { ConclusionCard } from "@/components/ui-darkui";
 import type { ConclusionVariant } from "@/components/ui-darkui";
@@ -100,7 +100,13 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
   );
 }
 
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
 export function InsightCards({ insights, clientId, isPilotClient }: InsightCardsProps) {
+  const sorted = [...insights].sort(
+    (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
+  );
+
   if (!isPilotClient) {
     return (
       <div className="rounded-lg border border-border bg-muted/50 p-5 text-center">
@@ -120,10 +126,21 @@ export function InsightCards({ insights, clientId, isPilotClient }: InsightCards
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {insights.map((insight) => (
-        <InsightCard key={insight.id} insight={insight} clientId={clientId} />
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {sorted.map((insight) => (
+          <InsightCard key={insight.id} insight={insight} clientId={clientId} />
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <Link
+          href={`/clientes/${clientId}/insights`}
+          className="flex items-center gap-1.5 font-mono text-[0.62rem] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <History className="h-3 w-3" />
+          Ver historial completo
+        </Link>
+      </div>
     </div>
   );
 }
