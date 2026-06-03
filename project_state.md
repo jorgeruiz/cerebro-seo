@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-02 (Sesión 25 — Módulo SEO Opportunities: detección algorítmica GSC + 5 tipos)
-**Fase actual:** Fase 3 — En curso. Site Audit activo. InsightsAgent activo (12 SEO). Rank Tracking activo. Backlinks activo (jueves 5 AM). Competencia activo (días 1 y 15, 7 AM). AI Search activo. Análisis Claude activo.
-**Próximo hito:** Sesión 26 — por definir (posibles: reporte mensual auto-generado, Módulo Eventos/Timeline, cierre de Fase 3)
+**Última actualización:** 2026-06-02 (Sesión 26 — Módulo Reporte Mensual: agregación BD + Claude Sonnet + render ejecutivo)
+**Fase actual:** Fase 3 — COMPLETA. Todos los módulos clave implementados y activos.
+**Próximo hito:** Sesión 27 — por definir (posibles: CycleCloseAgent, Módulo Eventos/Timeline, tRPC refactor, mejoras de UX)
 
 ---
 
@@ -93,6 +93,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo AI Search Visibility | ✅ Activo | `/clientes/[id]/ai-search`. AI-search worker semanal. Tasa de mención Claude Haiku, gráfica semanal, breakdown por LLM, detalle por query. Sesión 23. |
 | Módulo Análisis Claude | ✅ Activo | `/clientes/[id]/analisis`. Análisis on-demand Sonnet 4.6. Contexto completo de BD (ciclo, keywords, backlinks, competidores, AI search, insights). JSON estructurado (oportunidades + riesgos + recomendaciones). Sesión 24. |
 | Módulo SEO Opportunities | ✅ Activo | `/clientes/[id]/oportunidades`. Análisis algorítmico GSC 28d. 5 tipos: quick wins (pos 4-10), CTR bajo query, sin cobertura, posición pobre, CTR bajo página. Sin APIs externas — usa solo datos GSC. Sesión 25. |
+| Módulo Reporte Mensual | ✅ Activo | `/clientes/[id]/reporte`. Agrega datos del período (rankings, backlinks, AI search, ciclo) y genera reporte ejecutivo con Claude Sonnet 4.6. Selector de mes, historial de reportes, secciones: logros, desafíos, métricas, oportunidades, plan. Sesión 26. |
 
 ---
 
@@ -310,6 +311,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo AI Search Visibility (worker Haiku + vista + chart semanal) ✅ Sesión 23
 - [x] Módulo Análisis Claude on-demand (Sonnet 4.6 + contexto completo + JSON estructurado) ✅ Sesión 24
 - [x] Módulo SEO Opportunities (algorítmico, 5 tipos, sin APIs externas) ✅ Sesión 25
+- [x] Módulo Reporte Mensual (agregación BD + Claude Sonnet + render ejecutivo) ✅ Sesión 26
 - [ ] Refactorizar `POST /api/clientes` → tRPC
 
 ### Fase 4 — IA y reportes
@@ -347,6 +349,39 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 26 — 2026-06-02 ✅ COMPLETA (Módulo Reporte Mensual)
+**Participantes:** Jorge + Claude Code
+**Commit:** `275c8c8` — `feat: módulo Reporte Mensual — generación automática con Claude Sonnet 4.6 (Sesión 26)`
+**Resultado:** ✅ Módulo Reporte Mensual operativo. Schema + migración. Librería de contexto + Claude. Vista completa. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `prisma/schema.prisma`: modelo `MonthlyReport` (id, clientId, yearMonth, content Text, model, tokens, cost, triggeredBy, createdAt). Índice `[clientId, yearMonth]`. Relación inversa `monthlyReports` en `Client`.
+- `prisma/migrations/20260602120000_add_monthly_report/migration.sql`: migración manual creada y registrada con `prisma migrate resolve --applied`.
+- `src/lib/monthly-report.ts` (nuevo):
+  - `gatherReportContext(clientId, yearMonth)`: agrega datos del período desde BD — ciclo+tareas+hipótesis, keywords+rankings (mes actual vs anterior), backlinks snapshots (actual + anterior para comparar), AI search del mes, insights activos, rankings con mayor movimiento.
+  - Calcula métricas de código: keywords que mejoraron/cayeron/sin cambio, top mejoras y caídas, delta backlinks vs mes anterior, tasa AI search.
+  - `generateMonthlyReport(clientId, yearMonth, triggeredBy?)`: llama Claude Sonnet 4.6, max_tokens 2500. Persiste a `MonthlyReport`. Log a `ApiUsage`.
+  - Tipos: `MonthlyReportResult` (periodo, resumenEjecutivo, logros[], desafios[], metricas, oportunidades[], planProximoMes[], conclusionEjecutiva), `ReportMetricas`.
+- `reporte/actions.ts`: `actionGenerateMonthlyReport` (ADMIN only), `getReportHistory`, `getLatestReport`.
+- `reporte/ReportPanel.tsx`: client component. Botón trigger + spinner. Loading skeleton. Secciones: resumen ejecutivo, logros/desafíos (grid 2col), métricas keywords (KPI + top mejoras/caídas), otras métricas (backlinks/AI search/ciclo), oportunidades, plan próximo mes, conclusión. Zero state. Historial de reportes.
+- `reporte/page.tsx`: server page. Selector de mes por query param `?mes=YYYY-MM`. Default = mes actual. Pasa initialRecord hidratado al panel.
+- `clientes/[id]/page.tsx`: módulo Reporte Mensual activado (`active: true`, icon `FileText`, color `text-ds-blue`).
+
+**Fixes de build:**
+- `"Generar reporte"` con comillas regulares dentro de JSX string → removidas las comillas (SWC las interpretaba como cierre del string).
+- `"` en JSX text content (alrededor de `{m.term}`) → wrapped en template literal `{`"${m.term}"`}`.
+- Import `Minus` no utilizado → removido.
+
+**Decisiones técnicas:**
+- El reporte agrega datos ya en BD — costo = solo Claude (~$0.02-0.04). Sin llamadas externas en tiempo de render.
+- Un reporte por mes por cliente (se puede regenerar — no hay `@@unique`, solo `@@index`).
+- El selector de mes usa URL searchParam → SSR correcto, no estado cliente.
+- Diferencia clara con Análisis Claude: reporte cubre un período específico, tiene comparativas vs mes anterior, está orientado a compartir. Análisis Claude es snapshot del estado actual sin período fijo.
+
+**Costo de APIs:** $0 en esta sesión. Primer reporte real al hacer click en Generar en producción (~$0.02-0.04 por ejecución).
+
+---
 
 ### Sesión 25 — 2026-06-02 ✅ COMPLETA (Módulo SEO Opportunities)
 **Participantes:** Jorge + Claude Code
