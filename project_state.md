@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-02 (Sesión 28 — Módulo Eventos/Timeline: timeline unificada de 7 fuentes)
-**Fase actual:** Fase 4 — EN CURSO. Keyword Ideas ✅ · Timeline ✅ · Pendiente: CycleCloseAgent, PDF exportable.
-**Próximo hito:** Sesión 29 — CycleCloseAgent o Reporte PDF exportable
+**Última actualización:** 2026-06-02 (Sesión 29 — CycleCloseAgent: cierre atómico de ciclo + validación hipótesis)
+**Fase actual:** Fase 4 — EN CURSO. Keyword Ideas ✅ · Timeline ✅ · CycleCloseAgent ✅ · Pendiente: PDF exportable.
+**Próximo hito:** Sesión 30 — Reporte PDF exportable (opcional) o mejoras de UX
 
 ---
 
@@ -317,7 +317,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ### Fase 4 — IA y reportes
 - [x] Módulo Keyword Ideas (DataForSEO Labs + AddKeywordButton) ✅ Sesión 27
 - [x] Módulo Eventos/Timeline (7 fuentes, agrupado por mes, EventCard) ✅ Sesión 28
-- [ ] CycleCloseAgent: cierre automático de ciclo + validación de hipótesis
+- [x] CycleCloseAgent (cierre atómico de ciclo + validación de hipótesis) ✅ Sesión 29
 - [ ] Reporte PDF exportable
 
 ---
@@ -348,6 +348,34 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 29 — 2026-06-02 ✅ COMPLETA (CycleCloseAgent)
+**Participantes:** Jorge + Claude Code
+**Commit:** `9c559b4` — `feat: CycleCloseAgent — cierre de ciclo con validación de hipótesis (Sesión 29)`
+**Resultado:** ✅ Cierre de ciclo operativo. Botón ADMIN en portada. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `src/lib/cycle-close.ts` (nuevo): función `closeCycle(clientId)`. Transacción atómica Prisma:
+  1. Busca ciclo más reciente en estado ACTIVE o CLOSING.
+  2. Tareas PENDING/IN_PROGRESS → BLOCKED.
+  3. Hipótesis PENDING: si su tarea asociada quedó DONE → VALIDATED (con nota automática). Si no → PARTIAL (requiere revisión manual).
+  4. Ciclo → CLOSED + closedAt = now.
+  - Retorna: `CycleCloseResult` (cycleId, yearMonth, tasksBlocked, hypothesesValidated, hypothesesPartial, closedAt).
+- `src/app/(admin)/clientes/[id]/cycle-close-actions.ts` (nuevo): `actionCloseCycle(clientId)` — server action ADMIN only. Devuelve `{ ok: true, result }` o `{ ok: false, error }`. `revalidatePath` al terminar.
+- `src/app/(admin)/clientes/[id]/CycleCloseButton.tsx` (nuevo): client component con 3 estados:
+  1. Botón "Cerrar ciclo" (outline-mono discreto).
+  2. Confirm inline: "¿Cerrar ciclo YYYY-MM? No se puede deshacer." + botones Confirmar/Cancelar.
+  3. Toast resultado (verde ✓ con stats / rojo × con error). `useTransition` + `router.refresh()`.
+- `clientes/[id]/page.tsx`: `CycleCloseButton` importado. Inline header de la sección Operativa (reemplaza `<SectionHeader>` por `<div>` equivalente para alojar el botón a la derecha). Visible solo para ADMIN cuando cycle.status = ACTIVE o CLOSING.
+
+**Decisiones técnicas:**
+- Validación de hipótesis algorítmica simple: tarea completada → VALIDATED, resto → PARTIAL. No requiere llamada a Claude ni a APIs externas.
+- Sin nueva migración: todos los campos necesarios ya existían (Hypothesis.validation, validatedAt, validationNotes; MonthlyCycle.status, closedAt; Task.status).
+- El botón es discreto (outline-mono, tamaño pequeño) — no interfiere visualmente con el header. Solo visible para ADMIN con ciclo activo → 0 surface área para usuarios EDITOR.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 28 — 2026-06-02 ✅ COMPLETA (Módulo Eventos/Timeline)
 **Participantes:** Jorge + Claude Code

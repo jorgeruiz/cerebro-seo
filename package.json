@@ -17,6 +17,7 @@
     "@next-auth/prisma-adapter": "^1.0.7",
     "@notionhq/client": "^5.20.0",
     "@prisma/client": "^5.22.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@trpc/server": "^11.17.0",
     "@types/pg": "^8.20.0",
     "bullmq": "^5.76.6",

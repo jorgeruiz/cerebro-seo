@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import { SectionHeader, KpiCard } from "@/components/ui-darkui";
 import { actionGenerateMonthlyReport } from "./actions";
@@ -182,6 +183,7 @@ export function ReportPanel({
   history: HistoryEntry[];
   isAdmin: boolean;
 }) {
+  const pdfUrl = `/clientes/${clientId}/reporte/pdf?mes=${currentYearMonth}`;
   const [isPending, startTransition] = useTransition();
   const [record, setRecord] = useState<ReportRecord | null>(initialRecord);
   const [error, setError] = useState<string | null>(null);
@@ -204,7 +206,7 @@ export function ReportPanel({
     <div className="space-y-8">
 
       {/* Trigger / estado */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           {record ? (
             <p className="font-mono text-[0.65rem] text-muted-foreground">
@@ -217,25 +219,39 @@ export function ReportPanel({
             </p>
           )}
         </div>
-        {isAdmin && (
-          <button
-            onClick={handleGenerate}
-            disabled={isPending}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-          >
-            {isPending ? (
-              <>
-                <RefreshCw className="h-3 w-3 animate-spin" />
-                Generando…
-              </>
-            ) : (
-              <>
-                <FileText className="h-3 w-3" />
-                {record ? "Regenerar" : "Generar reporte"}
-              </>
-            )}
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Descargar PDF — visible cuando hay reporte */}
+          {record && (
+            <a
+              href={pdfUrl}
+              download
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Download className="h-3 w-3" />
+              PDF
+            </a>
+          )}
+          {/* Generar / Regenerar — solo ADMIN */}
+          {isAdmin && (
+            <button
+              onClick={handleGenerate}
+              disabled={isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPending ? (
+                <>
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Generando…
+                </>
+              ) : (
+                <>
+                  <FileText className="h-3 w-3" />
+                  {record ? "Regenerar" : "Generar reporte"}
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
