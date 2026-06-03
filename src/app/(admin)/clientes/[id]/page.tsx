@@ -99,7 +99,7 @@ const MODULES = [
   { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-ds-green",       requiresSeo: true,  active: true  },
   { label: "Keywords objetivo",    icon: TrendingUp,  href: "keywords",          color: "text-primary",        requiresSeo: true,  active: true  },
   { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-ds-blue",        requiresSeo: false, active: true  },
-  { label: "Eventos",              icon: Calendar,    href: "eventos",           color: "text-ds-orange",      requiresSeo: false, active: false },
+  { label: "Eventos",              icon: Calendar,    href: "timeline",          color: "text-ds-orange",      requiresSeo: false, active: true  },
   { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-destructive",    requiresSeo: false, active: true  },
   { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-ds-yellow",      requiresSeo: true,  active: true  },
   { label: "Backlinks",            icon: Link2,       href: "backlinks",         color: "text-ds-blue",        requiresSeo: true,  active: true  },
