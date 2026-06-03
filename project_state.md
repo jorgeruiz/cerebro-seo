@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-02 (Sesión 29 — CycleCloseAgent: cierre atómico de ciclo + validación hipótesis)
-**Fase actual:** Fase 4 — EN CURSO. Keyword Ideas ✅ · Timeline ✅ · CycleCloseAgent ✅ · Pendiente: PDF exportable.
-**Próximo hito:** Sesión 30 — Reporte PDF exportable (opcional) o mejoras de UX
+**Última actualización:** 2026-06-02 (Sesión 30 — Reporte PDF exportable: @react-pdf/renderer, ruta /reporte/pdf)
+**Fase actual:** Fase 4 — COMPLETA. Keyword Ideas ✅ · Timeline ✅ · CycleCloseAgent ✅ · PDF ✅
+**Próximo hito:** Sesión 31 — por definir (deudas, mejoras UX, o nueva fase)
 
 ---
 
@@ -318,7 +318,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo Keyword Ideas (DataForSEO Labs + AddKeywordButton) ✅ Sesión 27
 - [x] Módulo Eventos/Timeline (7 fuentes, agrupado por mes, EventCard) ✅ Sesión 28
 - [x] CycleCloseAgent (cierre atómico de ciclo + validación de hipótesis) ✅ Sesión 29
-- [ ] Reporte PDF exportable
+- [x] Reporte PDF exportable (@react-pdf/renderer, A4, diseño limpio) ✅ Sesión 30
 
 ---
 
@@ -348,6 +348,39 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 30 — 2026-06-02 ✅ COMPLETA (Reporte PDF exportable)
+**Participantes:** Jorge + Claude Code
+**Commit:** `3106e9e` — `feat: Reporte PDF exportable — @react-pdf/renderer, ruta /reporte/pdf, botón descarga (Sesión 30)`
+**Resultado:** ✅ PDF generado server-side. Botón "PDF" en ReportPanel. Build limpio. Push + deploy.
+
+**Trabajo realizado:**
+- `npm install @react-pdf/renderer` (v4.5.1) — librería de PDF puro en JS, sin Puppeteer/Chrome.
+- `reporte/ReportPdf.tsx` (nuevo): documento PDF con react-pdf primitives (Document, Page, Text, View, StyleSheet). Layout A4 con:
+  - Header: nombre cliente, dominio, período en box gris.
+  - Sección "Rankings": KPI cards (total, mejoraron [verde], cayeron [rojo], sin cambio) + tablas top mejoras/caídas en 2 columnas.
+  - Sección "Otras métricas": backlinks totales/dominios, mención Claude, tareas completadas (condicionales).
+  - Sección "Balance del mes": 2 columnas (Logros verde / Desafíos amarillo) con bullets.
+  - Sección "Oportunidades": cards con badge de impacto coloreado.
+  - Sección "Plan del próximo mes": lista numerada con badges azules.
+  - Sección "Conclusión estratégica".
+  - Footer fijo con "Click Society · Cerebro SEO · fecha" + numeración de páginas.
+- `reporte/pdf/route.ts` (nuevo): `GET /clientes/[id]/reporte/pdf?mes=YYYY-MM`. Auth check. Fetch del MonthlyReport de BD. `renderToBuffer(element as ReactElement<DocumentProps>)`. Convierte `Buffer → Uint8Array`. Response con headers `application/pdf` + `Content-Disposition: attachment`.
+- `ReportPanel.tsx`: importado `Download` de lucide-react. `pdfUrl` calculado en el componente. Botón `<a href={pdfUrl} download>` visible cuando hay `record`, junto al botón de generar.
+
+**Fixes de build:**
+- `Font` importado sin usar → removido de imports.
+- `renderToBuffer` requiere `ReactElement<DocumentProps>` → cast explícito.
+- `Buffer` no asignable a `BodyInit` de `NextResponse` → convertido a `new Uint8Array(buffer)`.
+
+**Decisiones técnicas:**
+- `@react-pdf/renderer` sobre Puppeteer: sin dependencias pesadas, sin Chrome, funciona en Vercel/Easypanel sin config extra.
+- PDF se genera on-demand (cada click en "PDF") — no se almacena en disco. Si el reporte es pesado en el futuro, considerar caché con `reportPdfUrl` en BD.
+- La ruta es pública para cualquier usuario autenticado (ADMIN y EDITOR) — PDFs no contienen información que no puedan ver en la UI.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 29 — 2026-06-02 ✅ COMPLETA (CycleCloseAgent)
 **Participantes:** Jorge + Claude Code
