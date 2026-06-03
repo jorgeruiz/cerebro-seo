@@ -19,6 +19,7 @@ import {
   Activity,
   FileSearch,
   FileText,
+  Lightbulb,
   Settings,
   Lock,
   Sparkles,
@@ -104,6 +105,7 @@ const MODULES = [
   { label: "Backlinks",            icon: Link2,       href: "backlinks",         color: "text-ds-blue",        requiresSeo: true,  active: true  },
   { label: "Análisis Claude",      icon: Sparkles,    href: "analisis",          color: "text-primary",        requiresSeo: true,  active: true  },
   { label: "Reporte Mensual",      icon: FileText,    href: "reporte",           color: "text-ds-blue",        requiresSeo: true,  active: true  },
+  { label: "Keyword Ideas",        icon: Lightbulb,   href: "keyword-ideas",     color: "text-ds-yellow",      requiresSeo: true,  active: true  },
 ];
 
 export default async function ClienteDetallePage({

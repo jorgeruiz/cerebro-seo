@@ -547,6 +547,78 @@ export class DataForSeoProvider implements SeoDataProvider {
   async getSerp(_keyword: string, _country: string): Promise<SerpResult> {
     throw new Error("getSerp: not implemented yet — Fase 2");
   }
+
+  // ── getKeywordIdeas ────────────────────────────────────────────────────────
+  // DataForSEO Labs — Keyword Suggestions. Dado un seed keyword, retorna ideas
+  // relacionadas con volumen, KD, CPC e intención de búsqueda.
+  // Costo: ~$0.025/req (Standard Queue). Cache: 7 días.
+
+  async getKeywordIdeas(
+    seeds: string[],
+    options?: { limit?: number; locationName?: string; languageName?: string },
+    clientId?: string
+  ): Promise<KeywordIdea[]> {
+    const limit = options?.limit ?? 100;
+    const location = options?.locationName ?? "Mexico";
+    const language = options?.languageName ?? "Spanish";
+    const cacheKey = `cache:dataforseo:keyword-ideas:${seeds.join(",").slice(0, 80)}:${location}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as KeywordIdea[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsKeywordSuggestionsResult>(
+      "/dataforseo_labs/google/keyword_suggestions/live",
+      seeds.slice(0, 5).map((seed) => ({
+        keyword: seed,
+        location_name: location,
+        language_name: language,
+        limit,
+        include_serp_info: false,
+        include_seed_keyword: false,
+      }))
+    );
+
+    void logUsage({ endpoint: "labs/keyword_suggestions", cost: cost || 0.025, clientId });
+
+    const seen = new Set<string>();
+    const ideas: KeywordIdea[] = [];
+
+    for (const task of data.tasks ?? []) {
+      for (const result of task.result ?? []) {
+        for (const item of (result as DfsKeywordSuggestionsResult).items ?? []) {
+          const kw = item.keyword ?? "";
+          if (!kw || seen.has(kw)) continue;
+          seen.add(kw);
+
+          const monthly = item.keyword_info?.monthly_searches ?? null;
+          const trend = monthly
+            ? monthly.slice(-12).map((m) => m.search_volume ?? 0)
+            : null;
+
+          ideas.push({
+            keyword: kw,
+            searchVolume: item.keyword_info?.search_volume ?? null,
+            cpc: item.keyword_info?.cpc ?? null,
+            competition: item.keyword_info?.competition ?? null,
+            keywordDifficulty: item.keyword_properties?.keyword_difficulty ?? null,
+            intent: item.search_intent_info?.main_intent ?? null,
+            trend,
+          });
+        }
+      }
+    }
+
+    // Ordenar por volumen descendente
+    ideas.sort((a, b) => (b.searchVolume ?? 0) - (a.searchVolume ?? 0));
+
+    try {
+      await redis.set(cacheKey, JSON.stringify(ideas), "EX", 7 * 24 * 3600);
+    } catch { /* Redis caído */ }
+
+    return ideas;
+  }
 }
 
 // ─── Singleton export ──────────────────────────────────────────────────────
@@ -680,4 +752,36 @@ interface DfsDomainIntersectionItem {
 
 interface DfsDomainIntersectionResult {
   items?: DfsDomainIntersectionItem[];
+}
+
+// ─── Keyword Ideas types ────────────────────────────────────────────────────
+
+export interface KeywordIdea {
+  keyword: string;
+  searchVolume: number | null;
+  cpc: number | null;
+  competition: number | null;      // 0-1
+  keywordDifficulty: number | null; // 0-100
+  intent: string | null;
+  trend: number[] | null;           // últimos 12 meses
+}
+
+interface DfsKeywordSuggestionsItem {
+  keyword?: string;
+  keyword_info?: {
+    search_volume?: number | null;
+    cpc?: number | null;
+    competition?: number | null;
+    monthly_searches?: Array<{ search_volume?: number }> | null;
+  };
+  keyword_properties?: {
+    keyword_difficulty?: number | null;
+  };
+  search_intent_info?: {
+    main_intent?: string | null;
+  };
+}
+
+interface DfsKeywordSuggestionsResult {
+  items?: DfsKeywordSuggestionsItem[];
 }
