@@ -44,6 +44,48 @@ function DeltaBadge({ delta }: { delta: number | null }) {
   );
 }
 
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+
+function MiniSparkline({ history }: { history: Array<{ date: Date; position: number | null }> }) {
+  const points = [...history]
+    .reverse() // history comes desc by date — reverse to chronological
+    .filter((h): h is { date: Date; position: number } => h.position !== null);
+
+  if (points.length < 2) {
+    return <span className="text-xs text-gray-300">—</span>;
+  }
+
+  const W = 60, H = 24, PAD = 2;
+  const positions = points.map((p) => p.position);
+  const minPos = Math.min(...positions);
+  const maxPos = Math.max(...positions);
+  const range = maxPos - minPos || 1;
+
+  // Lower position number = better = higher on chart (inverted Y)
+  const toY = (pos: number) => PAD + ((pos - minPos) / range) * (H - PAD * 2);
+  const toX = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
+
+  const polyPoints = points.map((p, i) => `${toX(i).toFixed(1)},${toY(p.position).toFixed(1)}`).join(" ");
+
+  const first = points[0].position;
+  const last = points[points.length - 1].position;
+  const color = last < first ? "#22c55e" : last > first ? "#ef4444" : "#6b7280";
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      <polyline
+        points={polyPoints}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+    </svg>
+  );
+}
+
 type SortField = "term" | "currentPosition" | "delta7d" | "delta30d" | "lastTracked";
 type SortDir = "asc" | "desc";
 type FilterType = "all" | "priority" | "bulk";
@@ -150,6 +192,7 @@ export function KeywordsTable({ rows }: Props) {
                 Posición <SortIcon field="currentPosition" />
               </button>
             </TableHead>
+            <TableHead className="text-xs font-semibold text-gray-500">Tendencia</TableHead>
             <TableHead>
               <button className="flex items-center gap-1 text-xs font-semibold hover:text-gray-800" onClick={() => toggleSort("delta7d")}>
                 7d <SortIcon field="delta7d" />
@@ -171,7 +214,7 @@ export function KeywordsTable({ rows }: Props) {
         <TableBody>
           {pageData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-sm text-gray-400 py-8">
+              <TableCell colSpan={7} className="text-center text-sm text-gray-400 py-8">
                 Sin keywords que coincidan con los filtros seleccionados
               </TableCell>
             </TableRow>
@@ -187,6 +230,9 @@ export function KeywordsTable({ rows }: Props) {
                 </TableCell>
                 <TableCell>
                   <PositionBadge pos={row.currentPosition} />
+                </TableCell>
+                <TableCell>
+                  <MiniSparkline history={row.history} />
                 </TableCell>
                 <TableCell>
                   <DeltaBadge delta={row.delta7d} />
