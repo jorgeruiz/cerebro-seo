@@ -73,6 +73,18 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+
+        // Re-evaluar ADMIN_EMAILS en cada sesión (no solo en jwt que solo corre en sign-in/refresh).
+        // Esto permite cambiar ADMIN_EMAILS en Easypanel y que surta efecto sin que el usuario
+        // cierre sesión — el rol se recalcula en cada request al servidor.
+        const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+          .split(",")
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+        const email = session.user.email?.toLowerCase() ?? "";
+        if (adminEmails.length > 0 && email && adminEmails.includes(email)) {
+          session.user.role = UserRole.ADMIN;
+        }
       }
       return session;
     },
