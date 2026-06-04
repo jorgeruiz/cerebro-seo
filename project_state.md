@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-02 (Sesión 30 — Reporte PDF exportable: @react-pdf/renderer, ruta /reporte/pdf)
-**Fase actual:** Fase 4 — COMPLETA. Keyword Ideas ✅ · Timeline ✅ · CycleCloseAgent ✅ · PDF ✅
-**Próximo hito:** Sesión 31 — por definir (deudas, mejoras UX, o nueva fase)
+**Última actualización:** 2026-06-03 (Sesión 31 — Mejoras UX transversales: sparkline keywords, CSV export, insights historial + Dark UI, audit historial + Dark UI)
+**Fase actual:** Post-Fase 4 — pulido y mejoras UX transversales
+**Próximo hito:** Sesión 32 — por definir (nueva funcionalidad, deudas técnicas, o mejoras UX adicionales)
 
 ---
 
@@ -12,9 +12,9 @@
 
 > Esta sección se escribe al inicio de cada contexto para que no se pierda entre el historial.
 
-### 🟡 Deuda de roles — PARCIALMENTE RESUELTA (2026-05-20)
+### ✅ Deuda de roles — RESUELTA (2026-06-03)
 
-Estrategia C+A implementada y desplegada. Jorge validado como ADMIN (vía `ADMIN_EMAILS`) viendo todos los clientes. **Félix sigue apareciendo como EDITOR sin ver clientes.** Pendiente: que Félix pruebe login en ventana incógnito fresca (su JWT actual puede estar firmado con `NEXTAUTH_SECRET` viejo o con lógica anterior). Si incógnito no resuelve, diagnosticar con: (a) valor exacto de `ADMIN_EMAILS` en Easypanel, (b) callback `jwt` en `src/lib/auth.ts`, (c) query en `src/app/(admin)/clientes/page.tsx`.
+Estrategia C+A implementada y desplegada. Root cause identificado: NextAuth `jwt` callback solo corre en sign-in/token expiry, no en cada `getServerSession()`. El JWT de Félix tenía `role: EDITOR` cacheado. Fix: se agregó el chequeo de `ADMIN_EMAILS` también al callback `session` en `src/lib/auth.ts` — así el rol se recalcula en cada request al servidor sin requerir re-login. Jorge: `jorge@clicksociety.com.mx`. Félix: `felix@clicksociety.com.mx`. Ambos en `ADMIN_EMAILS` de Easypanel.
 
 ### 🟡 Deuda de seguridad: Credenciales pendientes de rotación
 
@@ -78,7 +78,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=2048` (VPS 3.8GB sin swap — 4096 causaba OOM). |
 | Redis producción | ✅ Completo | `apps_cerebro-seo-redis:6379` (underscore después de `apps`, guiones en el nombre del servicio — formato Easypanel). Password rotado 2026-05-20. Dos clientes separados. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
-| Roles ADMIN/EDITOR | 🟡 Operativo (parcial) | C+A desplegado. Jorge = ADMIN validado. Félix pendiente validación en incógnito. Ver §DEUDAS. |
+| Roles ADMIN/EDITOR | ✅ Completo | C+A desplegado. Jorge + Félix = ADMIN vía `ADMIN_EMAILS`. Fix `session` callback garantiza re-eval en cada request. |
 | Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
 | Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
@@ -319,6 +319,13 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo Eventos/Timeline (7 fuentes, agrupado por mes, EventCard) ✅ Sesión 28
 - [x] CycleCloseAgent (cierre atómico de ciclo + validación de hipótesis) ✅ Sesión 29
 - [x] Reporte PDF exportable (@react-pdf/renderer, A4, diseño limpio) ✅ Sesión 30
+- [x] Sparkline de tendencia en tabla de keywords (SVG inline, 30 días, color por trend) ✅ Sesión 31
+- [x] Export CSV de keywords con filtros aplicados ✅ Sesión 31
+- [x] Mejoras módulo Insights: sort severidad, Dark UI detalle, página historial /insights (tabs activos/resueltos/ignorados) ✅ Sesión 31
+- [x] Historial de audits: selector de audits pasados, gráfica evolución de scores (Recharts), Dark UI completo ✅ Sesión 31
+- [x] Fix Félix: `session` callback evalúa ADMIN_EMAILS en cada request — sin necesidad de re-login ✅ Sesión 31
+- [x] Búsqueda de clientes en tiempo real + sort inteligente (alertas → tareas → nombre) ✅ Sesión 31
+- [x] Dashboard global `/dashboard` con KPIs, alertas críticas, actividad 7d, estado de ciclos ✅ Sesión 31
 
 ---
 
@@ -326,7 +333,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
-| Validación acceso Félix | Félix + Jorge | Login en incógnito fresca. Si sigue como EDITOR sin clientes, diagnosticar ADMIN_EMAILS + callback jwt. |
+| ~~Validación acceso Félix~~ | ~~Resuelto~~ | **RESUELTO (Sesión 31).** Fix en `session` callback de `auth.ts` — ADMIN_EMAILS re-evaluado en cada request. No requiere re-login. |
 | ~~Workers de sync Cerebro~~ | ~~Automático~~ | **RESUELTO (Sesión 16).** Workers `sync:cerebro` (6h) y `sync:cerebro-tasks` (15min) activos en producción. Verificar `JobLog` en Sesión 17. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
 | Validar calidad de insights (**en curso**) | Félix (1-2 semanas) | Insights reales generados y verificados visualmente en producción (Sesión 17). Félix debe revisar si son accionables. Si sí → expandir a 12 SEO (borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel). |
@@ -348,6 +355,46 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 31 — 2026-06-03 ✅ COMPLETA (Mejoras UX transversales)
+**Participantes:** Jorge + Claude Code
+**Commits:** `84598f9`, `e661330`, `4158d60`, `5fac3d1`
+**Resultado:** ✅ 4 módulos mejorados. Build limpio. Push + deploy en todos los commits.
+
+**Trabajo realizado:**
+
+1. **Sparkline de tendencia en keywords** (`KeywordsTable.tsx`):
+   - Componente `MiniSparkline` — SVG inline 60×24px, sin Recharts (demasiado pesado para celda de tabla).
+   - Y-axis invertido: posición 1 = arriba, posición 100 = abajo.
+   - Color dinámico: verde si mejoró, rojo si empeoró, gris si sin cambio.
+   - Columna "Tendencia" entre Posición y 7d en la tabla. No afecta sort ni filtros.
+
+2. **Export CSV de keywords** (`KeywordsTable.tsx`):
+   - Botón "CSV" en toolbar, junto al contador.
+   - Exporta los datos ya filtrados y ordenados (respeta el estado actual de filtros).
+   - Columnas: Keyword, Tipo, País, Posición, 7d, 30d, URL rankeando, Actualizado.
+   - BOM UTF-8 para Excel en español. Nombre: `keywords-YYYY-MM-DD.csv`.
+
+3. **Mejoras módulo Insights**:
+   - `InsightCards.tsx`: sort por severidad (critical > high > medium > low) antes de renderizar. Link "Ver historial completo" al pie.
+   - `insights/[insightId]/page.tsx`: Dark UI completo — `bg-card`, `border-border`, DS tokens de color. Breadcrumb con link al listado. URLs afectadas como links externos. Botones con `buttonVariants`.
+   - `insights/page.tsx` (nuevo): página de historial con 3 tabs — Activos / Resueltos / Ignorados. Contadores por tab. Lista densa con ícono por tipo, badge de severidad, descripción truncada, acción sugerida, fecha.
+
+4. **Historial de audits** (`audit/page.tsx`, `audit/AuditScoreChart.tsx`):
+   - Fetcha los últimos 24 audits (no solo el más reciente).
+   - `AuditScoreChart.tsx` (nuevo): Recharts LineChart con Overall, Técnico, Performance, Contenido. Aparece cuando hay 2+ audits completados.
+   - Selector de audits: fila de botones con fecha, tipo, score overall. Navegación via `?auditId=xxx`.
+   - Issues se cargan solo para el audit seleccionado (query separada — no penaliza historial grande).
+   - Dark UI completo: `bg-card`, `border-border`, severity usa `text-destructive/text-ds-orange/text-ds-yellow/text-ds-blue`.
+
+**Fixes previos (también esta sesión, sesiones previas resumidas):**
+- Fix Félix: `session` callback en `auth.ts` re-evalúa `ADMIN_EMAILS` en cada `getServerSession()` — sin requerir re-login. Root cause: `jwt` callback solo corre en sign-in/refresh.
+- Búsqueda de clientes: `ClientGrid.tsx` con input en tiempo real, sort inteligente, zero state.
+- Dashboard global `/dashboard`: 9 queries paralelas, KPIs, alertas críticas agrupadas por cliente, actividad 7d, estado de ciclos.
+
+**Costo de APIs:** $0 (todo client-side o BD local, sin llamadas a DataForSEO/Claude/GSC).
+
+---
 
 ### Sesión 30 — 2026-06-02 ✅ COMPLETA (Reporte PDF exportable)
 **Participantes:** Jorge + Claude Code
