@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-04 (Sesión 32 — Página /settings: estado del sistema, colas BullMQ, workers, costos del mes)
+**Última actualización:** 2026-06-05 (Sesión 33 — Dark UI sweep completo: KeywordsTable, GscQueriesTable, PagesTrafficTable)
 **Fase actual:** Post-Fase 4 — pulido y mejoras UX transversales
-**Próximo hito:** Sesión 33 — por definir (Dark UI sweep de módulos pendientes, nueva funcionalidad, o deudas técnicas)
+**Próximo hito:** Sesión 33 cont. — siguiente módulo por definir
 
 ---
 
@@ -356,6 +356,38 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 33 — 2026-06-05 ✅ Dark UI sweep completo
+**Participantes:** Jorge + Claude Code
+**Commit:** `82dbf48`
+**Resultado:** ✅ Dark UI sweep de los 3 componentes client-side de tabla que faltaban. Build limpio. Push.
+
+**Trabajo realizado:**
+
+1. **`KeywordsTable.tsx`** (reescrito en Sesión 33 previa a compactación):
+   - `PositionBadge`: top3=`bg-primary/10 text-ds-green border-ds-gd`, top10=`bg-ds-blue/10 text-ds-blue`, top30=`bg-primary/10 text-primary`, out=`bg-muted text-muted-foreground`
+   - `DeltaBadge`: positivo=`text-ds-green`, negativo=`text-destructive`, cero=`text-muted-foreground/50`
+   - Filtros: `bg-primary/15 text-primary` (activo) vs `bg-muted text-muted-foreground` (inactivo)
+   - Tabla: `bg-card border-border`, filas `hover:bg-muted/30`
+   - Sort icons: `text-primary` / `text-muted-foreground/30`
+
+2. **`GscQueriesTable.tsx`** (reescrito):
+   - Toggle rango: `bg-muted` → `bg-card text-foreground` (activo) vs `text-muted-foreground` (inactivo)
+   - Selects: `border-border bg-card text-foreground focus:ring-primary`
+   - Tabla: `bg-card border-border`, skeleton `bg-muted`, filas `hover:bg-muted/30`
+   - Sort icons: `text-primary` / `text-muted-foreground/30`, contador `font-mono`
+
+3. **`PagesTrafficTable.tsx`** (reescrito):
+   - Mismo patrón que GscQueriesTable
+   - Badge GA4: `bg-primary/10 text-primary border-primary/30`
+   - Badge GSC: `bg-ds-blue/10 text-ds-blue border-ds-blue/40`
+   - Valores null: `text-muted-foreground/30`
+
+**Estado del Dark UI sweep:** COMPLETO. Todos los módulos usan tokens del design system.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 32 — 2026-06-04 ✅ COMPLETA (Página /settings)
 **Participantes:** Jorge + Claude Code
