@@ -101,7 +101,7 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
     <div className="space-y-4">
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.value}
@@ -109,8 +109,8 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
               className={[
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
                 range === r.value
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700",
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
               {r.label}
@@ -121,21 +121,21 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
         {/* Badges de fuentes activas */}
         <div className="flex gap-1.5">
           {hasGa4 && (
-            <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">
+            <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded border bg-primary/10 text-primary border-primary/30">
               GA4
             </span>
           )}
           {hasGsc && (
-            <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200">
+            <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded border bg-ds-blue/10 text-ds-blue border-ds-blue/40">
               GSC
             </span>
           )}
         </div>
 
-        {isPending && <Loader2 className="h-4 w-4 animate-spin text-indigo-500 ml-auto" />}
+        {isPending && <Loader2 className="h-4 w-4 animate-spin text-primary ml-auto" />}
 
         {data && (
-          <span className="ml-auto text-xs text-gray-400">
+          <span className="ml-auto text-xs text-muted-foreground font-mono">
             {data.total > 200
               ? `Top 200 de ${fmt.format(data.total)} páginas`
               : `${fmt.format(data.total)} páginas`}
@@ -144,28 +144,28 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent border-gray-100">
-                <TableHead className="text-xs font-semibold text-gray-500 py-3 pl-4 min-w-[200px]">
+              <TableRow className="hover:bg-transparent border-border">
+                <TableHead className="text-xs font-mono text-muted-foreground py-3 pl-4 min-w-[200px]">
                   Página
                 </TableHead>
                 {activeCols.map((col) => (
                   <TableHead
                     key={col.key}
-                    className="text-xs font-semibold text-gray-500 py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-900 transition-colors whitespace-nowrap"
+                    className="text-xs font-mono text-muted-foreground py-3 pr-4 text-right cursor-pointer select-none hover:text-foreground transition-colors whitespace-nowrap"
                     onClick={() => handleSort(col.key)}
                   >
                     <span className="flex items-center justify-end gap-1">
                       {col.label}
                       {sortBy === col.key ? (
                         sortDir === "desc"
-                          ? <ChevronDown className="h-3 w-3 text-indigo-500" />
-                          : <ChevronUp className="h-3 w-3 text-indigo-500" />
+                          ? <ChevronDown className="h-3 w-3 text-primary" />
+                          : <ChevronUp className="h-3 w-3 text-primary" />
                       ) : (
-                        <ChevronDown className="h-3 w-3 text-gray-300" />
+                        <ChevronDown className="h-3 w-3 text-muted-foreground/30" />
                       )}
                     </span>
                   </TableHead>
@@ -175,13 +175,13 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
             <TableBody>
               {isPending ? (
                 Array.from({ length: 8 }).map((_, i) => (
-                  <TableRow key={i} className="border-gray-50">
+                  <TableRow key={i} className="border-border/50">
                     <TableCell className="pl-4 py-2.5">
-                      <div className="h-3.5 bg-gray-100 rounded animate-pulse w-48" />
+                      <div className="h-3.5 bg-muted rounded animate-pulse w-48" />
                     </TableCell>
                     {activeCols.map((col) => (
                       <TableCell key={col.key} className="pr-4 text-right">
-                        <div className="h-3.5 bg-gray-100 rounded animate-pulse w-12 ml-auto" />
+                        <div className="h-3.5 bg-muted rounded animate-pulse w-12 ml-auto" />
                       </TableCell>
                     ))}
                   </TableRow>
@@ -190,16 +190,16 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
                 <TableRow>
                   <TableCell
                     colSpan={activeCols.length + 1}
-                    className="text-center py-12 text-sm text-gray-400"
+                    className="text-center py-12 text-sm text-muted-foreground"
                   >
                     Sin datos para el período seleccionado
                   </TableCell>
                 </TableRow>
               ) : (
                 pages.map((row, i) => (
-                  <TableRow key={i} className="border-gray-50 hover:bg-gray-50/50">
+                  <TableRow key={i} className="border-border/50 hover:bg-muted/30">
                     <TableCell
-                      className="pl-4 py-2.5 text-sm text-gray-800 font-medium"
+                      className="pl-4 py-2.5 text-sm text-foreground font-medium"
                       title={row.page}
                     >
                       <span className="font-mono text-xs">{truncatePage(row.page)}</span>
@@ -210,7 +210,7 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
                       return (
                         <TableCell
                           key={col.key}
-                          className={`pr-4 text-right text-sm tabular-nums ${isNull ? "text-gray-300" : "text-gray-700"}`}
+                          className={`pr-4 text-right text-sm tabular-nums ${isNull ? "text-muted-foreground/30" : "text-foreground"}`}
                         >
                           {col.format(v)}
                         </TableCell>
@@ -223,8 +223,8 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
           </Table>
         </div>
         {!isPending && pages.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-gray-50">
-            <p className="text-[10px] text-gray-400">
+          <div className="px-4 py-2.5 border-t border-border">
+            <p className="text-[10px] text-muted-foreground/60 font-mono">
               {hasGa4 && "GA4: sesiones orgánicas (Organic Search)."}
               {hasGa4 && hasGsc && " · "}
               {hasGsc && "GSC: clics e impresiones orgánicas."}

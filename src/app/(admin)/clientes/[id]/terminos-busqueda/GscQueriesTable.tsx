@@ -107,7 +107,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Toggle de rango */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.value}
@@ -115,8 +115,8 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
               className={[
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
                 range === r.value
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700",
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
               {r.label}
@@ -128,7 +128,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
         <select
           value={device}
           onChange={(e) => handleDevice(e.target.value as GscQueriesDevice)}
-          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="border border-border rounded-lg px-3 py-1.5 text-xs text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-primary"
         >
           {DEVICES.map((d) => (
             <option key={d.value} value={d.value}>{d.label}</option>
@@ -139,7 +139,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
         <select
           value={country}
           onChange={(e) => handleCountry(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="border border-border rounded-lg px-3 py-1.5 text-xs text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-primary"
         >
           {COUNTRIES.map((c) => (
             <option key={c.value} value={c.value}>{c.label}</option>
@@ -147,11 +147,11 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
         </select>
 
         {isPending && (
-          <Loader2 className="h-4 w-4 animate-spin text-indigo-500 ml-auto" />
+          <Loader2 className="h-4 w-4 animate-spin text-primary ml-auto" />
         )}
 
         {data && (
-          <span className="ml-auto text-xs text-gray-400">
+          <span className="ml-auto text-xs text-muted-foreground font-mono">
             {data.total > 200
               ? `Mostrando top 200 de ${fmt.format(data.total)} queries`
               : `${fmt.format(data.total)} queries`}
@@ -160,25 +160,25 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent border-gray-100">
-              <TableHead className="text-xs font-semibold text-gray-500 py-3 pl-4">Query</TableHead>
+            <TableRow className="hover:bg-transparent border-border">
+              <TableHead className="text-xs font-mono text-muted-foreground py-3 pl-4">Query</TableHead>
               {COLUMNS.map((col) => (
                 <TableHead
                   key={col.key}
-                  className="text-xs font-semibold text-gray-500 py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-900 transition-colors"
+                  className="text-xs font-mono text-muted-foreground py-3 pr-4 text-right cursor-pointer select-none hover:text-foreground transition-colors"
                   onClick={() => handleSort(col.key)}
                 >
                   <span className="flex items-center justify-end gap-1">
                     {col.label}
                     {sortBy === col.key ? (
                       sortDir === "desc"
-                        ? <ChevronDown className="h-3 w-3 text-indigo-500" />
-                        : <ChevronUp className="h-3 w-3 text-indigo-500" />
+                        ? <ChevronDown className="h-3 w-3 text-primary" />
+                        : <ChevronUp className="h-3 w-3 text-primary" />
                     ) : (
-                      <ChevronDown className="h-3 w-3 text-gray-300" />
+                      <ChevronDown className="h-3 w-3 text-muted-foreground/30" />
                     )}
                   </span>
                 </TableHead>
@@ -188,39 +188,39 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
           <TableBody>
             {isPending ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i} className="border-gray-50">
+                <TableRow key={i} className="border-border/50">
                   <TableCell className="pl-4 py-2.5">
-                    <div className="h-3.5 bg-gray-100 rounded animate-pulse w-48" />
+                    <div className="h-3.5 bg-muted rounded animate-pulse w-48" />
                   </TableCell>
                   {COLUMNS.map((col) => (
                     <TableCell key={col.key} className="pr-4 text-right">
-                      <div className="h-3.5 bg-gray-100 rounded animate-pulse w-12 ml-auto" />
+                      <div className="h-3.5 bg-muted rounded animate-pulse w-12 ml-auto" />
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : queries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-sm text-gray-400">
+                <TableCell colSpan={5} className="text-center py-12 text-sm text-muted-foreground">
                   Sin queries para los filtros seleccionados
                 </TableCell>
               </TableRow>
             ) : (
               queries.map((row, i) => (
-                <TableRow key={i} className="border-gray-50 hover:bg-gray-50/50">
-                  <TableCell className="pl-4 py-2.5 text-sm text-gray-800 font-medium max-w-xs truncate">
+                <TableRow key={i} className="border-border/50 hover:bg-muted/30">
+                  <TableCell className="pl-4 py-2.5 text-sm text-foreground font-medium max-w-xs truncate">
                     {row.query}
                   </TableCell>
-                  <TableCell className="pr-4 text-right text-sm text-gray-700 tabular-nums">
+                  <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">
                     {fmt.format(row.clicks)}
                   </TableCell>
-                  <TableCell className="pr-4 text-right text-sm text-gray-700 tabular-nums">
+                  <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">
                     {fmt.format(row.impressions)}
                   </TableCell>
-                  <TableCell className="pr-4 text-right text-sm text-gray-700 tabular-nums">
+                  <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">
                     {row.ctr.toFixed(2)}%
                   </TableCell>
-                  <TableCell className="pr-4 text-right text-sm text-gray-700 tabular-nums">
+                  <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">
                     {row.position.toFixed(1)}
                   </TableCell>
                 </TableRow>
@@ -229,8 +229,8 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
           </TableBody>
         </Table>
         {!isPending && queries.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-gray-50">
-            <p className="text-[10px] text-gray-400">
+          <div className="px-4 py-2.5 border-t border-border">
+            <p className="text-[10px] text-muted-foreground/60 font-mono">
               Fuente: Google Search Console · Caché 24h · Filtrado: {device === "all" ? "todos los dispositivos" : device} · {COUNTRIES.find(c => c.value === country)?.label ?? country}
             </p>
           </div>
