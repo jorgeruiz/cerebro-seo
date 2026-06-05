@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-03 (Sesión 31 — Mejoras UX transversales: sparkline keywords, CSV export, insights historial + Dark UI, audit historial + Dark UI)
+**Última actualización:** 2026-06-04 (Sesión 32 — Página /settings: estado del sistema, colas BullMQ, workers, costos del mes)
 **Fase actual:** Post-Fase 4 — pulido y mejoras UX transversales
-**Próximo hito:** Sesión 32 — por definir (nueva funcionalidad, deudas técnicas, o mejoras UX adicionales)
+**Próximo hito:** Sesión 33 — por definir (Dark UI sweep de módulos pendientes, nueva funcionalidad, o deudas técnicas)
 
 ---
 
@@ -326,6 +326,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Fix Félix: `session` callback evalúa ADMIN_EMAILS en cada request — sin necesidad de re-login ✅ Sesión 31
 - [x] Búsqueda de clientes en tiempo real + sort inteligente (alertas → tareas → nombre) ✅ Sesión 31
 - [x] Dashboard global `/dashboard` con KPIs, alertas críticas, actividad 7d, estado de ciclos ✅ Sesión 31
+- [x] Página `/settings` — estado sistema (DB/Redis), colas BullMQ, workers últimas ejecuciones, costos del mes, admins ✅ Sesión 32
 
 ---
 
@@ -355,6 +356,31 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 32 — 2026-06-04 ✅ COMPLETA (Página /settings)
+**Participantes:** Jorge + Claude Code
+**Commit:** `983a15b`
+**Resultado:** ✅ Página `/settings` operativa. Solo ADMIN (404 para EDITORs). Push + deploy.
+
+**Trabajo realizado:**
+
+`src/app/(admin)/settings/page.tsx` (nuevo) — servidor, `force-dynamic`, ADMIN-only:
+
+1. **Estado del sistema** — ping a PostgreSQL (`prisma.$queryRaw\`SELECT 1\``) y Redis (`redis.ping()`). Contadores: total clientes activos + clientes con SEO.
+
+2. **Colas BullMQ** — `getJobCounts()` en las 3 colas (dataCollectionQueue, aiAnalysisQueue, syncQueue). Muestra: en cola (waiting+delayed), activos, fallidos, completados. Resaltado rojo si hay fallidos. Todo en try/catch — si BullMQ no responde, las tarjetas muestran "Sin datos" sin romper el render.
+
+3. **Workers — últimas ejecuciones** — Consulta los últimos 300 JobLog, agrupa client-side por `jobName` (primer resultado = más reciente). Tabla con los 12 tipos de worker: label legible, schedule, estado (OK/Error/Sin datos), tiempo relativo del último run, error truncado si falló, número de intentos.
+
+4. **Costos del mes** — `prisma.apiUsage.groupBy` por provider desde el 1ro del mes actual. Tabla con proveedor, requests, costo USD. Barra de proporción visual. Total al header de sección.
+
+5. **Acceso ADMIN** — muestra los emails en `ADMIN_EMAILS` como badges. Nota de dónde configurarlo en Easypanel.
+
+**Deuda identificada:** `/settings` está en el sidebar pero el sidebar no tiene link activo hacia ella (solo muestra el ícono). Funciona al navegar directamente. No se corrigió en esta sesión.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 31 — 2026-06-03 ✅ COMPLETA (Mejoras UX transversales)
 **Participantes:** Jorge + Claude Code
