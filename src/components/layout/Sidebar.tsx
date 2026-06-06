@@ -13,9 +13,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/clientes",  label: "Clientes",       icon: Users },
-  { href: "/dashboard", label: "Dashboard",       icon: LayoutDashboard },
-  { href: "/settings",  label: "Configuración",   icon: Settings },
+  { href: "/clientes",  label: "Clientes",       icon: Users,          adminOnly: false },
+  { href: "/dashboard", label: "Dashboard",       icon: LayoutDashboard, adminOnly: false },
+  { href: "/settings",  label: "Configuración",   icon: Settings,        adminOnly: true },
 ];
 
 export function Sidebar() {
@@ -41,25 +41,20 @@ export function Sidebar() {
 
       {/* Nav items */}
       <nav className="flex flex-col">
-        {NAV_ITEMS.map(({ href, label }) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || session?.user?.role === "ADMIN").map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-2 px-5 py-1.5 font-mono text-[0.68rem] border-l-2 border-transparent transition-colors",
+                "flex items-center gap-2.5 px-5 py-1.5 font-mono text-[0.68rem] border-l-2 border-transparent transition-colors",
                 active
                   ? "text-foreground border-l-primary bg-primary/5"
                   : "text-muted-foreground hover:text-foreground hover:bg-white/[0.03]"
               )}
             >
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full shrink-0",
-                  active ? "bg-primary" : "bg-current opacity-40"
-                )}
-              />
+              <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-primary" : "opacity-50")} />
               {label}
             </Link>
           );
