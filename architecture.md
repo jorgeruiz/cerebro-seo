@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-05-19 (v4)
+**Última actualización:** 2026-06-10 (v5)
 
 ---
 
@@ -107,28 +107,33 @@ prisma/migrations/
     └── migration.sql
 ```
 
-**Por implementar (no existe todavía):**
+**Módulos del cliente (todos activos):**
+```
+src/app/(admin)/clientes/[id]/
+├── page.tsx                    # Portada: GSC real, GA4, operativa del mes, grid módulos
+├── keywords/page.tsx           # Rankings con sparkline, filtros, export CSV
+├── terminos-busqueda/page.tsx  # Queries GSC con filtros
+├── trafico-paginas/page.tsx    # Tráfico GA4+GSC fusionado por URL
+├── backlinks/page.tsx          # BacklinksAgent: perfil, evolución, cambios semana
+├── competencia/page.tsx        # CompetitorAgent: SoV, keyword gaps
+├── ai-search/page.tsx          # AI Search Visibility semanal por LLM
+├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6
+├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC)
+├── reporte/page.tsx            # Reporte mensual Claude + PDF exportable
+├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs
+├── timeline/page.tsx           # Eventos/Timeline 7 fuentes 90 días
+├── audit/page.tsx              # Site Audit con historial + gráfica evolución
+├── contenido/page.tsx          # Plan de Contenido on-demand Claude ★ Sesión 34
+├── configuracion/page.tsx      # CRUD keywords/competidores/GSC/GA4
+├── insights/page.tsx           # Historial insights (tabs: activos/resueltos/ignorados)
+└── insights/[insightId]/page.tsx # Detalle de insight
+```
+
+**Pendiente de implementar:**
 ```
 src/
-├── server/
-│   ├── trpc/                       # Routers tRPC — Fase 2
-│   │   └── routers/
-│   │       ├── clientes.ts         # Migración de /api/clientes
-│   │       ├── ciclos.ts
-│   │       └── insights.ts
-│   └── jobs/
-│       └── workers/                # Agentes pendientes — Fases 2-4
-│           ├── crawler-worker.ts
-│           ├── rank-tracking-worker.ts
-│           ├── backlinks-worker.ts
-│           ├── competitor-worker.ts
-│           ├── ai-search-worker.ts
-│           ├── cycle-close-worker.ts
-│           ├── report-worker.ts
-│           └── sync-worker.ts
-└── lib/
-    ├── cerebro-bridge.ts           # Cliente REST para Cerebro — Fase 2
-    └── notion.ts                   # Acceso a Notion vía Cerebro — Fase 2
+└── server/
+    └── trpc/routers/clientes.ts   # Migración de POST /api/clientes → tRPC (deuda técnica)
 ```
 
 ---
@@ -242,6 +247,24 @@ model JobLog {
   attempts  Int
   createdAt DateTime @default(now())
   @@index([jobName, createdAt])
+}
+
+// ★ nuevo modelo (Sesión 34): planes de contenido on-demand generados por Claude
+model ContentPlan {
+  id           String   @id @default(cuid())
+  clientId     String
+  month        String                       // YYYY-MM del ciclo al que pertenece
+  ideas        Json                         // ContentPlanResult serializado
+  model        String                       // "claude-sonnet-4-6"
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cost         Decimal  @db.Decimal(10, 6)
+  triggeredBy  String?                      // email del usuario que lo generó
+  createdAt    DateTime @default(now())
+
+  client       Client   @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, createdAt])
 }
 ```
 

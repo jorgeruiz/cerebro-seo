@@ -93,9 +93,9 @@ async function getSystemData() {
       aiAnalysisQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       syncQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
     ]);
-    dataQueueCounts = d as QueueCounts;
-    aiQueueCounts = a as QueueCounts;
-    syncQueueCounts = s as QueueCounts;
+    dataQueueCounts = d as unknown as QueueCounts;
+    aiQueueCounts = a as unknown as QueueCounts;
+    syncQueueCounts = s as unknown as QueueCounts;
   } catch { /* queue stats unavailable */ }
 
   // Últimas ejecuciones por job type (últimas 300 entradas, agrupar client-side)
@@ -119,14 +119,14 @@ async function getSystemData() {
 
   const costsByProvider = await prisma.apiUsage.groupBy({
     by: ["provider"],
-    where: { createdAt: { gte: startOfMonth } },
+    where: { date: { gte: startOfMonth } },
     _sum: { cost: true },
     _count: { id: true },
     orderBy: { _sum: { cost: "desc" } },
   });
 
   const totalCostMonth = costsByProvider.reduce(
-    (acc, r) => acc + (r._sum.cost ?? 0), 0
+    (acc, r) => acc + Number(r._sum.cost ?? 0), 0
   );
 
   // Conteo de clientes
@@ -377,7 +377,7 @@ export default async function SettingsPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {costsByProvider.map((row) => {
-                    const cost = row._sum.cost ?? 0;
+                    const cost = Number(row._sum.cost ?? 0);
                     const pct = totalCostMonth > 0 ? (cost / totalCostMonth) * 100 : 0;
                     return (
                       <tr key={row.provider} className="hover:bg-muted/30 transition-colors">

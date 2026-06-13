@@ -107,6 +107,7 @@ const MODULES = [
   { label: "Análisis Claude",      icon: Sparkles,    href: "analisis",          color: "text-primary",        requiresSeo: true,  active: true  },
   { label: "Reporte Mensual",      icon: FileText,    href: "reporte",           color: "text-ds-blue",        requiresSeo: true,  active: true  },
   { label: "Keyword Ideas",        icon: Lightbulb,   href: "keyword-ideas",     color: "text-ds-yellow",      requiresSeo: true,  active: true  },
+  { label: "Plan de Contenido",    icon: Lightbulb,   href: "contenido",         color: "text-ds-green",       requiresSeo: true,  active: true  },
 ];
 
 export default async function ClienteDetallePage({

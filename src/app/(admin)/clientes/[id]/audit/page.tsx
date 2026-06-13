@@ -57,7 +57,7 @@ async function getAuditData(clientId: string, auditId?: string) {
 
   // Cargar issues del audit seleccionado por separado
   const auditWithIssues = selectedAuditBase
-    ? await prisma.siteAudit.findUnique({
+    ? await prisma.audit.findUnique({
         where: { id: selectedAuditBase.id },
         include: {
           auditIssues: {

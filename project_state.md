@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-05 (Sesión 33 — Dark UI sweep completo: KeywordsTable, GscQueriesTable, PagesTrafficTable)
-**Fase actual:** Post-Fase 4 — pulido y mejoras UX transversales
-**Próximo hito:** Sesión 33 cont. — siguiente módulo por definir
+**Última actualización:** 2026-06-10 (Sesión 34 — Módulo Plan de Contenido en curso)
+**Fase actual:** Post-Fase 4 — nuevos módulos + pulido
+**Próximo hito:** Completar Sesión 34 — commit y deploy Plan de Contenido
 
 ---
 
@@ -94,6 +94,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo Análisis Claude | ✅ Activo | `/clientes/[id]/analisis`. Análisis on-demand Sonnet 4.6. Contexto completo de BD (ciclo, keywords, backlinks, competidores, AI search, insights). JSON estructurado (oportunidades + riesgos + recomendaciones). Sesión 24. |
 | Módulo SEO Opportunities | ✅ Activo | `/clientes/[id]/oportunidades`. Análisis algorítmico GSC 28d. 5 tipos: quick wins (pos 4-10), CTR bajo query, sin cobertura, posición pobre, CTR bajo página. Sin APIs externas — usa solo datos GSC. Sesión 25. |
 | Módulo Reporte Mensual | ✅ Activo | `/clientes/[id]/reporte`. Agrega datos del período (rankings, backlinks, AI search, ciclo) y genera reporte ejecutivo con Claude Sonnet 4.6. Selector de mes, historial de reportes, secciones: logros, desafíos, métricas, oportunidades, plan. Sesión 26. |
+| Sidebar navegación | ✅ Completo | Íconos Lucide reales en todos los nav items. Settings solo visible para ADMIN. Sesión 33b (commit `69d9482`). |
+| Módulo Plan de Contenido | 🔧 En curso | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. Migración `add_content_plan`. Sesión 34. |
 
 ---
 
@@ -169,6 +171,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-31 | **Soft delete en `Keyword` y `Competitor`**: `deletedAt DateTime?` — no borrar filas de BD, solo setear timestamp. Toda query activa filtra `deletedAt: null`. Migración `add_keyword_softdelete_competitor_timestamps`. `rank-tracking-processor` actualizado con `deletedAt: null`. |
 | 2026-05-31 | **Configuración del cliente en página dedicada `/configuracion`**: las keywords y competidores se gestionan ahí, no en el wizard de alta (que solo hace alta inicial). El wizard mantiene su lógica actual — no se modifica. |
 | 2026-05-31 | **`Array.from(new Set(...))` en vez de `[...new Set(...)]`** en server actions TypeScript. El spread de iterables requiere `downlevelIteration` o target ES2015+ — `Array.from()` es seguro con cualquier target. |
+| 2026-06-05 | **Sidebar: Settings solo visible para ADMIN.** El nav item de `/settings` se oculta para EDITORs en `Sidebar.tsx` usando la sesión del servidor. Íconos Lucide reales en todos los items (reemplaza placeholders). Commit `69d9482`. |
+| 2026-06-10 | **Plan de Contenido on-demand.** Módulo `/contenido/` genera planes de contenido SEO con Claude Sonnet 4.6. Cruza keywords, gaps de competidores, oportunidades GSC y ciclo activo. Modelo `ContentPlan` en BD (tabla separada, historial por cliente por mes). Costo estimado $0.01–0.03/plan — no se encola en BullMQ (on-demand, igual que Análisis Claude). |
 
 ---
 
@@ -327,6 +331,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Búsqueda de clientes en tiempo real + sort inteligente (alertas → tareas → nombre) ✅ Sesión 31
 - [x] Dashboard global `/dashboard` con KPIs, alertas críticas, actividad 7d, estado de ciclos ✅ Sesión 31
 - [x] Página `/settings` — estado sistema (DB/Redis), colas BullMQ, workers últimas ejecuciones, costos del mes, admins ✅ Sesión 32
+- [x] Dark UI sweep completo — KeywordsTable, GscQueriesTable, PagesTrafficTable ✅ Sesión 33
+- [x] Sidebar: íconos Lucide reales en todos los nav items + Settings solo visible para ADMIN ✅ Sesión 33b
+- [ ] Módulo Plan de Contenido (`/contenido/`) — `claude-content-plan.ts`, modelo `ContentPlan`, UI con historial ⏳ Sesión 34
 
 ---
 
@@ -356,6 +363,39 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 34 — 2026-06-10 🔧 En curso (Módulo Plan de Contenido)
+**Participantes:** Jorge + Claude Code
+**Commit:** pendiente
+**Resultado:** En progreso — archivos creados, pendiente commit + deploy.
+
+**Trabajo realizado:**
+
+1. **`src/lib/claude-content-plan.ts`** (nuevo):
+   - Función `generateContentPlan(clientId)` — Claude Sonnet 4.6 con prompt caching.
+   - Recopila contexto: keywords actuales (rankings + gaps), oportunidades GSC 28d, competidores, ciclo activo (foco + objetivos).
+   - System prompt: estratega de contenido SEO senior de Click Society. Retorna JSON estructurado validado con Zod.
+   - `ContentPlanResult`: `resumen` (string), `ideas[]` (5–10, tipo ContentIdea), `notaEstrategica`.
+   - `ContentIdea`: `titulo`, `tipo` (blog/landing/pilar/soporte), `keywords[]`, `angulo`, `prioridad` (alta/media/baja), `razon`, `urlSugerida?`.
+   - Costo estimado: ~$0.01–0.03 USD por plan. Loguea en `ApiUsage`.
+
+2. **`prisma/migrations/20260606060849_add_content_plan/migration.sql`** (nueva):
+   - Tabla `ContentPlan`: `id`, `clientId` (FK → Client), `month` (YYYY-MM), `ideas` (JSONB), `model`, `inputTokens`, `outputTokens`, `cost`, `triggeredBy`, `createdAt`.
+   - Índice en `(clientId, createdAt)`.
+
+3. **`src/app/(admin)/clientes/[id]/contenido/`** (nueva carpeta):
+   - `page.tsx`: server, `force-dynamic`. Fetch del cliente + historial de planes. Muestra `ContentPlanPanel`.
+   - `actions.ts`: `actionGenerateContentPlan(clientId)` — server action ADMIN only, llama `generateContentPlan()`, guarda en BD. `getContentPlanHistory(clientId)` — fetcha últimos 10 planes.
+   - `ContentPlanPanel.tsx`: client component. Botón "Generar plan" con `useTransition`. Vista expandible por idea (acordeón). Badges de tipo y prioridad con DS tokens. Historial de planes pasados seleccionable.
+
+4. **`src/app/(admin)/clientes/[id]/page.tsx`** modificado:
+   - Módulo "Plan de Contenido" activado en el grid de módulos. Ícono `Lightbulb`, href `contenido`, color `text-ds-orange`. Reemplaza placeholder anterior.
+
+**Estado:** archivos listos, pendiente build verification + commit.
+
+**Costo de APIs:** ~$0.01–0.03 por ejecución de plan (Claude Sonnet 4.6). Sin costo en esta sesión hasta que se use en producción.
+
+---
 
 ### Sesión 33 — 2026-06-05 ✅ Dark UI sweep completo
 **Participantes:** Jorge + Claude Code

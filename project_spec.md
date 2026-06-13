@@ -1,8 +1,8 @@
 # Cerebro SEO — Project Spec
 
 **Owner:** Jorge Ruiz (Click Society)
-**Estado:** Fase 1 en curso (BD funcionando, GSC/GA4 pendiente)
-**Última actualización:** 2026-05-10 (v3)
+**Estado:** Post-Fase 4 — todos los módulos core activos, nuevos módulos en desarrollo
+**Última actualización:** 2026-06-10 (v4)
 
 ---
 
@@ -89,6 +89,7 @@ La vista central del producto. Estructura jerárquica:
 | Site Audit | Auditoría técnica on-site (crawler propio + Core Web Vitals). |
 | Análisis de competencia | Comparativa de rankings, share of voice, gap de keywords. |
 | Backlinks | Perfil de enlaces, nuevos/perdidos, comparativa vs competidores. |
+| Plan de Contenido | Ideas de contenido SEO on-demand con Claude Sonnet 4.6. Cruza keyword gaps, oportunidades GSC, ciclo activo. 4 tipos (blog/landing/pilar/soporte), historial de planes. |
 
 ---
 
@@ -195,39 +196,47 @@ PDF brandeado Click Society. Estructura:
 
 > El **sistema de multiagentes** (BullMQ queues, workers, InsightsAgent) es **infraestructura transversal**, no una fase. Ya está construido. Los agentes se activan conforme cada fase provee datos reales.
 
-**Fase 1 — Foundation (en curso)**
-Setup completo + datos reales iniciales + deploy.
+**Fase 1 — Foundation ✅ COMPLETA**
 - ✅ Next.js, Prisma schema, auth, layout, branding
-- ✅ Sistema de multiagentes (infraestructura)
+- ✅ Sistema de multiagentes (infraestructura BullMQ)
 - ✅ Listado de clientes, wizard de alta, vista detalle con gráfica
-- ✅ Setup git + OrbStack + primera migración (21 tablas)
-- ✅ Provider layer DataForSEO (interface + DataForSeoProvider, 4 métodos reales)
-- ✅ BD local funcionando — ApiUsage poblada con 15 rows de validación
-- ❌ Conexión GSC + GA4 con datos reales
-- ❌ Deploy inicial en Easypanel + subdominio `seo.clicksociety.mx`
+- ✅ Provider layer DataForSEO (interface + DataForSeoProvider)
+- ✅ Conexión GSC + GA4 con datos reales validados en producción
+- ✅ Deploy en Easypanel + subdominio `seo.clicksociety.com.mx`
 
-**Fase 2 — Datos reales fluyendo**
-GSC/GA4 en portada, primer audit, sync con Notion, InsightsAgent con datos reales.
-- Módulo Términos de búsqueda (GSC)
-- Módulo Tráfico de páginas (GA4 + GSC)
-- Primer site audit técnico (crawler + PageSpeed Insights)
-- Sync con Notion: tareas y estrategia del mes en panel
-- InsightsAgent corriendo primer ciclo completo con datos reales
-- tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
+**Fase 2 — Datos reales fluyendo ✅ COMPLETA**
+- ✅ Módulo Términos de búsqueda (GSC)
+- ✅ Módulo Tráfico de páginas (GA4 + GSC)
+- ✅ Primer site audit técnico (crawler + PageSpeed Insights)
+- ✅ Bridge Cerebro web (sync tareas/estrategia del mes cada 15min)
+- ✅ InsightsAgent activo para los 12 clientes SEO
+- ✅ Configuración editable del cliente (keywords + competidores + GSC/GA4)
 
-**Fase 3 — Módulos SEO + Análisis on-demand de Claude**
-- Módulo Análisis de competencia (share of voice, keyword gaps)
-- Módulo Backlinks (nuevos/perdidos, DA)
-- Módulo Eventos / Timeline (con cruce de tareas y conversaciones de Cerebro)
-- **Análisis on-demand de Claude**: botón en panel que abre análisis pre-cargado con TODO el contexto del cliente (estrategia, tareas, métricas, conversaciones recientes). NO es chat full-featured.
-- RankTrackingAgent, BacklinksAgent, CompetitorAgent activados
+**Fase 3 — Módulos SEO + Análisis ✅ COMPLETA**
+- ✅ Módulo Análisis de competencia (SoV, keyword gaps)
+- ✅ Módulo Backlinks (BacklinksAgent semanal, nuevos/perdidos)
+- ✅ Módulo AI Search Visibility (worker semanal, Claude Haiku)
+- ✅ Módulo Análisis Claude on-demand (Sonnet 4.6, contexto completo)
+- ✅ Módulo SEO Opportunities (algorítmico, 5 tipos)
+- ✅ Módulo Reporte Mensual (Claude Sonnet + PDF exportable)
+- ✅ RankTrackingAgent, BacklinksAgent, CompetitorAgent, AiSearchAgent activos
 
-**Fase 4 — IA y reportes**
-- Módulo AI Search Visibility (ChatGPT, Perplexity, Gemini)
-- Módulo Keyword ideas
-- Módulo SEO Opportunities
-- Reporte mensual auto-generado (ReportAgent + PDF)
-- CycleCloseAgent: cierre automático de ciclo y validación de hipótesis
+**Fase 4 — IA y reportes ✅ COMPLETA (con mejoras en curso)**
+- ✅ Módulo Keyword Ideas (DataForSEO Labs)
+- ✅ Módulo Eventos/Timeline (7 fuentes, 90 días)
+- ✅ CycleCloseAgent (cierre atómico + validación de hipótesis)
+- ✅ Reporte PDF exportable (@react-pdf/renderer, A4)
+- ✅ Sparkline de tendencia + Export CSV de keywords
+- ✅ Dashboard global `/dashboard` con KPIs y alertas
+- ✅ Página `/settings` — sistema, colas, workers, costos
+- ✅ Dark UI sweep completo — todos los módulos usan design system tokens
+- ⏳ Módulo Plan de Contenido (en desarrollo — Sesión 34)
+
+**Post-Fase 4 — Expansión de módulos (sin fecha límite)**
+Nuevas capacidades sobre la base ya construida:
+- Plan de Contenido SEO on-demand (en curso)
+- Análisis de auditoría comparativa (historial multi-audit)
+- Posibles: integración directa con Cerebro chat, notificaciones push de insights
 
 **Total estimado:** 8-10 semanas trabajando en paralelo a operación normal.
 
@@ -265,8 +274,12 @@ Escala lineal: 30 clientes ≈ $105–150 USD/mes.
 
 ## 12. Próximo paso concreto
 
-Completar los pendientes de **Fase 1** (Sesión 5):
-1. Comparar `validation-report.md` contra GSC de Molino Azteca, RFN y Quicsa
-2. Implementar conexión GSC con datos reales en portada del cliente
-3. Implementar conexión GA4 con métricas reales en portada
-4. Deploy inicial en Easypanel + DNS `seo.clicksociety.mx`
+Completar **Sesión 34** — Módulo Plan de Contenido:
+1. Verificar build sin errores
+2. Commit + push → deploy automático en Easypanel
+3. Probar en producción: generar primer plan de contenido para un cliente SEO
+4. Evaluar con Jorge/Félix si el output de Claude es accionable
+
+Después de Sesión 34, posibles próximos módulos a discutir:
+- Mejoras al módulo de Auditoría (comparativa multi-audit más visual)
+- Integración más profunda con Cerebro chat (context pass-through)
