@@ -29,7 +29,7 @@ ENV NEXTAUTH_URL=$NEXTAUTH_URL
 ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN SKIP_ENV_VALIDATION=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build
+RUN SKIP_ENV_VALIDATION=1 NODE_OPTIONS="--max-old-space-size=1800" npm run build
 
 # Limpiar vars placeholder — las reales vienen de Easypanel en runtime
 ENV DATABASE_URL=""
