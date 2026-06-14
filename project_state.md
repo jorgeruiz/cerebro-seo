@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-14 (Sesión 35 — Headers Dark UI queries/traffic ✅ commit f94bb80)
+**Última actualización:** 2026-06-14 (Sesión 36 — Módulo AEO Research ✅ commit 1294d7b)
 **Fase actual:** Post-Fase 4 — nuevos módulos + pulido
 **Próximo hito:** Por definir con Jorge
 
@@ -96,6 +96,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo Reporte Mensual | ✅ Activo | `/clientes/[id]/reporte`. Agrega datos del período (rankings, backlinks, AI search, ciclo) y genera reporte ejecutivo con Claude Sonnet 4.6. Selector de mes, historial de reportes, secciones: logros, desafíos, métricas, oportunidades, plan. Sesión 26. |
 | Sidebar navegación | ✅ Completo | Íconos Lucide reales en todos los nav items. Settings solo visible para ADMIN. Sesión 33b (commit `69d9482`). |
 | Módulo Plan de Contenido | ✅ Activo | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. ADMIN-only. Migración `add_content_plan`. Sesión 34 commit `c82b0d6`. |
+| Módulo AEO Research | ✅ Activo | `/clientes/[id]/aeo-research`. Recopila preguntas de búsqueda (DataForSEO Labs + SERP PAA), clasifica con Claude Sonnet 4.6 en clusters AEO (featured snippets) y GEO (citación por LLMs). KPI strip, cluster cards expandibles, historial. ADMIN-only. Migración `20260614120000_add_aeo_research`. Sesión 36 commit `1294d7b`. |
 
 ---
 
@@ -174,6 +175,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-31 | **`Array.from(new Set(...))` en vez de `[...new Set(...)]`** en server actions TypeScript. El spread de iterables requiere `downlevelIteration` o target ES2015+ — `Array.from()` es seguro con cualquier target. |
 | 2026-06-05 | **Sidebar: Settings solo visible para ADMIN.** El nav item de `/settings` se oculta para EDITORs en `Sidebar.tsx` usando la sesión del servidor. Íconos Lucide reales en todos los items (reemplaza placeholders). Commit `69d9482`. |
 | 2026-06-10 | **Plan de Contenido on-demand.** Módulo `/contenido/` genera planes de contenido SEO con Claude Sonnet 4.6. Cruza keywords, gaps de competidores, oportunidades GSC y ciclo activo. Modelo `ContentPlan` en BD (tabla separada, historial por cliente por mes). Costo estimado $0.01–0.03/plan — no se encola en BullMQ (on-demand, igual que Análisis Claude). |
+| 2026-06-14 | **AEO Research (Capa A pilar AEO/GEO).** Módulo `/aeo-research/` recopila preguntas via DataForSEO Labs `keyword_suggestions` (filtrado a palabras-pregunta, cache 7d) + SERP PAA extraction (cache 7d, $0.002/req × seed). Las preguntas se clasifican con Claude Sonnet 4.6 en clusters temáticos AEO (featured snippets/PAA/voz) y GEO (citación por ChatGPT/Gemini/Perplexity/Claude). Modelo `AeoResearch` en BD (clusters Json = `AeoResearchResult` completo). ADMIN-only, seeds automáticas desde keywords `isPriority`. Costo estimado $0.01–0.05/análisis (labs + PAA + Claude). Capa B (escalar a Perplexity/SearchGPT APIs reales) queda como próximo push. |
 
 ---
 
@@ -365,6 +367,44 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 36 — 2026-06-14 ✅ COMPLETA (Módulo AEO Research — Capa A pilar AEO/GEO)
+**Participantes:** Jorge + Claude Code
+**Commit:** `1294d7b` — `feat: módulo AEO Research (capa A pilar AEO/GEO) — Answer the Public + clasificación AEO/GEO con Claude`
+**Resultado:** ✅ Lint limpio. Push. Deploy en curso. Migración `add_aeo_research` se aplica en startup.
+
+**Trabajo realizado:**
+
+1. **`prisma/schema.prisma`**: Modelo `AeoResearch` (seeds[], clusters Json, questionCount, cost Decimal, inputTokens, outputTokens, triggeredBy). Relación `aeoResearches AeoResearch[]` en `Client`.
+
+2. **Migración `20260614120000_add_aeo_research/migration.sql`**: `CREATE TABLE "AeoResearch"` con PK, FK a Client, índice `clientId + createdAt`. Se aplica vía `prisma migrate deploy` en `startup.mjs`.
+
+3. **`src/server/providers/dataforseo.ts`**:
+   - Tipo `QuestionKeyword` (keyword, volume, kd, cpc, intent, source: 'labs'|'serp_paa').
+   - `title?: string` en `DfsSerpItem` para PAA items.
+   - `getQuestionKeywords(seeds, options?, clientId?)`: llama `getKeywordIdeas` con límite ×3 y filtra con regex de palabras-pregunta en español. Cache dedicado `aeo:questions:{seeds-hash}` 7d.
+   - `getSerpQuestions(keyword, country, language, clientId?)`: SERP live regular, extrae items con `type === "people_also_ask"`. Cache `aeo:paa:{keyword}:{country}` 7d.
+
+4. **`src/lib/aeo-classify.ts`**: `classifyAeoResearchForClient(clientId, questions, seeds, triggeredBy?)`. Prompt que clasifica clusters como AEO (featured snippets/PAA/voz) o GEO (ChatGPT/Gemini/Perplexity). Guarda en `prisma.aeoResearch`. Logs a `ApiUsage`. Costo estimado $0.01–0.04.
+
+5. **`src/app/(admin)/clientes/[id]/aeo-research/actions.ts`**: `actionGenerateAeoResearch` (ADMIN-only): obtiene priority keywords como seeds → `getQuestionKeywords` + `getSerpQuestions` en paralelo → dedup → `classifyAeoResearchForClient`. `getAeoResearchHistory` para historial.
+
+6. **`src/app/(admin)/clientes/[id]/aeo-research/AeoResearchPanel.tsx`**: KPI bar (preguntas, clusters, AEO, GEO, AEO+GEO), cluster cards con expansión, badges AEO/GEO, generación via useTransition, historial, empty state.
+
+7. **`src/app/(admin)/clientes/[id]/aeo-research/page.tsx`**: server, force-dynamic. Seeds desde priority keywords. Empty state si no hay seeds (link a `/keywords`).
+
+8. **`src/app/(admin)/clientes/[id]/page.tsx`**: Módulo `AEO Research` en grid (ícono `Brain`, color `text-ds-yellow`, href `aeo-research`, requiresSeo true).
+
+**Fix durante desarrollo:** Los métodos `getQuestionKeywords` y `getSerpQuestions` quedaron fuera del body de la clase `DataForSeoProvider` (el `}` de cierre estaba antes de los métodos). Detectado y corregido por `npm run lint` antes del commit.
+
+**Costo de APIs:** $0 (lint + deploy — sin llamadas a DataForSEO ni Claude).
+
+**Próximo push sugerido (Capa B):**
+- Integrar Perplexity API para validar qué preguntas ya responde en respuestas generativas.
+- o SearchGPT / Bing API para PAA real en tiempo real.
+- Por ahora, AEO Research ya es funcional con datos de Google.
+
+---
 
 ### Sesión 35 — 2026-06-14 ✅ COMPLETA (Headers Dark UI — Términos de búsqueda y Tráfico de páginas)
 **Participantes:** Jorge + Claude Code
