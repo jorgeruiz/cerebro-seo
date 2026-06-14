@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { Users, LayoutDashboard, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Users, LayoutDashboard, Settings, LogOut, ChevronDown, FlaskConical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +13,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/clientes",  label: "Clientes",       icon: Users,          adminOnly: false },
+  { href: "/clientes",  label: "Clientes",       icon: Users,           adminOnly: false },
   { href: "/dashboard", label: "Dashboard",       icon: LayoutDashboard, adminOnly: false },
+  { href: "/research",  label: "Research",        icon: FlaskConical,    adminOnly: false },
   { href: "/settings",  label: "Configuración",   icon: Settings,        adminOnly: true },
 ];
 

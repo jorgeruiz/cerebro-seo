@@ -73,6 +73,89 @@ Incluye TODAS las preguntas recibidas en al menos un cluster. Sin texto fuera de
 
 // ─── Función principal ──────────────────────────────────────────────────────
 
+/**
+ * Versión efímera: clasifica preguntas sin persistir en BD.
+ * Usada por /research (sin cliente). Loggea costo en ApiUsage con clientId: null.
+ */
+export async function classifyAeoResearchEphemeral(
+  questions: QuestionKeyword[],
+  clientInfo: { name: string; domain: string },
+  seeds: string[]
+): Promise<{ result: AeoResearchResult; cost: number }> {
+  if (questions.length === 0) {
+    return { result: { resumen: "", clusters: [], notaEstrategica: "" }, cost: 0 };
+  }
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const questionList = questions
+    .slice(0, 150)
+    .map((q, i) => {
+      const meta = [
+        q.volume ? `vol:${q.volume}` : null,
+        q.kd !== null ? `kd:${q.kd}` : null,
+        q.source === "serp_paa" ? "PAA" : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return `${i + 1}. ${q.keyword}${meta ? ` (${meta})` : ""}`;
+    })
+    .join("\n");
+
+  const userMessage = [
+    `# Análisis AEO/GEO — ${clientInfo.name}`,
+    clientInfo.domain ? `Contexto: ${clientInfo.domain}` : "",
+    `Seeds de búsqueda: ${seeds.join(", ")}`,
+    "",
+    `## Preguntas recopiladas (${questions.length} total):`,
+    questionList,
+    "",
+    "Agrupa estas preguntas en clusters temáticos y clasifica el potencial AEO y GEO de cada uno.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4000,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
+  });
+
+  const rawText =
+    response.content[0]?.type === "text" ? response.content[0].text : "{}";
+
+  let result: AeoResearchResult;
+  try {
+    const jsonStr = rawText
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+    result = JSON.parse(jsonStr) as AeoResearchResult;
+  } catch {
+    result = { resumen: rawText.slice(0, 300), clusters: [], notaEstrategica: "" };
+  }
+
+  const usage = response.usage;
+  const cachedTokens =
+    (usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
+  const cost = calculateClaudeCost(
+    "sonnet-4-6",
+    usage.input_tokens,
+    usage.output_tokens,
+    cachedTokens
+  );
+
+  // Log sin clientId → se persiste con clientId null en ApiUsage
+  await logApiUsage({
+    provider: "anthropic",
+    endpoint: "research/aeo-classify/sonnet",
+    cost,
+  });
+
+  return { result, cost };
+}
+
 export async function classifyAeoResearchForClient(
   clientId: string,
   questions: QuestionKeyword[],
