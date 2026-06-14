@@ -619,6 +619,102 @@ export class DataForSeoProvider implements SeoDataProvider {
 
     return ideas;
   }
+
+  // ── getQuestionKeywords ────────────────────────────────────────────────────
+  // Reutiliza keyword_suggestions (vía getKeywordIdeas) y filtra a preguntas.
+  // Costo: ~$0.025/req. Cache dedicado: 7 días.
+
+  async getQuestionKeywords(
+    seeds: string[],
+    options?: { limit?: number; locationName?: string; languageName?: string },
+    clientId?: string
+  ): Promise<QuestionKeyword[]> {
+    const seedsHash = seeds.slice(0, 5).join(",").slice(0, 80);
+    const cacheKey = `aeo:questions:${seedsHash}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as QuestionKeyword[];
+    } catch { /* Redis caído */ }
+
+    // Obtiene 3× el límite para tener margen al filtrar
+    const allIdeas = await this.getKeywordIdeas(
+      seeds,
+      {
+        limit: (options?.limit ?? 100) * 3,
+        locationName: options?.locationName,
+        languageName: options?.languageName,
+      },
+      clientId
+    );
+
+    const QUESTION_RE =
+      /^(qué\s|que\s|cómo\s|como\s|por qué\s|por que\s|cuándo\s|cuando\s|dónde\s|donde\s|cuál\s|cual\s|quién\s|quien\s|cuánto\s|cuanto\s|para qué\s|para que\s|es\s|son\s|puede\s|pueden\s|hay\s|tiene\s|tienen\s|cuesta\s|vale\s|sirve\s|funciona\s)/i;
+
+    const questions: QuestionKeyword[] = allIdeas
+      .filter((idea) => QUESTION_RE.test((idea.keyword.trim() + " ").toLowerCase()))
+      .slice(0, options?.limit ?? 100)
+      .map((idea) => ({
+        keyword: idea.keyword,
+        volume: idea.searchVolume,
+        kd: idea.keywordDifficulty,
+        cpc: idea.cpc,
+        intent: idea.intent,
+        source: "labs" as const,
+      }));
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(questions));
+    } catch { /* Redis caído */ }
+
+    return questions;
+  }
+
+  // ── getSerpQuestions ───────────────────────────────────────────────────────
+  // SERP API Live — extrae ítems People Also Ask de la SERP de una keyword.
+  // Costo: ~$0.002/req. Cache: 7 días.
+
+  async getSerpQuestions(
+    keyword: string,
+    country = "MX",
+    language = "es",
+    clientId?: string
+  ): Promise<QuestionKeyword[]> {
+    const cacheKey = `aeo:paa:${keyword}:${country}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as QuestionKeyword[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsSerpItem>(
+      "/serp/google/organic/live/regular",
+      [{ keyword, location_code: locationCode(country), language_code: language, depth: 10 }]
+    );
+
+    void logUsage({ endpoint: "serp/organic/live/paa", cost, clientId });
+
+    const task = data.tasks?.[0];
+    const items: DfsSerpItem[] =
+      (task?.result?.[0] as unknown as { items?: DfsSerpItem[] })?.items ?? [];
+
+    const questions: QuestionKeyword[] = items
+      .filter((item) => item.type === "people_also_ask" && item.title)
+      .map((item) => ({
+        keyword: item.title!,
+        volume: null,
+        kd: null,
+        cpc: null,
+        intent: "informational",
+        source: "serp_paa" as const,
+      }));
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(questions));
+    } catch { /* Redis caído */ }
+
+    return questions;
+  }
 }
 
 // ─── Singleton export ──────────────────────────────────────────────────────
@@ -649,12 +745,24 @@ function domainMatches(url: string, domain: string): boolean {
   }
 }
 
+// ─── AEO Research types ─────────────────────────────────────────────────────
+
+export interface QuestionKeyword {
+  keyword: string;
+  volume: number | null;
+  kd: number | null;
+  cpc: number | null;
+  intent: string | null;
+  source: "labs" | "serp_paa";
+}
+
 // ─── DataForSEO response types (partial) ──────────────────────────────────────
 
 interface DfsSerpItem {
   type: string;
   rank_absolute: number | null;
   url?: string;
+  title?: string; // presente en items de tipo people_also_ask
 }
 
 interface DfsSerpResult {
