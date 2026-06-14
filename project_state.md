@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-14 (Sesión 34b — Fix OOM build ✅ commit ff736e4)
+**Última actualización:** 2026-06-14 (Sesión 35 — Headers Dark UI queries/traffic ✅ commit f94bb80)
 **Fase actual:** Post-Fase 4 — nuevos módulos + pulido
 **Próximo hito:** Por definir con Jorge
 
@@ -81,8 +81,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Roles ADMIN/EDITOR | ✅ Completo | C+A desplegado. Jorge + Félix = ADMIN vía `ADMIN_EMAILS`. Fix `session` callback garantiza re-eval en cada request. |
 | Validación GSC datos | ✅ Validado | Números coherentes vs Search Console directo. |
 | Validación GA4 datos | ✅ Validado | Números cuadran vs GA4 → Reports → Traffic Acquisition → Organic Search. |
-| Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. |
-| Módulo Tráfico de páginas | ✅ Implementado | `/clientes/[id]/trafico-paginas`. Fusión GA4+GSC por URL (outer join), columnas condicionales, SSR, nulls al final. |
+| Módulo Términos de búsqueda | ✅ Implementado | `/clientes/[id]/terminos-busqueda`. Filtros device/country/range, tabla ordenable, SSR, cache 24h. Header Dark UI (Sesión 35). |
+| Módulo Tráfico de páginas | ✅ Implementado | `/clientes/[id]/trafico-paginas`. Fusión GA4+GSC por URL (outer join), columnas condicionales, SSR, nulls al final. Header Dark UI (Sesión 35). |
 | Bridge Cerebro web | ✅ Operativo | `cerebro-bridge.ts`, workers sync clientes y tareas activos (cada 6h y 15min). Endpoint `/api/internal/cerebro/.../monthly-summary` disponible. |
 | Sección Operativa del mes | ✅ Implementado | 3 bloques en portada: Estrategia (focus+goals), Tareas (status badges), Hipótesis (validation badges). Estado vacío con "(Sync pendiente)". |
 | Validación calidad datos DataForSEO | ⏸ Diferido | Comparar `validation-report.md` vs GSC real. Pendiente para Fase 2 cuando se active tracking. |
@@ -365,6 +365,29 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 35 — 2026-06-14 ✅ COMPLETA (Headers Dark UI — Términos de búsqueda y Tráfico de páginas)
+**Participantes:** Jorge + Claude Code
+**Commit:** `f94bb80` — `fix: migrar headers de queries y traffic al design system Dark UI`
+**Resultado:** ✅ Build limpio. Push. Deploy en curso.
+
+**Trabajo realizado:**
+
+1. **`terminos-busqueda/page.tsx`**:
+   - Header viejo: `bg-white border-b border-gray-100 px-8 py-5`, título `text-gray-900`, breadcrumb `text-gray-400` con `ChevronLeft`.
+   - Header nuevo: `p-8 space-y-8`, título `font-display font-extrabold`, ícono `Search` (`text-ds-blue`), breadcrumb `buttonVariants outline-mono + ArrowLeft`, subtítulo `font-mono text-muted-foreground`.
+   - Empty state: `bg-white border-gray-100 shadow-sm` → `bg-card border-border`.
+
+2. **`trafico-paginas/page.tsx`**:
+   - Mismo patrón. Ícono `BarChart2` (`text-ds-green`).
+   - Aplicado en **dos retornos**: early return (sin GSC/GA4) y main return.
+   - Estado vacío con Google Analytics: `text-gray-300/500/400` → `text-muted-foreground/30` y `text-muted-foreground`.
+
+**Deuda visual resuelta:** Headers blancos en módulos de Fase 2 eran los últimos remanentes del estilo pre-Dark UI.
+
+**Costo de APIs:** $0.
+
+---
 
 ### Sesión 34b — 2026-06-14 ✅ COMPLETA (Fix OOM build producción)
 **Participantes:** Jorge + Claude Code
