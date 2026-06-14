@@ -4,10 +4,13 @@ import { useState, useTransition } from "react";
 import {
   Brain, Loader2, ChevronDown, ChevronRight,
   MessageSquare, Cpu, Mic, CheckCircle2, XCircle,
+  Plus, Check,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { actionGenerateAeoResearch, type AeoResearchRecord } from "./actions";
 import type { AeoCluster, AeoResearchResult } from "@/lib/aeo-classify";
+import { useClipboard } from "../ClipboardContext";
+import { cn } from "@/lib/utils";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -50,6 +53,31 @@ function KpiBar({ result, questionCount }: { result: AeoResearchResult; question
 
 function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number }) {
   const [open, setOpen] = useState(false);
+  const { toggleItem, hasItem } = useClipboard();
+
+  const added = hasItem(cluster.tema, "aeo_cluster");
+
+  function buildPayload(): string {
+    const lines: string[] = [
+      `### ${cluster.tema}`,
+      `Intención: ${cluster.intencion} | AEO: ${cluster.aeoCandidate ? "Sí" : "No"} | GEO: ${cluster.geoCandidate ? "Sí" : "No"}`,
+      "",
+      "**Preguntas:**",
+      ...cluster.preguntas.map((q) => `- ${q}`),
+      "",
+      `**Recomendación:** ${cluster.recomendacion}`,
+    ];
+    return lines.join("\n");
+  }
+
+  function handleClipboard(e: React.MouseEvent) {
+    e.stopPropagation(); // no abrir/cerrar el acordeón
+    toggleItem({
+      type: "aeo_cluster",
+      label: cluster.tema,
+      payload: buildPayload(),
+    });
+  }
 
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -80,10 +108,23 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
               GEO
             </span>
           )}
+          {/* Botón portapapeles — stopPropagation para no toggle el acordeón */}
+          <button
+            onClick={handleClipboard}
+            title={added ? "Quitar del portapapeles" : "Añadir al portapapeles"}
+            className={cn(
+              "h-6 w-6 rounded border flex items-center justify-center transition-colors ml-1",
+              added
+                ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
+                : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+            )}
+          >
+            {added ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+          </button>
           {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           )}
         </div>
       </button>

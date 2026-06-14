@@ -4,10 +4,13 @@ import { useState, useTransition } from "react";
 import {
   Lightbulb, Loader2, ChevronDown, ChevronRight,
   FileText, Globe, BookOpen, Layers,
+  Plus, Check,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { actionGenerateContentPlan, type ContentPlanRecord } from "./actions";
 import type { ContentIdea, ContentType, ContentPriority } from "@/lib/claude-content-plan";
+import { useClipboard } from "../ClipboardContext";
+import { cn } from "@/lib/utils";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -37,6 +40,21 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
   const type = TYPE_CONFIG[idea.tipo] ?? TYPE_CONFIG.blog;
   const prio = PRIORITY_CONFIG[idea.prioridad] ?? PRIORITY_CONFIG.media;
   const Icon = type.icon;
+  const { toggleItem, hasItem } = useClipboard();
+
+  const added = hasItem(idea.titulo, "content_idea");
+
+  function buildPayload(): string {
+    const lines: string[] = [
+      `### ${idea.titulo} [${idea.tipo}] — Prioridad: ${idea.prioridad}`,
+    ];
+    if (idea.keywords.length > 0) {
+      lines.push(`**Keywords:** ${idea.keywords.join(", ")}`);
+    }
+    lines.push(`**Ángulo:** ${idea.angulo}`);
+    lines.push(`**Razón:** ${idea.razon}`);
+    return lines.join("\n");
+  }
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 space-y-3 hover:border-border/80 transition-colors">
@@ -61,6 +79,19 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
           <span className={`font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${prio.color}`}>
             {prio.label}
           </span>
+          {/* Botón portapapeles */}
+          <button
+            onClick={() => toggleItem({ type: "content_idea", label: idea.titulo, payload: buildPayload() })}
+            title={added ? "Quitar del portapapeles" : "Añadir al portapapeles"}
+            className={cn(
+              "h-6 w-6 rounded border flex items-center justify-center transition-colors",
+              added
+                ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
+                : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+            )}
+          >
+            {added ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+          </button>
         </div>
       </div>
 

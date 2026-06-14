@@ -24,6 +24,7 @@ import {
   Lock,
   Sparkles,
   Brain,
+  ClipboardList,
 } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
@@ -110,6 +111,7 @@ const MODULES = [
   { label: "Keyword Ideas",        icon: Lightbulb,   href: "keyword-ideas",     color: "text-ds-yellow",      requiresSeo: true,  active: true  },
   { label: "Plan de Contenido",    icon: Lightbulb,   href: "contenido",         color: "text-ds-green",       requiresSeo: true,  active: true  },
   { label: "AEO Research",         icon: Brain,       href: "aeo-research",      color: "text-ds-yellow",      requiresSeo: true,  active: true  },
+  { label: "Portapapeles",         icon: ClipboardList, href: "portapapeles",    color: "text-ds-orange",      requiresSeo: false, active: true  },
 ];
 
 export default async function ClienteDetallePage({
