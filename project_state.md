@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-10 (Sesión 34 — Módulo Plan de Contenido en curso)
+**Última actualización:** 2026-06-14 (Sesión 34b — Fix OOM build ✅ commit ff736e4)
 **Fase actual:** Post-Fase 4 — nuevos módulos + pulido
-**Próximo hito:** Completar Sesión 34 — commit y deploy Plan de Contenido
+**Próximo hito:** Por definir con Jorge
 
 ---
 
@@ -75,7 +75,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Build de producción | ✅ Completo | `npm run build` sin errores — tailwind.config.ts y globals.css corregidos |
 | Deploy inicial Easypanel | ✅ Completo | App en producción. HTTP 307 verificado. BD `cerebro_seo` creada. Migraciones aplicadas. |
 | URL producción (custom) | ✅ Activo | `https://seo.clicksociety.com.mx` → HTTP 307 → `/api/auth/signin`. DNS A record en clicksociety.com.mx. |
-| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=2048` (VPS 3.8GB sin swap — 4096 causaba OOM). |
+| Build Docker producción | ✅ Completo | `force-dynamic` en páginas Prisma, `lazyConnect` en Redis, `SKIP_ENV_VALIDATION=1`. Dockerfile reestructurado. `NODE_OPTIONS=--max-old-space-size=4096` + `cpus:1` en next.config. VPS tiene 4GB swap en `/swapfile`. |
 | Redis producción | ✅ Completo | `apps_cerebro-seo-redis:6379` (underscore después de `apps`, guiones en el nombre del servicio — formato Easypanel). Password rotado 2026-05-20. Dos clientes separados. |
 | Filtrado por servicio SEO | ✅ Completo | Toggle SEO/Todos en `/clientes`. Badges de servicios en tarjetas. Lock icons en módulos SEO para clientes sin ese servicio. |
 | Roles ADMIN/EDITOR | ✅ Completo | C+A desplegado. Jorge + Félix = ADMIN vía `ADMIN_EMAILS`. Fix `session` callback garantiza re-eval en cada request. |
@@ -95,7 +95,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo SEO Opportunities | ✅ Activo | `/clientes/[id]/oportunidades`. Análisis algorítmico GSC 28d. 5 tipos: quick wins (pos 4-10), CTR bajo query, sin cobertura, posición pobre, CTR bajo página. Sin APIs externas — usa solo datos GSC. Sesión 25. |
 | Módulo Reporte Mensual | ✅ Activo | `/clientes/[id]/reporte`. Agrega datos del período (rankings, backlinks, AI search, ciclo) y genera reporte ejecutivo con Claude Sonnet 4.6. Selector de mes, historial de reportes, secciones: logros, desafíos, métricas, oportunidades, plan. Sesión 26. |
 | Sidebar navegación | ✅ Completo | Íconos Lucide reales en todos los nav items. Settings solo visible para ADMIN. Sesión 33b (commit `69d9482`). |
-| Módulo Plan de Contenido | 🔧 En curso | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. Migración `add_content_plan`. Sesión 34. |
+| Módulo Plan de Contenido | ✅ Activo | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. ADMIN-only. Migración `add_content_plan`. Sesión 34 commit `c82b0d6`. |
 
 ---
 
@@ -145,8 +145,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-14 | **Dockerfile estructurado para invalidar caché correctamente**: `COPY prisma ./prisma` + `RUN prisma generate` ANTES del `COPY . .` para que la capa Prisma sea independiente del código fuente. Cualquier cambio en `src/` invalida solo las capas posteriores. |
 | 2026-05-14 | **Migraciones siempre con `prisma migrate deploy` en startup** (no `db push`). Si una migración fue aplicada con SQL raw, usar `prisma migrate resolve --applied <nombre>` para registrarla en `_prisma_migrations` con el checksum correcto ANTES del siguiente deploy. |
 | 2026-05-14 | **`startup.mjs` corre `prisma migrate deploy` que es idempotente**: si la migración ya está en `_prisma_migrations`, la salta sin re-aplicar el SQL. Garantiza arranque limpio en todos los deploys. |
-| 2026-05-21 | **`NODE_OPTIONS=--max-old-space-size=2048` (no 4096).** Build de Next.js requiere heap extra — el default Node (~1.5GB) agota el heap a los ~270s. El valor correcto era **2048 MB** porque el VPS tenía solo 3.8GB RAM SIN swap, y con 4096 el OOM Killer del kernel mataba el proceso silenciosamente en ~4-8 min. |
-| 2026-05-24 | **4GB de swap configurados en VPS (`/swapfile`). Persistente en `/etc/fstab`.** Resuelve definitivamente los OOM kills de builds y prepara terreno para el crawler de site audit (Sesión 18). Con swap disponible, `--max-old-space-size=4096` volvería a ser viable técnicamente — pero **se mantiene en 2048 por estabilidad** hasta que haya razón para subirlo. Swap = red de seguridad, no licencia para inflar el heap. |
+| 2026-05-21 | **`NODE_OPTIONS=--max-old-space-size=2048` (inicial).** Build de Next.js requiere heap extra — el default Node (~1.5GB) agota el heap. Se eligió 2048 porque el VPS tenía 3.8GB RAM sin swap. Superado en Sesión 34b — ver decisión 2026-06-14. |
+| 2026-05-24 | **4GB de swap configurados en VPS (`/swapfile`). Persistente en `/etc/fstab`.** Resuelve definitivamente los OOM kills de builds y prepara terreno para el crawler de site audit (Sesión 18). Con swap disponible, `--max-old-space-size=4096` es viable — actualizado en Sesión 34b tras 3er OOM. |
+| 2026-06-14 | **Heap de build subido a 4096 + `cpus:1` en next.config.mjs.** El OOM del Sesión 34 (SIGABRT, heap 2046/2048MB) fue causado por el crecimiento acumulado de la app (~30 rutas dinámicas) combinado con el swap/RAM del servidor. `cpus:1` evita que Next.js lance varios workers de compilación en paralelo (cada uno con su propio heap) → reduce el pico de memoria total. El heap de 4096 da margen usando el swap de 4GB. Build confirmado: 308s, `✓ Compiled successfully`, `/clientes/[id]/contenido` en artefacto. |
 | 2026-05-15 | **REDIS_URL en producción usa hostname interno `apps_cerebro-seo-redis`** — Easypanel genera hostnames con formato `<proyecto>_<servicio>`: underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. El error original era un hostname incompleto (sin prefijo `apps_`), no los guiones en sí. |
 | 2026-05-15 | **Credenciales rotadas tras exposición accidental**: Anthropic API key, Notion Integration Token, Google OAuth Secret, DataForSEO API key. Pendiente rotar: Meta Access Token (si aplica), NEXTAUTH_SECRET, Postgres password, Redis password, SEO_INTERNAL_SECRET. |
 | 2026-05-16 | **NextAuth usa `session.strategy: "jwt"` en producción.** Database strategy es incompatible con `next-auth/middleware` en App Router: el middleware llama `getToken()` que solo decodifica JWTs, con database strategy recibe un UUID opaco y falla silenciosamente. PrismaAdapter sigue activo para persistir User y Account. |
@@ -304,7 +305,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Primer site audit técnico (crawler + PageSpeed Insights) ✅ Sesión 18
 - [x] Configuración editable del cliente (keywords + competidores + GSC/GA4) ✅ Sesión 20
 - [x] Trigger manual de rank tracking (ADMIN) en módulo Keywords ✅ Sesión 20
-- [ ] Sync con Notion: clientes, tareas, estrategia, bitácora (vía bridge)
+- [x] Sync con Notion: clientes, tareas, estrategia (focus/goals) vía bridge ✅ Sesión 16 — workers `sync:cerebro` (6h) + `sync:cerebro-tasks` (15min) operativos
+- [ ] Sync de bitácora vía bridge — DEUDA: Cerebro web no expone el endpoint todavía. No prioritario salvo que el equipo lo pida.
 - [x] InsightsAgent activo para los 12 clientes SEO ✅ (`INSIGHTS_PILOT_CLIENT_IDS` no definido en Easypanel → todos activos)
 - [ ] tRPC routers: `clientesRouter`, `ciclosRouter`, `insightsRouter`
 
@@ -333,7 +335,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Página `/settings` — estado sistema (DB/Redis), colas BullMQ, workers últimas ejecuciones, costos del mes, admins ✅ Sesión 32
 - [x] Dark UI sweep completo — KeywordsTable, GscQueriesTable, PagesTrafficTable ✅ Sesión 33
 - [x] Sidebar: íconos Lucide reales en todos los nav items + Settings solo visible para ADMIN ✅ Sesión 33b
-- [ ] Módulo Plan de Contenido (`/contenido/`) — `claude-content-plan.ts`, modelo `ContentPlan`, UI con historial ⏳ Sesión 34
+- [x] Módulo Plan de Contenido (`/contenido/`) — `claude-content-plan.ts`, modelo `ContentPlan`, ADMIN-only, historial ✅ Sesión 34 commit `c82b0d6`
 
 ---
 
@@ -364,10 +366,38 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ## 8. Bitácora de sesiones
 
-### Sesión 34 — 2026-06-10 🔧 En curso (Módulo Plan de Contenido)
+### Sesión 34b — 2026-06-14 ✅ COMPLETA (Fix OOM build producción)
 **Participantes:** Jorge + Claude Code
-**Commit:** pendiente
-**Resultado:** En progreso — archivos creados, pendiente commit + deploy.
+**Commits:** `4899278` (cpus:1 + heap 1800), `ff736e4` (heap → 4096)
+**Resultado:** ✅ Build exitoso en producción. `✓ Compiled successfully`. Ruta `/clientes/[id]/contenido` confirmada en artefacto `.next`. Deploy completo: 308s sin SIGABRT.
+
+**Diagnóstico:**
+- El build de Sesión 34 (commit `c82b0d6`) falló con `FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory` → SIGABRT (heap 2046/2048MB).
+- Root cause: la app creció a ~30 rutas dinámicas. Next.js lanza múltiples workers de compilación en paralelo, cada uno con su propio heap. Con `--max-old-space-size=2048` y 2GB ya usados por otros contenedores, el total supera los 3.8GB de RAM del servidor.
+- El VPS tiene 4GB de swap en `/swapfile` (configurado Sesión 18) — disponible pero no explotado con el límite de 2048.
+
+**Fixes aplicados:**
+1. `next.config.mjs`: `experimental.cpus: 1` → un solo worker de compilación en vez de N paralelos.
+2. `Dockerfile`: `--max-old-space-size=2048` → `4096` → con cpus:1 y swap disponible, el build completa sin OOM.
+
+**Verificación:**
+- Build local: `✓ Compiled successfully`, `/clientes/[id]/contenido 4.64 kB 114 kB`.
+- Deploy Easypanel `ff736e4`: duración 8 min (histórico), `### Success ###`, ruta en artefacto confirmada.
+- Migración `add_content_plan` aplicada vía `startup.mjs` → tabla `ContentPlan` disponible.
+
+**Lección (3ª ocurrencia de OOM en build):**
+- 1ª vez: Sesión 12 — swap no existía, heap 4096 OOMeaba. Fix: bajar a 2048.
+- 2ª vez (silenciosa): errores TypeScript en `settings/page.tsx` causaban build fallido antes del OOM. Fix: TypeScript corregido.
+- 3ª vez: Sesión 34b — la app creció suficiente para que 2048 ya no alcance incluso con cpus:1 sin swap. Fix: subir a 4096 + swap. **Regla**: si el build vuelve a OOMear con la app creciendo, primero verificar swap en VPS, luego considerar aumentar instancia.
+
+**Costo de APIs:** $0.
+
+---
+
+### Sesión 34 — 2026-06-13 ✅ COMPLETA (Módulo Plan de Contenido)
+**Participantes:** Jorge + Claude Code
+**Commit:** `c82b0d6` — `feat: módulo plan de contenido on-demand con Claude Sonnet 4.6`
+**Resultado:** ✅ Build limpio. Push a main. Deploy en Easypanel vía auto-deploy. Migración `add_content_plan` lista para aplicarse en producción vía `startup.mjs`.
 
 **Trabajo realizado:**
 
@@ -391,7 +421,10 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 4. **`src/app/(admin)/clientes/[id]/page.tsx`** modificado:
    - Módulo "Plan de Contenido" activado en el grid de módulos. Ícono `Lightbulb`, href `contenido`, color `text-ds-orange`. Reemplaza placeholder anterior.
 
-**Estado:** archivos listos, pendiente build verification + commit.
+**Fixes de build detectados y corregidos (no regresiones — bugs latentes en archivos pre-existentes):**
+- `settings/page.tsx`: `as unknown as QueueCounts` (TypeScript strict), `createdAt` → `date` en `ApiUsage.groupBy` (campo real es `date`), `Number(Decimal)` en suma de costos.
+- `claude-content-plan.ts`: campo `clientPosition` inexistente en `CompetitorKeywordGap` schema → eliminado. Nullables en `impressions` y `ctr` de `PageMetric` → guards `?? 0`. Cast `Prisma.InputJsonValue` para campo `ideas Json`.
+- `actions.ts`: protección elevada de auth-only → ADMIN-only (`session.user.role !== "ADMIN"`), igual que `reporte/actions.ts`.
 
 **Costo de APIs:** ~$0.01–0.03 por ejecución de plan (Claude Sonnet 4.6). Sin costo en esta sesión hasta que se use en producción.
 
