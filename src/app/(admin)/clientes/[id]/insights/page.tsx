@@ -95,7 +95,7 @@ export default async function InsightsListPage({
           <h1 className="font-display font-extrabold text-[clamp(1.4rem,2.5vw,2rem)] tracking-tight leading-[1.05] text-foreground">
             Insights del sistema
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-0.5">
             {client.name} · historial completo
           </p>
         </div>
@@ -160,11 +160,11 @@ export default async function InsightsListPage({
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{insight.description}</p>
                     {insight.suggestedAction && (
-                      <p className="font-mono text-[0.62rem] text-muted-foreground/60 mt-1 truncate">
+                      <p className="font-mono text-[0.72rem] text-muted-foreground/60 mt-1 truncate">
                         → {insight.suggestedAction}
                       </p>
                     )}
-                    <p className="font-mono text-[0.58rem] text-muted-foreground/40 mt-2">
+                    <p className="font-mono text-[0.68rem] text-muted-foreground/40 mt-2">
                       {format(insight.generatedAt, "d MMM yyyy, HH:mm", { locale: es })}
                       {insight.acknowledgedAt && ` · resuelto ${format(insight.acknowledgedAt, "d MMM", { locale: es })}`}
                     </p>

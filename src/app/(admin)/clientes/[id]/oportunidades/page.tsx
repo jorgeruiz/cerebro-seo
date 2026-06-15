@@ -63,28 +63,28 @@ function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
           </p>
         </div>
         <span
-          className={`shrink-0 font-mono text-[0.55rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${priorityBadge(opp.priority)}`}
+          className={`shrink-0 font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${priorityBadge(opp.priority)}`}
         >
           {opp.priority}
         </span>
       </div>
 
       {/* Métricas */}
-      <p className="font-mono text-[0.65rem] text-muted-foreground">{opp.label}</p>
+      <p className="font-mono text-[0.75rem] text-muted-foreground">{opp.label}</p>
 
       {/* Posición badge si existe */}
       {opp.position != null && (
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-foreground">
+          <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-foreground">
             #{Math.round(opp.position)}
           </span>
           {opp.impressions != null && (
-            <span className="font-mono text-[0.6rem] text-muted-foreground">
+            <span className="font-mono text-[0.7rem] text-muted-foreground">
               {opp.impressions.toLocaleString("es-MX")} impresiones
             </span>
           )}
           {opp.ctr != null && (
-            <span className="font-mono text-[0.6rem] text-muted-foreground">
+            <span className="font-mono text-[0.7rem] text-muted-foreground">
               CTR {opp.ctr.toFixed(1)}%
             </span>
           )}
@@ -93,7 +93,7 @@ function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
 
       {/* Acción */}
       <div className="border-t border-border pt-3">
-        <p className="font-mono text-[0.55rem] uppercase tracking-wider text-muted-foreground mb-1">
+        <p className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground mb-1">
           Acción recomendada
         </p>
         <p className="text-xs text-foreground leading-relaxed">{opp.action}</p>
@@ -117,7 +117,7 @@ function OpportunitySection({
         <span className="flex items-center gap-2">
           {title}
           {opportunities.length > 0 && (
-            <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+            <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
               {opportunities.length}
             </span>
           )}
@@ -256,7 +256,7 @@ export default async function OportunidadesPage({
             <TrendingUp className="h-6 w-6 text-ds-green shrink-0" />
             SEO Opportunities
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · últimos 28 días · datos de Google Search Console
           </p>
         </div>
@@ -334,7 +334,7 @@ export default async function OportunidadesPage({
         )}
 
         {/* Footer */}
-        <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+        <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
           Datos GSC: {start} → {end} · Caché 24h · {queries.length} queries analizadas
         </p>
       </div>

@@ -43,7 +43,7 @@ function OpportunityCard({ opp }: { opp: AnalysisOpportunity }) {
           <p className="text-sm font-semibold text-foreground">{opp.titulo}</p>
         </div>
         <span
-          className={`shrink-0 font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoColor(opp.impacto)}`}
+          className={`shrink-0 font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoColor(opp.impacto)}`}
         >
           {opp.impacto}
         </span>
@@ -51,7 +51,7 @@ function OpportunityCard({ opp }: { opp: AnalysisOpportunity }) {
       <p className="text-xs text-muted-foreground leading-relaxed">{opp.descripcion}</p>
       {opp.accion && (
         <div className="border-t border-border pt-3">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-1">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-1">
             Acción concreta
           </p>
           <p className="text-xs text-foreground leading-relaxed">{opp.accion}</p>
@@ -70,7 +70,7 @@ function RiskCard({ risk }: { risk: AnalysisRisk }) {
           <p className="text-sm font-semibold text-foreground">{risk.titulo}</p>
         </div>
         <span
-          className={`shrink-0 font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${urgenciaColor(risk.urgencia)}`}
+          className={`shrink-0 font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${urgenciaColor(risk.urgencia)}`}
         >
           {risk.urgencia}
         </span>
@@ -86,20 +86,20 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
     <div className="space-y-6">
       {/* Meta */}
       <div className="flex items-center gap-3 text-muted-foreground">
-        <span className="font-mono text-[0.6rem]">
+        <span className="font-mono text-[0.7rem]">
           Generado: {formatDate(record.createdAt)}
         </span>
         {record.triggeredBy && (
-          <span className="font-mono text-[0.6rem]">por {record.triggeredBy}</span>
+          <span className="font-mono text-[0.7rem]">por {record.triggeredBy}</span>
         )}
-        <span className="font-mono text-[0.6rem]">
+        <span className="font-mono text-[0.7rem]">
           ${record.cost.toFixed(4)} USD
         </span>
       </div>
 
       {/* Resumen ejecutivo */}
       <div className="bg-card rounded-xl border border-border p-6">
-        <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+        <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
           Resumen ejecutivo
         </p>
         <p className="text-sm text-foreground leading-relaxed">{analysis.resumenEjecutivo}</p>
@@ -108,7 +108,7 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
       {/* Oportunidades */}
       {analysis.oportunidades?.length > 0 && (
         <section>
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Oportunidades identificadas ({analysis.oportunidades.length})
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -122,7 +122,7 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
       {/* Riesgos */}
       {analysis.riesgos?.length > 0 && (
         <section>
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Riesgos a vigilar ({analysis.riesgos.length})
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -136,14 +136,14 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
       {/* Recomendaciones */}
       {analysis.recomendaciones?.length > 0 && (
         <section>
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Recomendaciones para el ciclo
           </p>
           <div className="bg-card rounded-xl border border-border p-5">
             <ol className="space-y-3">
               {analysis.recomendaciones.map((rec, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="shrink-0 font-mono text-[0.65rem] bg-primary/10 text-ds-green border border-ds-gd rounded px-1.5 py-0.5 mt-0.5">
+                  <span className="shrink-0 font-mono text-[0.75rem] bg-primary/10 text-ds-green border border-ds-gd rounded px-1.5 py-0.5 mt-0.5">
                     {i + 1}
                   </span>
                   <p className="text-xs text-foreground leading-relaxed">{rec}</p>
@@ -157,7 +157,7 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
       {/* Conclusión estratégica */}
       {analysis.conclusionEstrategica && (
         <div className="bg-muted/30 rounded-xl border border-border p-6">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Contexto estratégico
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
@@ -210,7 +210,7 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
         </button>
 
         {current && !isPending && (
-          <p className="font-mono text-[0.6rem] text-muted-foreground">
+          <p className="font-mono text-[0.7rem] text-muted-foreground">
             Análisis actual del {formatDate(current.createdAt)}
           </p>
         )}
@@ -256,7 +256,7 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
         <section>
           <button
             onClick={() => setShowHistory((v) => !v)}
-            className="flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           >
             {showHistory ? (
               <ChevronDown className="h-3 w-3" />
@@ -277,7 +277,7 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
                   <span className="font-mono text-xs text-foreground">
                     {formatDate(rec.createdAt)}
                   </span>
-                  <span className="font-mono text-[0.6rem] text-muted-foreground">
+                  <span className="font-mono text-[0.7rem] text-muted-foreground">
                     ${rec.cost.toFixed(4)} · {rec.triggeredBy ?? "sistema"}
   </span>
                 </button>

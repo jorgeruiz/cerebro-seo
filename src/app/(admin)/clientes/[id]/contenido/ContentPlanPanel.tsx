@@ -60,23 +60,23 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
     <div className="bg-card rounded-xl border border-border p-5 space-y-3 hover:border-border/80 transition-colors">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <span className="shrink-0 font-mono text-[0.65rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
+        <span className="shrink-0 font-mono text-[0.75rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground leading-snug">{idea.titulo}</p>
           {idea.urlSugerida && (
-            <p className="font-mono text-[0.6rem] text-muted-foreground/60 mt-0.5 truncate">
+            <p className="font-mono text-[0.7rem] text-muted-foreground/60 mt-0.5 truncate">
               {idea.urlSugerida}
             </p>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${type.color}`}>
+          <span className={`font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${type.color}`}>
             <Icon className="h-2.5 w-2.5 inline mr-0.5" />
             {type.label}
           </span>
-          <span className={`font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${prio.color}`}>
+          <span className={`font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${prio.color}`}>
             {prio.label}
           </span>
           {/* Botón portapapeles */}
@@ -99,7 +99,7 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
       {idea.keywords.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {idea.keywords.map((kw, i) => (
-            <span key={i} className="font-mono text-[0.6rem] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
+            <span key={i} className="font-mono text-[0.7rem] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
               {kw}
             </span>
           ))}
@@ -111,7 +111,7 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
 
       {/* Razón / justificación con datos */}
       <div className="border-t border-border pt-3">
-        <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-1">
+        <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-1">
           Justificación
         </p>
         <p className="text-xs text-muted-foreground leading-relaxed">{idea.razon}</p>
@@ -130,17 +130,17 @@ function PlanView({ record }: { record: ContentPlanRecord }) {
     <div className="space-y-6">
       {/* Meta */}
       <div className="flex items-center gap-3 text-muted-foreground flex-wrap">
-        <span className="font-mono text-[0.6rem]">Generado: {formatDate(record.createdAt)}</span>
+        <span className="font-mono text-[0.7rem]">Generado: {formatDate(record.createdAt)}</span>
         {record.triggeredBy && (
-          <span className="font-mono text-[0.6rem]">por {record.triggeredBy}</span>
+          <span className="font-mono text-[0.7rem]">por {record.triggeredBy}</span>
         )}
-        <span className="font-mono text-[0.6rem]">${record.cost.toFixed(4)} USD</span>
-        <span className="font-mono text-[0.6rem]">{record.month}</span>
+        <span className="font-mono text-[0.7rem]">${record.cost.toFixed(4)} USD</span>
+        <span className="font-mono text-[0.7rem]">{record.month}</span>
       </div>
 
       {/* Resumen */}
       <div className="bg-card rounded-xl border border-border p-6">
-        <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+        <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
           Visión general del plan
         </p>
         <p className="text-sm text-foreground leading-relaxed">{plan.resumen}</p>
@@ -149,7 +149,7 @@ function PlanView({ record }: { record: ContentPlanRecord }) {
       {/* Ideas */}
       {ideas.length > 0 && (
         <section>
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Ideas de contenido ({ideas.length}) — ordenadas por prioridad
           </p>
           <div className="space-y-4">
@@ -163,7 +163,7 @@ function PlanView({ record }: { record: ContentPlanRecord }) {
       {/* Nota estratégica */}
       {plan.notaEstrategica && (
         <div className="bg-muted/30 rounded-xl border border-border p-6">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Alineación con ciclo actual
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">{plan.notaEstrategica}</p>
@@ -222,7 +222,7 @@ export function ContentPlanPanel({ clientId, initialRecord, history }: Props) {
         </button>
 
         {current && !isPending && (
-          <p className="font-mono text-[0.6rem] text-muted-foreground">
+          <p className="font-mono text-[0.7rem] text-muted-foreground">
             Plan actual del {formatDate(current.createdAt)}
           </p>
         )}
@@ -267,7 +267,7 @@ export function ContentPlanPanel({ clientId, initialRecord, history }: Props) {
         <section>
           <button
             onClick={() => setShowHistory((v) => !v)}
-            className="flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           >
             {showHistory ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             Historial ({history.length - 1} planes anteriores)
@@ -284,7 +284,7 @@ export function ContentPlanPanel({ clientId, initialRecord, history }: Props) {
                   <span className="font-mono text-xs text-foreground">
                     {formatDate(rec.createdAt)} · {rec.month}
                   </span>
-                  <span className="font-mono text-[0.6rem] text-muted-foreground">
+                  <span className="font-mono text-[0.7rem] text-muted-foreground">
                     ${rec.cost.toFixed(4)} · {rec.triggeredBy ?? "sistema"}
                   </span>
                 </button>

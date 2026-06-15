@@ -9,7 +9,7 @@ export function SectionHeader({ children, className }: SectionHeaderProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2.5 font-mono text-[0.6rem] text-muted-foreground uppercase tracking-[0.1em] mb-5",
+        "flex items-center gap-2.5 font-mono text-[0.7rem] text-muted-foreground uppercase tracking-[0.1em] mb-5",
         className,
       )}
     >

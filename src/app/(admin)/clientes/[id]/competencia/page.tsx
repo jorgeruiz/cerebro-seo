@@ -139,7 +139,7 @@ export default async function CompetenciaPage({
               <BarChart3 className="h-6 w-6 text-ds-yellow shrink-0" />
               Competencia
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
               {client.domain}
             </p>
           </div>
@@ -202,7 +202,7 @@ export default async function CompetenciaPage({
               label="Último análisis"
               value={lastAnalyzed ? formatDate(lastAnalyzed) : "—"}
               delta={
-                <span className="font-mono text-[0.6rem] text-muted-foreground">
+                <span className="font-mono text-[0.7rem] text-muted-foreground">
                   días 1 y 15, 7 AM
                 </span>
               }
@@ -215,7 +215,7 @@ export default async function CompetenciaPage({
           <section>
             <SectionHeader>Share of Voice por competidor</SectionHeader>
             <div className="bg-card rounded-xl border border-border p-6">
-              <p className="font-mono text-[0.6rem] text-muted-foreground mb-4">
+              <p className="font-mono text-[0.7rem] text-muted-foreground mb-4">
                 % del pool de keywords relevantes donde cada competidor tiene presencia (posición 1-100)
               </p>
               <SovChart data={sovData} />
@@ -241,13 +241,13 @@ export default async function CompetenciaPage({
                           {comp.domain}
                         </p>
                         {comp.lastAnalyzed && (
-                          <p className="font-mono text-[0.6rem] text-muted-foreground mt-0.5">
+                          <p className="font-mono text-[0.7rem] text-muted-foreground mt-0.5">
                             Analizado: {formatDate(comp.lastAnalyzed)}
                           </p>
                         )}
                       </div>
                       {snap?.shareOfVoicePct != null && (
-                        <span className="shrink-0 font-mono text-[0.65rem] px-2 py-0.5 rounded border bg-ds-yellow/10 border-ds-yellow/40 text-ds-yellow">
+                        <span className="shrink-0 font-mono text-[0.75rem] px-2 py-0.5 rounded border bg-ds-yellow/10 border-ds-yellow/40 text-ds-yellow">
                           SoV {snap.shareOfVoicePct}%
                         </span>
                       )}
@@ -263,7 +263,7 @@ export default async function CompetenciaPage({
                           { label: "Gaps (ventaja)", value: snap.gapsCount != null ? formatNum(snap.gapsCount) : "—" },
                         ].map(({ label, value }) => (
                           <div key={label}>
-                            <dt className="font-mono text-[0.55rem] uppercase tracking-wider text-muted-foreground">
+                            <dt className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
                               {label}
                             </dt>
                             <dd className="font-mono text-sm font-medium text-foreground">
@@ -295,22 +295,22 @@ export default async function CompetenciaPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
+                    <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                       Keyword
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-20">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-20">
                       Volumen
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       KD
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Intent
                     </th>
-                    <th className="text-right font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3 w-24">
+                    <th className="text-right font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3 w-24">
                       Competidor
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Pos.
                     </th>
                   </tr>
@@ -335,7 +335,7 @@ export default async function CompetenciaPage({
                       <td className="px-3 py-2.5 text-center">
                         {gap.keywordDifficulty != null ? (
                           <span
-                            className={`inline-flex items-center justify-center font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${difficultyBadge(gap.keywordDifficulty)}`}
+                            className={`inline-flex items-center justify-center font-mono text-[0.75rem] px-1.5 py-0.5 rounded border ${difficultyBadge(gap.keywordDifficulty)}`}
                           >
                             {gap.keywordDifficulty}
                           </span>
@@ -343,10 +343,10 @@ export default async function CompetenciaPage({
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-center font-mono text-[0.65rem] text-muted-foreground">
+                      <td className="px-3 py-2.5 text-center font-mono text-[0.75rem] text-muted-foreground">
                         {intentLabel(gap.intent)}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-muted-foreground truncate max-w-[120px]">
+                      <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-muted-foreground truncate max-w-[120px]">
                         {gap.competitor.domain.replace(/^www\./, "")}
                       </td>
                       <td className="px-3 py-2.5 text-center font-mono text-xs text-foreground">
@@ -357,7 +357,7 @@ export default async function CompetenciaPage({
                 </tbody>
               </table>
               {topGaps.length > 30 && (
-                <p className="font-mono text-[0.6rem] text-muted-foreground text-center py-3 border-t border-border">
+                <p className="font-mono text-[0.7rem] text-muted-foreground text-center py-3 border-t border-border">
                   Mostrando 30 de {topGaps.length} gaps detectados
                 </p>
               )}
@@ -367,7 +367,7 @@ export default async function CompetenciaPage({
 
         {/* Footer */}
         {lastAnalyzed && (
-          <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+          <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
             Último análisis: {formatDate(lastAnalyzed)} · Próximo: días 1 y 15, 7 AM
           </p>
         )}

@@ -148,7 +148,7 @@ export default async function AiSearchPage({
               <Zap className="h-6 w-6 text-ds-yellow shrink-0" />
               AI Search Visibility
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
               {client.domain} · ¿te mencionan los LLMs cuando buscan lo que ofreces?
             </p>
           </div>
@@ -187,7 +187,7 @@ export default async function AiSearchPage({
               value={avgPosition ?? "—"}
               delta={
                 avgPosition
-                  ? <span className="font-mono text-[0.6rem] text-muted-foreground">cuando aparece</span>
+                  ? <span className="font-mono text-[0.7rem] text-muted-foreground">cuando aparece</span>
                   : undefined
               }
             />
@@ -195,7 +195,7 @@ export default async function AiSearchPage({
               label="Último análisis"
               value={lastRun ? formatDate(lastRun) : "—"}
               delta={
-                <span className="font-mono text-[0.6rem] text-muted-foreground">viernes 6 AM</span>
+                <span className="font-mono text-[0.7rem] text-muted-foreground">viernes 6 AM</span>
               }
             />
           </div>
@@ -206,7 +206,7 @@ export default async function AiSearchPage({
           <section>
             <SectionHeader>Visibilidad semanal</SectionHeader>
             <div className="bg-card rounded-xl border border-border p-6">
-              <p className="font-mono text-[0.6rem] text-muted-foreground mb-4">
+              <p className="font-mono text-[0.7rem] text-muted-foreground mb-4">
                 % de queries donde el cliente fue mencionado por Claude al simular búsquedas de sus keywords
               </p>
               <AiVisibilityChart data={chartData} />
@@ -238,7 +238,7 @@ export default async function AiSearchPage({
                       >
                         {rate}%
                       </span>
-                      <span className="font-mono text-[0.65rem] text-muted-foreground mb-1">
+                      <span className="font-mono text-[0.75rem] text-muted-foreground mb-1">
                         {stats.mentioned}/{stats.total} queries
                       </span>
                     </div>
@@ -271,16 +271,16 @@ export default async function AiSearchPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
+                    <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                       Query
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-24">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-24">
                       Mención
                     </th>
-                    <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
+                    <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Pos.
                     </th>
-                    <th className="text-left font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
+                    <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                       Contexto
                     </th>
                   </tr>
@@ -316,7 +316,7 @@ export default async function AiSearchPage({
                       <td className="px-4 py-3">
                         {rec.context ? (
                           <span
-                            className="font-mono text-[0.65rem] text-muted-foreground max-w-[260px] truncate block"
+                            className="font-mono text-[0.75rem] text-muted-foreground max-w-[260px] truncate block"
                             title={rec.context}
                           >
                             {rec.context}
@@ -354,7 +354,7 @@ export default async function AiSearchPage({
                         Semana del {formatWeek(weekData.date)}
                       </span>
                       <div className="flex items-center gap-4">
-                        <span className="font-mono text-[0.65rem] text-muted-foreground">
+                        <span className="font-mono text-[0.75rem] text-muted-foreground">
                           {weekData.mentioned}/{weekData.total} menciones
                         </span>
                         <span
@@ -379,7 +379,7 @@ export default async function AiSearchPage({
         {/* Nota metodológica */}
         {hasData && (
           <div className="bg-muted/30 rounded-xl border border-border p-4">
-            <p className="font-mono text-[0.6rem] text-muted-foreground leading-relaxed">
+            <p className="font-mono text-[0.7rem] text-muted-foreground leading-relaxed">
               <span className="text-foreground font-medium">Metodología:</span> Cada viernes se generan queries en español
               basadas en las keywords prioritarias del cliente y se envían a Claude (Anthropic).
               Se detecta si el nombre o dominio del cliente aparece en las respuestas y en qué posición.
@@ -390,7 +390,7 @@ export default async function AiSearchPage({
 
         {/* Footer */}
         {lastRun && (
-          <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+          <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
             Último análisis: {formatDate(lastRun)} · Próximo: viernes 6 AM
           </p>
         )}

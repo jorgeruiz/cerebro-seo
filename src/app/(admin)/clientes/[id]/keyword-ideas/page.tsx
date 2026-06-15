@@ -158,7 +158,7 @@ export default async function KeywordIdeasPage({
             <Lightbulb className="h-6 w-6 text-ds-yellow shrink-0" />
             Keyword Ideas
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             Seeds: {seeds.map((s) => `"${s}"`).join(", ")} · DataForSEO Labs · caché 7 días
           </p>
         </div>
@@ -198,7 +198,7 @@ export default async function KeywordIdeasPage({
             <SectionHeader>
               <span className="flex items-center gap-2">
                 Sugerencias de keywords
-                <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                   {ideas.length}
                 </span>
               </span>
@@ -208,14 +208,14 @@ export default async function KeywordIdeasPage({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
-                    <th className="text-left px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
-                    <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
-                    <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">KD</th>
-                    <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
-                    <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
-                    <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Copiar</th>
+                    <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
+                    <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
+                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">KD</th>
+                    <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
+                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
+                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Copiar</th>
                     {isAdmin && (
-                      <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Agregar</th>
+                      <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Agregar</th>
                     )}
                   </tr>
                 </thead>
@@ -232,30 +232,30 @@ export default async function KeywordIdeasPage({
                             {idea.searchVolume != null && idea.searchVolume >= 1000 && (
                               <TrendingUp className="h-3 w-3 text-ds-green shrink-0" />
                             )}
-                            <span className="font-mono text-[0.7rem] text-foreground">{idea.keyword}</span>
+                            <span className="font-mono text-[0.8rem] text-foreground">{idea.keyword}</span>
                             {alreadyAdded && (
-                              <span className="font-mono text-[0.55rem] text-muted-foreground bg-muted rounded px-1">ya existe</span>
+                              <span className="font-mono text-[0.65rem] text-muted-foreground bg-muted rounded px-1">ya existe</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-foreground">
+                        <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-foreground">
                           {fmtVol(idea.searchVolume)}
                         </td>
                         <td className="px-4 py-2.5 text-center">
                           {idea.keywordDifficulty != null ? (
-                            <span className={`font-mono text-[0.55rem] px-1.5 py-0.5 rounded border ${kdBadge(idea.keywordDifficulty)}`}>
+                            <span className={`font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${kdBadge(idea.keywordDifficulty)}`}>
                               {idea.keywordDifficulty}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-muted-foreground hidden lg:table-cell">
+                        <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-muted-foreground hidden lg:table-cell">
                           {fmtCpc(idea.cpc)}
                         </td>
                         <td className="px-4 py-2.5 text-center hidden lg:table-cell">
                           {idea.intent && (
-                            <span className={`font-mono text-[0.55rem] px-1.5 py-0.5 rounded border ${intentBadge(idea.intent)}`}>
+                            <span className={`font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${intentBadge(idea.intent)}`}>
                               {idea.intent.slice(0, 4)}
                             </span>
                           )}
@@ -286,7 +286,7 @@ export default async function KeywordIdeasPage({
             </div>
 
             {ideas.length > 200 && (
-              <p className="font-mono text-[0.6rem] text-muted-foreground text-right mt-2">
+              <p className="font-mono text-[0.7rem] text-muted-foreground text-right mt-2">
                 Mostrando 200 de {ideas.length} resultados · ajusta las keywords seed para refinar
               </p>
             )}
@@ -294,7 +294,7 @@ export default async function KeywordIdeasPage({
         )}
 
         {/* Footer */}
-        <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+        <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
           Datos DataForSEO Labs · Standard Queue · caché 7 días · México / Español
         </p>
 

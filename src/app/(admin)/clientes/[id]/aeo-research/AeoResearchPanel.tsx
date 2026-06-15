@@ -42,7 +42,7 @@ function KpiBar({ result, questionCount }: { result: AeoResearchResult; question
       {kpis.map(({ label, value, color }) => (
         <div key={label} className="bg-card rounded-xl border border-border p-4">
           <p className={`text-xl font-display font-extrabold ${color}`}>{value}</p>
-          <p className="font-mono text-[0.6rem] text-muted-foreground mt-1 uppercase tracking-wide">{label}</p>
+          <p className="font-mono text-[0.7rem] text-muted-foreground mt-1 uppercase tracking-wide">{label}</p>
         </div>
       ))}
     </div>
@@ -86,24 +86,24 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
         onClick={() => setOpen((v) => !v)}
         className="w-full text-left flex items-start gap-3 p-5 hover:bg-muted/20 transition-colors"
       >
-        <span className="shrink-0 font-mono text-[0.65rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
+        <span className="shrink-0 font-mono text-[0.75rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground leading-snug">{cluster.tema}</p>
-          <p className="font-mono text-[0.6rem] text-muted-foreground mt-0.5">
+          <p className="font-mono text-[0.7rem] text-muted-foreground mt-0.5">
             {cluster.preguntas.length} preguntas · {cluster.intencion}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {cluster.aeoCandidate && (
-            <span className="font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
+            <span className="font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
               <Mic className="h-2.5 w-2.5" />
               AEO
             </span>
           )}
           {cluster.geoCandidate && (
-            <span className="font-mono text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
+            <span className="font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
               <Cpu className="h-2.5 w-2.5" />
               GEO
             </span>
@@ -140,7 +140,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
               ) : (
                 <XCircle className="h-3.5 w-3.5 text-muted-foreground/40" />
               )}
-              <span className="font-mono text-[0.6rem] text-muted-foreground uppercase">
+              <span className="font-mono text-[0.7rem] text-muted-foreground uppercase">
                 Featured Snippet / PAA / Voz
               </span>
             </div>
@@ -150,7 +150,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
               ) : (
                 <XCircle className="h-3.5 w-3.5 text-muted-foreground/40" />
               )}
-              <span className="font-mono text-[0.6rem] text-muted-foreground uppercase">
+              <span className="font-mono text-[0.7rem] text-muted-foreground uppercase">
                 ChatGPT / Gemini / Perplexity
               </span>
             </div>
@@ -158,7 +158,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
 
           {/* Preguntas */}
           <div>
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-2">
+            <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-2">
               Preguntas del cluster
             </p>
             <ul className="space-y-1">
@@ -173,7 +173,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
 
           {/* Recomendación */}
           <div className="border-t border-border pt-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-1.5">
+            <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-1.5">
               Recomendación de contenido
             </p>
             <p className="text-xs text-foreground leading-relaxed">{cluster.recomendacion}</p>
@@ -194,12 +194,12 @@ function ResearchView({ record }: { record: AeoResearchRecord }) {
     <div className="space-y-6">
       {/* Meta */}
       <div className="flex items-center gap-3 text-muted-foreground flex-wrap">
-        <span className="font-mono text-[0.6rem]">Generado: {formatDate(record.createdAt)}</span>
+        <span className="font-mono text-[0.7rem]">Generado: {formatDate(record.createdAt)}</span>
         {record.triggeredBy && (
-          <span className="font-mono text-[0.6rem]">por {record.triggeredBy}</span>
+          <span className="font-mono text-[0.7rem]">por {record.triggeredBy}</span>
         )}
-        <span className="font-mono text-[0.6rem]">${record.cost.toFixed(4)} USD</span>
-        <span className="font-mono text-[0.6rem]">Seeds: {record.seeds.join(", ")}</span>
+        <span className="font-mono text-[0.7rem]">${record.cost.toFixed(4)} USD</span>
+        <span className="font-mono text-[0.7rem]">Seeds: {record.seeds.join(", ")}</span>
       </div>
 
       {/* KPIs */}
@@ -207,7 +207,7 @@ function ResearchView({ record }: { record: AeoResearchRecord }) {
 
       {/* Resumen */}
       <div className="bg-card rounded-xl border border-border p-6">
-        <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+        <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
           Perfil AEO/GEO del cliente
         </p>
         <p className="text-sm text-foreground leading-relaxed">{result.resumen}</p>
@@ -216,7 +216,7 @@ function ResearchView({ record }: { record: AeoResearchRecord }) {
       {/* Clusters */}
       {clusters.length > 0 && (
         <section>
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Clusters temáticos ({clusters.length}) — haz clic para expandir
           </p>
           <div className="space-y-3">
@@ -230,7 +230,7 @@ function ResearchView({ record }: { record: AeoResearchRecord }) {
       {/* Nota estratégica */}
       {result.notaEstrategica && (
         <div className="bg-muted/30 rounded-xl border border-border p-6">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">
             Priorización estratégica
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">{result.notaEstrategica}</p>
@@ -291,9 +291,9 @@ export function AeoResearchPanel({ clientId, initialRecord, history, seeds }: Pr
 
         {seeds.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wide">Seeds:</span>
+            <span className="font-mono text-[0.7rem] text-muted-foreground uppercase tracking-wide">Seeds:</span>
             {seeds.map((s) => (
-              <span key={s} className="font-mono text-[0.6rem] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
+              <span key={s} className="font-mono text-[0.7rem] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">
                 {s}
               </span>
             ))}
@@ -346,7 +346,7 @@ export function AeoResearchPanel({ clientId, initialRecord, history, seeds }: Pr
         <section>
           <button
             onClick={() => setShowHistory((v) => !v)}
-            className="flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           >
             {showHistory ? (
               <ChevronDown className="h-3 w-3" />
@@ -367,7 +367,7 @@ export function AeoResearchPanel({ clientId, initialRecord, history, seeds }: Pr
                   <span className="font-mono text-xs text-foreground">
                     {formatDate(rec.createdAt)} · {rec.seeds.slice(0, 2).join(", ")}
                   </span>
-                  <span className="font-mono text-[0.6rem] text-muted-foreground">
+                  <span className="font-mono text-[0.7rem] text-muted-foreground">
                     {rec.questionCount} preguntas · ${rec.cost.toFixed(4)} · {rec.triggeredBy ?? "sistema"}
                   </span>
                 </button>

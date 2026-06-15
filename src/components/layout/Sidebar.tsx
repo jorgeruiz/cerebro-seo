@@ -30,13 +30,13 @@ export function Sidebar() {
         <div className="font-display font-bold text-[0.85rem] text-foreground tracking-tight">
           Cerebro <span className="text-primary">SEO</span>
         </div>
-        <div className="font-mono text-[0.58rem] text-muted-foreground mt-0.5">
+        <div className="font-mono text-[0.68rem] text-muted-foreground mt-0.5">
           Click Society · Internal
         </div>
       </div>
 
       {/* Section label */}
-      <div className="px-5 pt-4 pb-2 font-mono text-[0.56rem] text-muted-foreground uppercase tracking-[0.1em]">
+      <div className="px-5 pt-4 pb-2 font-mono text-[0.66rem] text-muted-foreground uppercase tracking-[0.1em]">
         Navegación
       </div>
 
@@ -49,7 +49,7 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-2.5 px-5 py-1.5 font-mono text-[0.68rem] border-l-2 border-transparent transition-colors",
+                "flex items-center gap-2.5 px-5 py-1.5 font-mono text-[0.78rem] border-l-2 border-transparent transition-colors",
                 active
                   ? "text-foreground border-l-primary bg-primary/5"
                   : "text-muted-foreground hover:text-foreground hover:bg-white/[0.03]"
@@ -70,10 +70,10 @@ export function Sidebar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex w-full items-center gap-2 text-left cursor-pointer bg-transparent border-none outline-none hover:text-foreground transition-colors">
             <div className="flex-1 min-w-0">
-              <p className="truncate text-foreground font-mono text-[0.7rem] font-medium">
+              <p className="truncate text-foreground font-mono text-[0.8rem] font-medium">
                 {session?.user?.name ?? session?.user?.email}
               </p>
-              <p className="text-muted-foreground font-mono text-[0.56rem] uppercase tracking-wide mt-0.5">
+              <p className="text-muted-foreground font-mono text-[0.66rem] uppercase tracking-wide mt-0.5">
                 {session?.user?.role ?? ""}
               </p>
             </div>

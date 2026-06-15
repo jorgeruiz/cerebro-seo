@@ -98,8 +98,8 @@ function MetricasKeywords({ report }: { report: MonthlyReportResult }) {
               </p>
               {kw.topMejoras.map((m, i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <p className="font-mono text-[0.65rem] text-foreground truncate max-w-[60%]">{`"${m.term}"`}</p>
-                  <span className="font-mono text-[0.6rem] text-ds-green">
+                  <p className="font-mono text-[0.75rem] text-foreground truncate max-w-[60%]">{`"${m.term}"`}</p>
+                  <span className="font-mono text-[0.7rem] text-ds-green">
                     #{m.posicionAnterior} → #{m.posicionActual} (+{m.delta})
                   </span>
                 </div>
@@ -113,8 +113,8 @@ function MetricasKeywords({ report }: { report: MonthlyReportResult }) {
               </p>
               {kw.topCaidas.map((m, i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <p className="font-mono text-[0.65rem] text-foreground truncate max-w-[60%]">{`"${m.term}"`}</p>
-                  <span className="font-mono text-[0.6rem] text-ds-red">
+                  <p className="font-mono text-[0.75rem] text-foreground truncate max-w-[60%]">{`"${m.term}"`}</p>
+                  <span className="font-mono text-[0.7rem] text-ds-red">
                     #{m.posicionAnterior} → #{m.posicionActual} ({m.delta})
                   </span>
                 </div>
@@ -135,13 +135,13 @@ function OportunidadesSection({ report }: { report: MonthlyReportResult }) {
         <div key={i} className="bg-card rounded-xl border border-border p-5 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs font-semibold text-foreground">{op.titulo}</p>
-            <span className={`shrink-0 font-mono text-[0.55rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoBadge(op.impacto)}`}>
+            <span className={`shrink-0 font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoBadge(op.impacto)}`}>
               {op.impacto}
             </span>
           </div>
-          <p className="font-mono text-[0.65rem] text-muted-foreground leading-relaxed">{op.descripcion}</p>
+          <p className="font-mono text-[0.75rem] text-muted-foreground leading-relaxed">{op.descripcion}</p>
           <div className="border-t border-border pt-3">
-            <p className="font-mono text-[0.55rem] uppercase tracking-wider text-muted-foreground mb-1">Acción</p>
+            <p className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground mb-1">Acción</p>
             <p className="text-xs text-foreground leading-relaxed">{op.accion}</p>
           </div>
         </div>
@@ -157,7 +157,7 @@ function PlanProximoMes({ report }: { report: MonthlyReportResult }) {
       <ol className="space-y-2">
         {report.planProximoMes.map((accion, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="font-mono text-[0.6rem] text-ds-blue bg-ds-blue/10 border border-ds-blue/30 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
+            <span className="font-mono text-[0.7rem] text-ds-blue bg-ds-blue/10 border border-ds-blue/30 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
               {i + 1}
             </span>
             <p className="text-xs text-foreground leading-relaxed">{accion}</p>
@@ -209,12 +209,12 @@ export function ReportPanel({
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           {record ? (
-            <p className="font-mono text-[0.65rem] text-muted-foreground">
+            <p className="font-mono text-[0.75rem] text-muted-foreground">
               Reporte {record.yearMonth} generado el{" "}
               {new Date(record.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}
             </p>
           ) : (
-            <p className="font-mono text-[0.65rem] text-muted-foreground">
+            <p className="font-mono text-[0.75rem] text-muted-foreground">
               Sin reporte para {currentYearMonth}
             </p>
           )}
@@ -382,7 +382,7 @@ export function ReportPanel({
                   <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="font-mono text-xs text-foreground">{h.yearMonth}</span>
                 </div>
-                <span className="font-mono text-[0.6rem] text-muted-foreground">
+                <span className="font-mono text-[0.7rem] text-muted-foreground">
                   {new Date(h.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </div>

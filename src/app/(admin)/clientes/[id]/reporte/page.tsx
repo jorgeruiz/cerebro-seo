@@ -68,7 +68,7 @@ export default async function ReportePage({
             <FileText className="h-6 w-6 text-ds-blue shrink-0" />
             Reporte Mensual
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · generado con Claude Sonnet 4.6 · datos internos de BD
           </p>
         </div>
@@ -84,7 +84,7 @@ export default async function ReportePage({
                 <Link
                   key={ym}
                   href={`/clientes/${client.id}/reporte?mes=${ym}`}
-                  className={`font-mono text-[0.65rem] px-2.5 py-1 rounded border transition-colors ${
+                  className={`font-mono text-[0.75rem] px-2.5 py-1 rounded border transition-colors ${
                     ym === currentYearMonth
                       ? "bg-foreground text-background border-foreground"
                       : "bg-card text-muted-foreground border-border hover:text-foreground"

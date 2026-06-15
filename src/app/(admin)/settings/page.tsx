@@ -219,7 +219,7 @@ export default async function SettingsPage() {
             <h1 className="font-display font-extrabold text-[clamp(1.4rem,2.5vw,2rem)] tracking-tight leading-[1.05] text-foreground">
               Sistema
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-0.5">
               Estado de infraestructura · workers · costos
             </p>
           </div>
@@ -432,7 +432,7 @@ export default async function SettingsPage() {
               ))
             )}
           </div>
-          <p className="font-mono text-[0.58rem] text-muted-foreground/40 mt-2">
+          <p className="font-mono text-[0.68rem] text-muted-foreground/40 mt-2">
             Configurado en Easypanel → cerebro-seo → ADMIN_EMAILS
           </p>
         </section>

@@ -66,12 +66,12 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
     >
       <p className="mb-1">{insight.description}</p>
       {insight.suggestedAction && (
-        <p className="font-mono text-[0.68rem] mt-1">→ {insight.suggestedAction}</p>
+        <p className="font-mono text-[0.78rem] mt-1">→ {insight.suggestedAction}</p>
       )}
       <div className="flex items-center gap-3 mt-3 pt-2 border-t border-border/20">
         <Link
           href={`/clientes/${clientId}/insights/${insight.id}`}
-          className="flex items-center gap-1 font-mono text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 font-mono text-[0.75rem] text-muted-foreground hover:text-foreground transition-colors"
         >
           Ver detalle <ArrowRight className="h-2.5 w-2.5" />
         </Link>
@@ -79,7 +79,7 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
         <button
           onClick={handleResolve}
           disabled={loading !== null}
-          className="flex items-center gap-1 font-mono text-[0.65rem] text-ds-green hover:text-primary disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1 font-mono text-[0.75rem] text-ds-green hover:text-primary disabled:opacity-50 transition-colors"
         >
           <CheckCheck className="h-3 w-3" />
           {loading === "resolve" ? "..." : "Resuelto"}
@@ -87,13 +87,13 @@ function InsightCard({ insight, clientId }: { insight: Insight; clientId: string
         <button
           onClick={handleIgnore}
           disabled={loading !== null}
-          className="flex items-center gap-1 font-mono text-[0.65rem] text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1 font-mono text-[0.75rem] text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
         >
           <EyeOff className="h-3 w-3" />
           {loading === "ignore" ? "..." : "Ignorar"}
         </button>
       </div>
-      <div className="font-mono text-[0.56rem] text-muted-foreground/50 mt-1">
+      <div className="font-mono text-[0.66rem] text-muted-foreground/50 mt-1">
         {relativeTime(insight.generatedAt)}
       </div>
     </ConclusionCard>
@@ -111,7 +111,7 @@ export function InsightCards({ insights, clientId, isPilotClient }: InsightCards
     return (
       <div className="rounded-lg border border-border bg-muted/50 p-5 text-center">
         <p className="text-sm text-muted-foreground font-medium">Insights proactivos en fase piloto</p>
-        <p className="font-mono text-[0.62rem] text-muted-foreground/60 mt-1">Disponibles próximamente para este cliente.</p>
+        <p className="font-mono text-[0.72rem] text-muted-foreground/60 mt-1">Disponibles próximamente para este cliente.</p>
       </div>
     );
   }
@@ -120,7 +120,7 @@ export function InsightCards({ insights, clientId, isPilotClient }: InsightCards
     return (
       <div className="rounded-lg border border-border bg-muted/50 p-5 text-center">
         <p className="text-sm text-muted-foreground font-medium">Sin insights pendientes</p>
-        <p className="font-mono text-[0.62rem] text-muted-foreground/60 mt-1">El agente revisa diariamente a las 6 AM.</p>
+        <p className="font-mono text-[0.72rem] text-muted-foreground/60 mt-1">El agente revisa diariamente a las 6 AM.</p>
       </div>
     );
   }
@@ -135,7 +135,7 @@ export function InsightCards({ insights, clientId, isPilotClient }: InsightCards
       <div className="flex justify-end">
         <Link
           href={`/clientes/${clientId}/insights`}
-          className="flex items-center gap-1.5 font-mono text-[0.62rem] text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 font-mono text-[0.72rem] text-muted-foreground hover:text-foreground transition-colors"
         >
           <History className="h-3 w-3" />
           Ver historial completo

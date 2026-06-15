@@ -86,7 +86,7 @@ export function ClientGrid({ clients }: { clients: ClientRow[] }) {
 
       {/* Contador */}
       {query && (
-        <p className="font-mono text-[0.6rem] text-muted-foreground">
+        <p className="font-mono text-[0.7rem] text-muted-foreground">
           {filtered.length} de {clients.length} clientes
         </p>
       )}

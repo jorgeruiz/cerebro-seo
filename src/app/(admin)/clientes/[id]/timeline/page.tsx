@@ -93,17 +93,17 @@ function EventCard({ event }: { event: TimelineEvent }) {
       <div className="pb-6 min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3 mb-1">
           <p className="text-sm font-medium text-foreground leading-snug">{event.title}</p>
-          <span className="font-mono text-[0.6rem] text-muted-foreground shrink-0 mt-0.5">
+          <span className="font-mono text-[0.7rem] text-muted-foreground shrink-0 mt-0.5">
             {fmtRelative(event.date)}
           </span>
         </div>
-        <p className="font-mono text-[0.65rem] text-muted-foreground leading-relaxed">{event.detail}</p>
+        <p className="font-mono text-[0.75rem] text-muted-foreground leading-relaxed">{event.detail}</p>
         {event.badge && (
-          <span className={`inline-block mt-1.5 font-mono text-[0.55rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${event.badgeColor ?? "text-muted-foreground bg-muted border-border"}`}>
+          <span className={`inline-block mt-1.5 font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${event.badgeColor ?? "text-muted-foreground bg-muted border-border"}`}>
             {event.badge}
           </span>
         )}
-        <p className="font-mono text-[0.55rem] text-muted-foreground/60 mt-1">{fmtDate(event.date)}</p>
+        <p className="font-mono text-[0.65rem] text-muted-foreground/60 mt-1">{fmtDate(event.date)}</p>
       </div>
     </div>
   );
@@ -356,7 +356,7 @@ export default async function TimelinePage({
             <Clock className="h-6 w-6 text-ds-orange shrink-0" />
             Eventos
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · últimos 90 días · {events.length} eventos
           </p>
         </div>
@@ -378,7 +378,7 @@ export default async function TimelinePage({
             return (
               <div key={kind} className="flex items-center gap-1.5">
                 <Icon className={`h-3 w-3 ${meta.color}`} />
-                <span className="font-mono text-[0.6rem] text-muted-foreground">{labels[kind]}</span>
+                <span className="font-mono text-[0.7rem] text-muted-foreground">{labels[kind]}</span>
               </div>
             );
           })}
@@ -414,7 +414,7 @@ export default async function TimelinePage({
         )}
 
         {/* Footer */}
-        <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+        <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
           Fuentes: Rankings · Tareas · Site Audit · Backlinks · Insights · Reportes · Análisis
         </p>
 

@@ -60,7 +60,7 @@ export default async function ContenidoPage({
             <Lightbulb className="h-6 w-6 text-ds-yellow shrink-0" />
             Plan de Contenido
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · ideas de contenido SEO generadas con Claude, basadas en gaps, oportunidades GSC y estrategia del ciclo
           </p>
         </div>

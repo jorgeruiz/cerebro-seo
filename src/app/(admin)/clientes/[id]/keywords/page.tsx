@@ -160,7 +160,7 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
                   Keywords objetivo
                 </h1>
               </div>
-              <p className="font-mono text-[0.65rem] text-muted-foreground">
+              <p className="font-mono text-[0.75rem] text-muted-foreground">
                 {client.name} · {totalKeywords} keywords{priorityKeywords > 0 && ` · ${priorityKeywords} priority`}
               </p>
             </div>

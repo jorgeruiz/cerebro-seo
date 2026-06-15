@@ -11,7 +11,7 @@ const badgeVariants = cva(
       variant: {
         // Pill verde tenue — etiqueta por defecto del DS
         default:
-          "bg-primary/10 border-ds-gd text-ds-green font-mono text-[0.65rem] uppercase tracking-wide",
+          "bg-primary/10 border-ds-gd text-ds-green font-mono text-[0.75rem] uppercase tracking-wide",
         secondary:
           "bg-secondary text-secondary-foreground font-medium [a]:hover:bg-secondary/80",
         destructive:
@@ -21,9 +21,9 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50 font-medium",
         warning:
-          "bg-ds-yellow/10 border-ds-yellow/50 text-ds-yellow font-mono text-[0.65rem] uppercase tracking-wide",
+          "bg-ds-yellow/10 border-ds-yellow/50 text-ds-yellow font-mono text-[0.75rem] uppercase tracking-wide",
         info:
-          "bg-ds-blue/10 border-ds-blue/50 text-ds-blue font-mono text-[0.65rem] uppercase tracking-wide",
+          "bg-ds-blue/10 border-ds-blue/50 text-ds-blue font-mono text-[0.75rem] uppercase tracking-wide",
       },
     },
     defaultVariants: {

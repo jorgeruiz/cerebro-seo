@@ -38,7 +38,7 @@ export function KpiCard({
       )}
     >
       <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-1.5 font-mono text-[0.58rem] text-muted-foreground uppercase tracking-[0.08em]">
+        <div className="flex items-center gap-1.5 font-mono text-[0.68rem] text-muted-foreground uppercase tracking-[0.08em]">
           {icon && <span className="opacity-70">{icon}</span>}
           {label}
         </div>

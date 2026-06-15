@@ -59,7 +59,7 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
                 Configuración
               </h1>
             </div>
-            <p className="font-mono text-[0.65rem] text-muted-foreground">
+            <p className="font-mono text-[0.75rem] text-muted-foreground">
               {client.name} · {client.domain}
             </p>
           </div>

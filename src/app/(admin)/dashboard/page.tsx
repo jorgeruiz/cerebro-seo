@@ -227,7 +227,7 @@ export default async function DashboardPage() {
             <LayoutDashboard className="h-6 w-6 text-primary shrink-0" />
             Dashboard SEO
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {totalClientes} clientes SEO activos · datos en tiempo real
           </p>
         </div>
@@ -270,7 +270,7 @@ export default async function DashboardPage() {
               <span className="flex items-center gap-2">
                 Alertas críticas
                 {criticalInsights.length > 0 && (
-                  <span className="font-mono text-[0.6rem] bg-destructive/10 border border-destructive/30 text-destructive rounded px-1.5 py-0.5">
+                  <span className="font-mono text-[0.7rem] bg-destructive/10 border border-destructive/30 text-destructive rounded px-1.5 py-0.5">
                     {criticalInsights.length}
                   </span>
                 )}
@@ -293,7 +293,7 @@ export default async function DashboardPage() {
                       <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                       <span className="text-sm font-medium text-foreground truncate">{ac.name}</span>
                     </div>
-                    <span className="font-mono text-[0.65rem] text-destructive bg-destructive/10 border border-destructive/30 rounded px-2 py-0.5 shrink-0">
+                    <span className="font-mono text-[0.75rem] text-destructive bg-destructive/10 border border-destructive/30 rounded px-2 py-0.5 shrink-0">
                       {ac.count} alerta{ac.count > 1 ? "s" : ""}
                     </span>
                   </Link>
@@ -317,9 +317,9 @@ export default async function DashboardPage() {
                   <TrendingUp className="h-3.5 w-3.5 text-ds-green shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">{`"${r.keyword.term}"`}</p>
-                    <p className="font-mono text-[0.58rem] text-muted-foreground">{r.keyword.client.name}</p>
+                    <p className="font-mono text-[0.68rem] text-muted-foreground">{r.keyword.client.name}</p>
                   </div>
-                  <span className="font-mono text-[0.6rem] text-ds-green shrink-0">
+                  <span className="font-mono text-[0.7rem] text-ds-green shrink-0">
                     +{Math.abs(r.delta ?? 0)} pos.
                   </span>
                 </Link>
@@ -335,9 +335,9 @@ export default async function DashboardPage() {
                   <TrendingDown className="h-3.5 w-3.5 text-ds-red shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">{`"${r.keyword.term}"`}</p>
-                    <p className="font-mono text-[0.58rem] text-muted-foreground">{r.keyword.client.name}</p>
+                    <p className="font-mono text-[0.68rem] text-muted-foreground">{r.keyword.client.name}</p>
                   </div>
-                  <span className="font-mono text-[0.6rem] text-ds-red shrink-0">
+                  <span className="font-mono text-[0.7rem] text-ds-red shrink-0">
                     -{Math.abs(r.delta ?? 0)} pos.
                   </span>
                 </Link>
@@ -353,9 +353,9 @@ export default async function DashboardPage() {
                   <Lightbulb className={`h-3.5 w-3.5 shrink-0 ${SEVERITY_COLOR[ins.severity] ?? "text-muted-foreground"}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">{ins.title}</p>
-                    <p className="font-mono text-[0.58rem] text-muted-foreground">{ins.client.name}</p>
+                    <p className="font-mono text-[0.68rem] text-muted-foreground">{ins.client.name}</p>
                   </div>
-                  <span className="font-mono text-[0.55rem] text-muted-foreground shrink-0">
+                  <span className="font-mono text-[0.65rem] text-muted-foreground shrink-0">
                     {fmtRelative(ins.generatedAt)}
                   </span>
                 </Link>
@@ -373,9 +373,9 @@ export default async function DashboardPage() {
                     <p className="text-xs font-medium text-foreground truncate">
                       Reporte {r.yearMonth} — {r.client.name}
                     </p>
-                    <p className="font-mono text-[0.58rem] text-muted-foreground">Reporte mensual generado</p>
+                    <p className="font-mono text-[0.68rem] text-muted-foreground">Reporte mensual generado</p>
                   </div>
-                  <span className="font-mono text-[0.55rem] text-muted-foreground shrink-0">
+                  <span className="font-mono text-[0.65rem] text-muted-foreground shrink-0">
                     {fmtRelative(r.createdAt)}
                   </span>
                 </Link>
@@ -396,7 +396,7 @@ export default async function DashboardPage() {
           <SectionHeader>
             <span className="flex items-center gap-2">
               Ciclos activos
-              <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+              <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                 {cycleRows.filter((c) => c.cycle).length} de {totalClientes}
               </span>
             </span>
@@ -405,11 +405,11 @@ export default async function DashboardPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="text-left px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Cliente</th>
-                  <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Ciclo</th>
-                  <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Estado</th>
-                  <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Tareas</th>
-                  <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Hipótesis</th>
+                  <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Cliente</th>
+                  <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Ciclo</th>
+                  <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Estado</th>
+                  <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Tareas</th>
+                  <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Hipótesis</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,37 +420,37 @@ export default async function DashboardPage() {
                       <td className="px-4 py-2.5">
                         <Link href={`/clientes/${row.id}`} className="hover:text-primary transition-colors">
                           <p className="font-medium text-foreground">{row.name}</p>
-                          <p className="font-mono text-[0.58rem] text-muted-foreground">{row.domain}</p>
+                          <p className="font-mono text-[0.68rem] text-muted-foreground">{row.domain}</p>
                         </Link>
                       </td>
-                      <td className="px-4 py-2.5 text-center font-mono text-[0.65rem] text-muted-foreground">
+                      <td className="px-4 py-2.5 text-center font-mono text-[0.75rem] text-muted-foreground">
                         {row.cycle?.yearMonth ?? "—"}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         {cs ? (
-                          <span className={`font-mono text-[0.55rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${cs.cls}`}>
+                          <span className={`font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${cs.cls}`}>
                             {cs.label}
                           </span>
                         ) : (
-                          <span className="font-mono text-[0.55rem] text-muted-foreground/50">Sin ciclo</span>
+                          <span className="font-mono text-[0.65rem] text-muted-foreground/50">Sin ciclo</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {row.total > 0 ? (
-                          <span className={`font-mono text-[0.65rem] ${row.done === row.total ? "text-ds-green" : "text-foreground"}`}>
+                          <span className={`font-mono text-[0.75rem] ${row.done === row.total ? "text-ds-green" : "text-foreground"}`}>
                             {row.done}/{row.total}
                           </span>
                         ) : (
-                          <span className="font-mono text-[0.65rem] text-muted-foreground/50">—</span>
+                          <span className="font-mono text-[0.75rem] text-muted-foreground/50">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right hidden lg:table-cell">
                         {row.hypothesesTotal > 0 ? (
-                          <span className={`font-mono text-[0.65rem] ${row.validated === row.hypothesesTotal ? "text-ds-green" : "text-foreground"}`}>
+                          <span className={`font-mono text-[0.75rem] ${row.validated === row.hypothesesTotal ? "text-ds-green" : "text-foreground"}`}>
                             {row.validated}/{row.hypothesesTotal}
                           </span>
                         ) : (
-                          <span className="font-mono text-[0.65rem] text-muted-foreground/50">—</span>
+                          <span className="font-mono text-[0.75rem] text-muted-foreground/50">—</span>
                         )}
                       </td>
                     </tr>
@@ -467,7 +467,7 @@ export default async function DashboardPage() {
             <SectionHeader>
               <span className="flex items-center gap-2">
                 Movimientos de ranking — últimos 7 días
-                <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                   {significantMovements.length}
                 </span>
               </span>
@@ -487,13 +487,13 @@ export default async function DashboardPage() {
                     }
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-foreground truncate">{`"${r.keyword.term}"`}</p>
-                      <p className="font-mono text-[0.58rem] text-muted-foreground">{r.keyword.client.name}</p>
+                      <p className="font-mono text-[0.68rem] text-muted-foreground">{r.keyword.client.name}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`font-mono text-[0.7rem] font-bold ${up ? "text-ds-green" : "text-ds-red"}`}>
+                      <p className={`font-mono text-[0.8rem] font-bold ${up ? "text-ds-green" : "text-ds-red"}`}>
                         {up ? "+" : "-"}{Math.abs(r.delta ?? 0)}
                       </p>
-                      <p className="font-mono text-[0.55rem] text-muted-foreground">
+                      <p className="font-mono text-[0.65rem] text-muted-foreground">
                         pos. {r.position}
                       </p>
                     </div>
@@ -505,7 +505,7 @@ export default async function DashboardPage() {
         )}
 
         {/* Footer */}
-        <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+        <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
           Cerebro SEO · Click Society · datos en tiempo real desde BD
         </p>
 

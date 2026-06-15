@@ -64,7 +64,7 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
   if (ideas.length === 0) return null;
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-2.5 font-mono text-[0.6rem] text-muted-foreground uppercase tracking-[0.1em]">
+      <div className="flex items-center gap-2.5 font-mono text-[0.7rem] text-muted-foreground uppercase tracking-[0.1em]">
         <span className="text-primary">{"//"}</span>
         <span>
           Keyword ideas
@@ -78,11 +78,11 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              <th className="text-left px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
-              <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
-              <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">KD</th>
-              <th className="text-right px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
-              <th className="text-center px-4 py-2.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
+              <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
+              <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
+              <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">KD</th>
+              <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
+              <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
             </tr>
           </thead>
           <tbody>
@@ -93,27 +93,27 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
                     {(idea.searchVolume ?? 0) >= 1000 && (
                       <TrendingUp className="h-3 w-3 text-ds-green shrink-0" />
                     )}
-                    <span className="font-mono text-[0.7rem] text-foreground">{idea.keyword}</span>
+                    <span className="font-mono text-[0.8rem] text-foreground">{idea.keyword}</span>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-foreground">
+                <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-foreground">
                   {fmtVol(idea.searchVolume)}
                 </td>
                 <td className="px-4 py-2.5 text-center">
                   {idea.keywordDifficulty != null ? (
-                    <span className={`font-mono text-[0.55rem] px-1.5 py-0.5 rounded border ${kdBadge(idea.keywordDifficulty)}`}>
+                    <span className={`font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${kdBadge(idea.keywordDifficulty)}`}>
                       {idea.keywordDifficulty}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-muted-foreground hidden lg:table-cell">
+                <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-muted-foreground hidden lg:table-cell">
                   {fmtCpc(idea.cpc)}
                 </td>
                 <td className="px-4 py-2.5 text-center hidden lg:table-cell">
                   {idea.intent && (
-                    <span className={`font-mono text-[0.55rem] px-1.5 py-0.5 rounded border ${intentBadge(idea.intent)}`}>
+                    <span className={`font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${intentBadge(idea.intent)}`}>
                       {idea.intent.slice(0, 4)}
                     </span>
                   )}
@@ -124,7 +124,7 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
         </table>
       </div>
       {ideas.length > 200 && (
-        <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+        <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
           Mostrando 200 de {ideas.length} · ajusta las seeds para refinar
         </p>
       )}
@@ -142,23 +142,23 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
         onClick={() => setOpen((v) => !v)}
         className="w-full text-left flex items-start gap-3 p-5 hover:bg-muted/20 transition-colors"
       >
-        <span className="shrink-0 font-mono text-[0.65rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
+        <span className="shrink-0 font-mono text-[0.75rem] bg-muted text-muted-foreground border border-border rounded px-1.5 py-0.5 mt-0.5">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground leading-snug">{cluster.tema}</p>
-          <p className="font-mono text-[0.6rem] text-muted-foreground mt-0.5">
+          <p className="font-mono text-[0.7rem] text-muted-foreground mt-0.5">
             {cluster.preguntas.length} preguntas · {cluster.intencion}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {cluster.aeoCandidate && (
-            <span className="font-mono text-[0.6rem] uppercase px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
+            <span className="font-mono text-[0.7rem] uppercase px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
               <Mic className="h-2.5 w-2.5" /> AEO
             </span>
           )}
           {cluster.geoCandidate && (
-            <span className="font-mono text-[0.6rem] uppercase px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
+            <span className="font-mono text-[0.7rem] uppercase px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
               <Cpu className="h-2.5 w-2.5" /> GEO
             </span>
           )}
@@ -178,7 +178,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
               ) : (
                 <XCircle className="h-3.5 w-3.5 text-muted-foreground/40" />
               )}
-              <span className="font-mono text-[0.6rem] text-muted-foreground uppercase">Featured Snippet / PAA / Voz</span>
+              <span className="font-mono text-[0.7rem] text-muted-foreground uppercase">Featured Snippet / PAA / Voz</span>
             </div>
             <div className="flex items-center gap-1.5">
               {cluster.geoCandidate ? (
@@ -186,11 +186,11 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
               ) : (
                 <XCircle className="h-3.5 w-3.5 text-muted-foreground/40" />
               )}
-              <span className="font-mono text-[0.6rem] text-muted-foreground uppercase">ChatGPT / Gemini / Perplexity</span>
+              <span className="font-mono text-[0.7rem] text-muted-foreground uppercase">ChatGPT / Gemini / Perplexity</span>
             </div>
           </div>
           <div>
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-2">Preguntas del cluster</p>
+            <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-2">Preguntas del cluster</p>
             <ul className="space-y-1">
               {cluster.preguntas.map((q, i) => (
                 <li key={i} className="flex items-start gap-2 text-xs text-foreground">
@@ -201,7 +201,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
             </ul>
           </div>
           <div className="border-t border-border pt-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-1.5">Recomendación</p>
+            <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-1.5">Recomendación</p>
             <p className="text-xs text-foreground leading-relaxed">{cluster.recomendacion}</p>
           </div>
         </div>
@@ -220,7 +220,7 @@ function KeywordResults({ data }: { data: KeywordResearchResult }) {
   return (
     <div className="space-y-6">
       {/* Meta */}
-      <div className="flex items-center gap-3 font-mono text-[0.6rem] text-muted-foreground flex-wrap">
+      <div className="flex items-center gap-3 font-mono text-[0.7rem] text-muted-foreground flex-wrap">
         <span>Seeds: {data.seeds.join(", ")}</span>
         {data.cost > 0 && <span>${data.cost.toFixed(4)} USD (Claude)</span>}
       </div>
@@ -236,7 +236,7 @@ function KeywordResults({ data }: { data: KeywordResearchResult }) {
       {/* AEO Resumen */}
       {data.aeo.resumen && (
         <div className="bg-card rounded-xl border border-border p-6">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">Perfil AEO/GEO</p>
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">Perfil AEO/GEO</p>
           <p className="text-sm text-foreground leading-relaxed">{data.aeo.resumen}</p>
         </div>
       )}
@@ -244,7 +244,7 @@ function KeywordResults({ data }: { data: KeywordResearchResult }) {
       {/* Clusters */}
       {clusters.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-2.5 font-mono text-[0.6rem] text-muted-foreground uppercase tracking-[0.1em]">
+          <div className="flex items-center gap-2.5 font-mono text-[0.7rem] text-muted-foreground uppercase tracking-[0.1em]">
             <span className="text-primary">{"//"}</span>
             <span>Clusters AEO/GEO <span className="ml-1 bg-muted border border-border rounded px-1.5 py-0.5">{clusters.length}</span></span>
             <span className="flex-1 h-px bg-border" />
@@ -260,7 +260,7 @@ function KeywordResults({ data }: { data: KeywordResearchResult }) {
       {/* Nota estratégica */}
       {data.aeo.notaEstrategica && (
         <div className="bg-muted/30 rounded-xl border border-border p-6">
-          <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-3">Priorización estratégica</p>
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">Priorización estratégica</p>
           <p className="text-sm text-muted-foreground leading-relaxed">{data.aeo.notaEstrategica}</p>
         </div>
       )}
@@ -268,7 +268,7 @@ function KeywordResults({ data }: { data: KeywordResearchResult }) {
       {/* Keyword Ideas Table */}
       <KeywordTable ideas={data.ideas} />
 
-      <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+      <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
         DataForSEO Labs · caché 7 días · efímero (sin guardar)
       </p>
     </div>
@@ -288,7 +288,7 @@ function DomainResults({ data }: { data: DomainResearchResult }) {
 
   return (
     <div className="space-y-6">
-      <div className="font-mono text-[0.6rem] text-muted-foreground">
+      <div className="font-mono text-[0.7rem] text-muted-foreground">
         Dominio analizado: <span className="text-foreground">{data.domain}</span> · caché 7 días
       </div>
 
@@ -310,7 +310,7 @@ function DomainResults({ data }: { data: DomainResearchResult }) {
         />
       </div>
 
-      <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+      <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
         DataForSEO Labs Domain Rank Overview · México / Español · efímero (sin guardar)
       </p>
     </div>
@@ -400,7 +400,7 @@ export function ResearchPanel() {
       {mode === "keywords" && (
         <form onSubmit={handleKeywordSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="font-mono text-[0.65rem] text-muted-foreground uppercase tracking-wider">
+            <label className="font-mono text-[0.75rem] text-muted-foreground uppercase tracking-wider">
               Keywords seed (separadas por coma, máx 5)
             </label>
             <input
@@ -411,13 +411,13 @@ export function ResearchPanel() {
               className={inputClass}
               required
             />
-            <p className="font-mono text-[0.6rem] text-muted-foreground">
+            <p className="font-mono text-[0.7rem] text-muted-foreground">
               El análisis buscará preguntas relacionadas y las clasificará como candidatos AEO y GEO
             </p>
           </div>
           <div className="flex gap-4 flex-wrap">
             <div className="space-y-1.5 flex-1 min-w-32">
-              <label className="font-mono text-[0.65rem] text-muted-foreground uppercase tracking-wider">País</label>
+              <label className="font-mono text-[0.75rem] text-muted-foreground uppercase tracking-wider">País</label>
               <select value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass}>
                 <option value="MX">México</option>
                 <option value="US">Estados Unidos</option>
@@ -427,7 +427,7 @@ export function ResearchPanel() {
               </select>
             </div>
             <div className="space-y-1.5 flex-1 min-w-32">
-              <label className="font-mono text-[0.65rem] text-muted-foreground uppercase tracking-wider">Idioma</label>
+              <label className="font-mono text-[0.75rem] text-muted-foreground uppercase tracking-wider">Idioma</label>
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
                 <option value="es">Español</option>
                 <option value="en">English</option>
@@ -458,7 +458,7 @@ export function ResearchPanel() {
       {mode === "domain" && (
         <form onSubmit={handleDomainSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="font-mono text-[0.65rem] text-muted-foreground uppercase tracking-wider">
+            <label className="font-mono text-[0.75rem] text-muted-foreground uppercase tracking-wider">
               Dominio o URL
             </label>
             <input
@@ -469,7 +469,7 @@ export function ResearchPanel() {
               className={inputClass}
               required
             />
-            <p className="font-mono text-[0.6rem] text-muted-foreground">
+            <p className="font-mono text-[0.7rem] text-muted-foreground">
               DataForSEO Labs Domain Rank Overview · México / Español · caché 7 días
             </p>
           </div>

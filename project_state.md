@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-14 (Sesión 36 — Módulo AEO Research ✅ commit 1294d7b)
+**Última actualización:** 2026-06-15 (Sesión 39 — Primer deploy completo de producción ✅)
 **Fase actual:** Post-Fase 4 — nuevos módulos + pulido
-**Próximo hito:** Por definir con Jorge
+**Próximo hito:** Verificar login Google OAuth en producción con dominio real
 
 ---
 
@@ -32,6 +32,18 @@ Ya rotadas previamente: Anthropic, Notion Integration Token, Google OAuth Client
 ### 🟡 Deuda operativa: Auto-deploy de Easypanel
 
 El auto-deploy tras `git push` no siempre se dispara. Varias veces en la saga requirió redeploy manual vía API tRPC. Investigar configuración webhook GitHub → Easypanel.
+
+### ✅ Env vars de producción — CONFIGURADAS (2026-06-15)
+
+Las variables de entorno estaban vacías en Easypanel — root cause del 502. En Sesión 39 se configuraron todas, y en Sesión 40 se corrigió el DATABASE_URL:
+- `DATABASE_URL` → postgres compartido `cerebro-db` (`apps_cerebro-db:5432/cerebro_seo`, user `cerebro`, password `CerebroClick2026#`). La database `cerebro_seo` vive en el mismo servidor que `cerebro_db` (Cerebro web).
+- `REDIS_URL` → `apps_cerebro-seo-redis:6379` (con password rotado)
+- `NEXTAUTH_URL` → `https://seo.clicksociety.com.mx`
+- `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `DATAFORSEO_*`, `ANTHROPIC_API_KEY`, `NOTION_API_KEY`, `CEREBRO_API_URL`, `SEO_INTERNAL_SECRET`, `GOOGLE_PAGESPEED_API_KEY`
+
+**⚠️ Nota:** En Sesión 39 se creó erróneamente un postgres nuevo `cerebro-seo-db`. La BD real con 42 clientes y 2 usuarios siempre estuvo en `cerebro-db` (database `cerebro_seo`). El servicio `cerebro-seo-db` fue eliminado en Sesión 40.
+
+**✅ Verificado:** Login Google OAuth funcionando. Jorge (ADMIN) y Felix (EDITOR) son los 2 usuarios existentes..
 
 ### 🟡 Deuda de seguridad: Secrets en imagen Docker
 
@@ -176,6 +188,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-06-05 | **Sidebar: Settings solo visible para ADMIN.** El nav item de `/settings` se oculta para EDITORs en `Sidebar.tsx` usando la sesión del servidor. Íconos Lucide reales en todos los items (reemplaza placeholders). Commit `69d9482`. |
 | 2026-06-10 | **Plan de Contenido on-demand.** Módulo `/contenido/` genera planes de contenido SEO con Claude Sonnet 4.6. Cruza keywords, gaps de competidores, oportunidades GSC y ciclo activo. Modelo `ContentPlan` en BD (tabla separada, historial por cliente por mes). Costo estimado $0.01–0.03/plan — no se encola en BullMQ (on-demand, igual que Análisis Claude). |
 | 2026-06-14 | **AEO Research (Capa A pilar AEO/GEO).** Módulo `/aeo-research/` recopila preguntas via DataForSEO Labs `keyword_suggestions` (filtrado a palabras-pregunta, cache 7d) + SERP PAA extraction (cache 7d, $0.002/req × seed). Las preguntas se clasifican con Claude Sonnet 4.6 en clusters temáticos AEO (featured snippets/PAA/voz) y GEO (citación por ChatGPT/Gemini/Perplexity/Claude). Modelo `AeoResearch` en BD (clusters Json = `AeoResearchResult` completo). ADMIN-only, seeds automáticas desde keywords `isPriority`. Costo estimado $0.01–0.05/análisis (labs + PAA + Claude). Capa B (escalar a Perplexity/SearchGPT APIs reales) queda como próximo push. |
+| 2026-06-14 | **Sección global `/research` (Sesión 37).** Research ephemero sin cliente: modo keywords (ideas + preguntas + clusters AEO/GEO con Claude) y modo dominio (rank overview). Resultados solo en memoria React — sin modelo Prisma nuevo. `classifyAeoResearchEphemeral` en `aeo-classify.ts` clasifica sin guardar a BD. `ApiUsage` se loggea con `clientId: null` (campo ya nullable). Sidebar: ítem "Research" (FlaskConical, visible ADMIN + EDITOR). Útil para preventa, análisis de campañas y research ad-hoc sin cliente asignado. |
+| 2026-06-14 | **Portapapeles de estrategia por cliente (Sesión 38).** EN MEMORIA — no persiste en BD, localStorage ni sessionStorage. React Context (`ClipboardContext`) montado en `clientes/[id]/layout.tsx` keyed por clientId: persiste al navegar entre módulos del mismo cliente, se resetea al cambiar de cliente. Items: keyword/aeo_cluster/content_idea con payload markdown. Botones Plus/Check en keyword-ideas (columna nueva "Copiar"), AeoResearchPanel (ClusterCard header), ContentPlanPanel (IdeaCard header). Página `/portapapeles`: items agrupados por tipo, "Copiar todo" (navigator.clipboard), "Vaciar", warning temporal, empty state. Guard 4a (beforeunload) implementado. Guard 4b (navegación interna Next.js App Router): NO implementado — router.events no existe en App Router; se documenta como limitación menor. |
 
 ---
 
@@ -338,6 +352,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Dark UI sweep completo — KeywordsTable, GscQueriesTable, PagesTrafficTable ✅ Sesión 33
 - [x] Sidebar: íconos Lucide reales en todos los nav items + Settings solo visible para ADMIN ✅ Sesión 33b
 - [x] Módulo Plan de Contenido (`/contenido/`) — `claude-content-plan.ts`, modelo `ContentPlan`, ADMIN-only, historial ✅ Sesión 34 commit `c82b0d6`
+- [x] Módulo AEO Research (`/aeo-research/`) — `classifyAeoResearchForClient`, modelo `AeoResearch`, ADMIN-only, seeds de priority keywords, historial, clusters AEO/GEO ✅ Sesión 36 commit `1294d7b`
+- [x] Sección global `/research` — research efímero sin cliente (keywords + dominio + AEO/GEO), sidebar FlaskConical, `classifyAeoResearchEphemeral`, `ApiUsage` con clientId null ✅ Sesión 37 commit `acec61e`
+- [x] Portapapeles de estrategia por cliente — en memoria, por cliente, NO persistente; layout.tsx keyed; botones en keyword-ideas/aeo-research/contenido; página /portapapeles con copy markdown ✅ Sesión 38 commit `6ef3d69`
 
 ---
 
@@ -367,6 +384,114 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 40 — 2026-06-15 ✅ COMPLETA (Fix DATABASE_URL → BD real con 42 clientes)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ App en producción con los 42 clientes reales. Jorge y Felix con acceso verificado.
+
+**Trabajo realizado:**
+
+1. **Diagnóstico:** Jorge reportó que no veía clientes al entrar. Las tablas `Client` y `User` de `cerebro-seo-db` (la BD nueva de Sesión 39) estaban vacías.
+
+2. **Root cause identificado:** El postgres `cerebro-db` tenía una database `cerebro_seo` con 42 clientes y 2 usuarios (Jorge ADMIN, Felix EDITOR) — era la BD real que la app usó antes. En Sesión 39 se apuntó erróneamente a un postgres nuevo vacío.
+
+3. **Fix aplicado:** `DATABASE_URL` corregido de `apps_cerebro-seo-db:5432` → `apps_cerebro-db:5432/cerebro_seo`. Guardado y redeploy en Easypanel.
+
+4. **Limpieza:** Servicio `cerebro-seo-db` (postgres vacío) eliminado de Easypanel. Documentación corregida.
+
+5. **Verificado:** Jorge entra con Google OAuth y ve todos sus clientes con métricas.
+
+**Arquitectura correcta de producción:**
+- Postgres: servicio `cerebro-db` → database `cerebro_seo` (Cerebro SEO) + `cerebro_db` (Cerebro web)
+- Redis: servicio `cerebro-seo-redis` (exclusivo Cerebro SEO)
+- Host interno DB: `apps_cerebro-db:5432`
+
+---
+
+### Sesión 39 — 2026-06-15 ✅ COMPLETA (Primer deploy completo de producción)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ App en producción. Login page visible en `https://apps-cerebro-seo.6lk5jx.easypanel.host/`.
+
+**Trabajo realizado:**
+
+1. **Root cause del 502:** Variables de entorno vacías en Easypanel — el servicio `cerebro-seo` nunca tuvo env vars configuradas. `startup.mjs` lanzaba `Error: DATABASE_URL no definido` en un crash loop.
+
+2. **Postgres elegido (error corregido en Sesión 40):** Se creó erróneamente un nuevo `cerebro-seo-db`, cuando la BD real siempre estuvo en `cerebro-db` (database `cerebro_seo`). Error corregido en Sesión 40.
+
+3. **13 env vars configuradas en Easypanel** (panel Environment de `cerebro-seo`): DATABASE_URL (inicialmente mal apuntada a cerebro-seo-db), REDIS_URL, NEXTAUTH_URL (`https://seo.clicksociety.com.mx`), NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET, DATAFORSEO_LOGIN/PASSWORD, ANTHROPIC_API_KEY, NOTION_API_KEY, CEREBRO_API_URL, SEO_INTERNAL_SECRET, GOOGLE_PAGESPEED_API_KEY.
+
+4. **Deploy disparado:** Build exitoso del commit `6ef3d69` (portapapeles). `startup.mjs` corre `prisma migrate deploy` al arrancar.
+
+5. **App respondiendo:** Login page de Cerebro SEO visible. Google OAuth visible. `NEXTAUTH_URL` corregido a `seo.clicksociety.com.mx`.
+
+---
+
+### Sesión 38 — 2026-06-14 ✅ COMPLETA (Portapapeles de estrategia por cliente)
+**Participantes:** Jorge + Claude Code
+**Commit:** `6ef3d69` — `feat: portapapeles de estrategia por cliente (selección de outputs para copiar a Cerebro)`
+**Resultado:** ✅ Lint limpio. Build exitoso (319s). `/clientes/[id]/portapapeles` en artefacto. Push. Deploy en curso.
+
+**Trabajo realizado:**
+
+1. **`ClipboardContext.tsx`** (nuevo): React context `ClipboardProvider` / `useClipboard`. Estado: `ClipboardItem[]` con campos `id`, `type`, `label`, `payload`. Métodos: `toggleItem`, `removeItem`, `clear`, `hasItem`, `count`. `useEffect` para `beforeunload` cuando `items.length > 0`. Reset de items cuando cambia `clientId`.
+
+2. **`clientes/[id]/layout.tsx`** (nuevo, server component): Monta `<ClipboardProvider key={params.id} clientId={params.id}>`. El `key` fuerza remount al cambiar de cliente → items se resetean. Persiste al navegar entre módulos del mismo cliente.
+
+3. **`keyword-ideas/KeywordClipboardButton.tsx`** (nuevo, client component): Botón Plus/Check que llama `toggleItem` con payload `- {keyword} (vol: {vol}/mes, KD: {kd}, intención: {intent})`.
+
+4. **`keyword-ideas/page.tsx`**: Nueva columna "Copiar" con `KeywordClipboardButton` en cada fila (visible para todos, no solo ADMIN).
+
+5. **`aeo-research/AeoResearchPanel.tsx`**: Botón Plus/Check en header de `ClusterCard`. `stopPropagation` para no interferir con el toggle del acordeón. Payload: markdown con tema, preguntas y recomendación.
+
+6. **`contenido/ContentPlanPanel.tsx`**: Botón Plus/Check en header de `IdeaCard`. Payload: título [tipo] — Prioridad + keywords + ángulo + razón.
+
+7. **`portapapeles/page.tsx`** + **`PortapapelesPanel.tsx`**: Server page (prisma client name) + client panel. Items agrupados por tipo (Keywords/Temas AEO/Ideas de contenido). "Copiar todo a portapapeles" → `navigator.clipboard.writeText` con markdown agrupado. Feedback visual "Copiado" 2.5s. "Vaciar". Warning card estilo DS (border-left amarillo). Empty state con links a módulos. Vista previa del markdown.
+
+8. **`clientes/[id]/page.tsx`**: Módulo "Portapapeles" en MODULES grid (ícono `ClipboardList`, color `text-ds-orange`, `requiresSeo: false`).
+
+**Limitación documentada — Guard 4b (navegación interna):**
+Next.js 14 App Router no expone `router.events` (existía en Pages Router). No hay forma nativa de interceptar navegación interna sin soluciones frágiles. Mitigación implementada: warning visible en página de portapapeles + beforeunload (4a). El usuario ve el conteo en el MODULES grid al estar en portada; el warning en la página recuerda el riesgo de pérdida.
+
+**Costo de APIs:** $0.
+
+---
+
+### Sesión 37 — 2026-06-14 ✅ COMPLETA (Sección global /research — Análisis sin cliente)
+**Participantes:** Jorge + Claude Code
+**Commit:** `acec61e` — `feat: sección global /research — análisis de keywords y dominio sin cliente`
+**Resultado:** ✅ Lint limpio (solo warning preexistente en ServiceToggle). Push. Deploy en curso.
+
+**Trabajo realizado:**
+
+1. **`src/lib/aeo-classify.ts`**: Agregada función `classifyAeoResearchEphemeral(questions, clientInfo, seeds)`. Misma llamada Claude Sonnet 4.6 que `classifyAeoResearchForClient` pero SIN `prisma.aeoResearch.create`. Loggea a `ApiUsage` con `clientId: undefined` (se persiste como null). Retorna `{ result: AeoResearchResult, cost: number }`.
+
+2. **`src/app/(admin)/research/actions.ts`**:
+   - `actionResearchKeywords({ seeds, country, language })`: ADMIN-only. `getKeywordIdeas` (100 ideas) + `getQuestionKeywords` (80) + `getSerpQuestions` por seed en paralelo. Dedup questions. `classifyAeoResearchEphemeral`. Retorna `KeywordResearchResult` (efímero).
+   - `actionResearchDomain({ domain })`: ADMIN-only. `getDomainRankOverview`. Retorna `DomainResearchResult`.
+
+3. **`src/app/(admin)/research/ResearchPanel.tsx`**: Client component completo:
+   - Tabs "Por keyword" / "Por dominio" (border-b-2 border-primary para activo)
+   - Helpers inline: `kdBadge`, `intentBadge`, `fmtVol`, `fmtCpc`
+   - `KeywordTable`: tabla de ideas con vol/KD/CPC/intent (sin columna "Agregar")
+   - `ClusterCard`: expand/collapse, badges AEO (azul/Mic) y GEO (amarillo/Cpu)
+   - `KeywordResults`: KPI bar + resumen + clusters + tabla
+   - `DomainResults`: 3 KPI cards (Domain Rank, Keywords orgánicas, Tráfico estimado)
+   - `ResearchPanel`: form con `useTransition`, selectors país/idioma, seed input multi
+
+4. **`src/app/(admin)/research/page.tsx`**: Server component (sin force-dynamic — no hay queries Prisma). Renderiza `ResearchPanel`.
+
+5. **`src/components/layout/Sidebar.tsx`**: Import `FlaskConical`. Item "Research" (`href: "/research"`, `adminOnly: false`) entre Dashboard y Configuración.
+
+**Decisión arquitectónica clave:** Sección global vs "cliente sentinel". Se eligió sección propia `/research` para evitar contaminar dashboard, BullMQ workers y sync flows que iteran por clientes.
+
+**Costo de APIs:** $0 (sin llamadas a DataForSEO ni Claude en esta sesión).
+
+**Próximos pasos sugeridos:**
+- Capa B AEO/GEO: integrar Perplexity API para validar qué preguntas ya están respondidas por LLMs.
+- Export de resultados de `/research` a PDF o CSV.
+- Guardar research en "historial de research" (modelo `GlobalResearch` — decision pendiente si se necesita).
+
+---
 
 ### Sesión 36 — 2026-06-14 ✅ COMPLETA (Módulo AEO Research — Capa A pilar AEO/GEO)
 **Participantes:** Jorge + Claude Code

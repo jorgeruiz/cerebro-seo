@@ -134,7 +134,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
               <Link2 className="h-6 w-6 text-ds-blue shrink-0" />
               Backlinks
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
               {client.domain}
             </p>
           </div>
@@ -168,7 +168,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
               value={formatNum(lastSnapshot.totalBacklinks)}
               delta={
                 deltaBacklinks !== null ? (
-                  <span className={`font-mono text-[0.65rem] ${deltaBacklinks >= 0 ? "text-ds-green" : "text-ds-red"}`}>
+                  <span className={`font-mono text-[0.75rem] ${deltaBacklinks >= 0 ? "text-ds-green" : "text-ds-red"}`}>
                     {deltaBacklinks >= 0 ? "+" : ""}{deltaBacklinks}
                   </span>
                 ) : undefined
@@ -179,7 +179,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
               value={formatNum(lastSnapshot.uniqueDomains)}
               delta={
                 deltaDomains !== null ? (
-                  <span className={`font-mono text-[0.65rem] ${deltaDomains >= 0 ? "text-ds-green" : "text-ds-red"}`}>
+                  <span className={`font-mono text-[0.75rem] ${deltaDomains >= 0 ? "text-ds-green" : "text-ds-red"}`}>
                     {deltaDomains >= 0 ? "+" : ""}{deltaDomains}
                   </span>
                 ) : undefined
@@ -194,7 +194,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
               value={`+${gained} / -${lost}`}
               valueColor={deltaColor}
               delta={
-                <span className="font-mono text-[0.6rem] text-muted-foreground">jueves 5 AM</span>
+                <span className="font-mono text-[0.7rem] text-muted-foreground">jueves 5 AM</span>
               }
             />
           </div>
@@ -225,19 +225,19 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
+                      <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                         Dominio fuente
                       </th>
-                      <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
+                      <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                         DA
                       </th>
-                      <th className="text-left font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3">
+                      <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3">
                         Anchor text
                       </th>
-                      <th className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-20">
+                      <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-20">
                         Tipo
                       </th>
-                      <th className="text-right font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground px-4 py-3 w-24">
+                      <th className="text-right font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3 w-24">
                         Primer det.
                       </th>
                     </tr>
@@ -259,7 +259,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                         <td className="px-3 py-2.5 text-center">
                           {bl.domainAuthority !== null ? (
                             <span
-                              className={`inline-flex items-center justify-center font-mono text-[0.65rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}
+                              className={`inline-flex items-center justify-center font-mono text-[0.75rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}
                             >
                               {bl.domainAuthority}
                             </span>
@@ -286,7 +286,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[0.65rem] text-muted-foreground">
+                        <td className="px-4 py-2.5 text-right font-mono text-[0.75rem] text-muted-foreground">
                           {formatDate(bl.firstSeen)}
                         </td>
                       </tr>
@@ -305,7 +305,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Ganados */}
               <div>
-                <p className="font-mono text-[0.6rem] uppercase tracking-wider text-ds-green mb-3">
+                <p className="font-mono text-[0.7rem] uppercase tracking-wider text-ds-green mb-3">
                   Ganados ({recentGained.length})
                 </p>
                 {recentGained.length === 0 ? (
@@ -320,18 +320,18 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                         <div className="min-w-0">
                           <p className="font-mono text-xs text-foreground truncate">{bl.sourceDomain}</p>
                           {bl.anchorText && (
-                            <p className="text-[0.65rem] text-muted-foreground truncate mt-0.5">
+                            <p className="text-[0.75rem] text-muted-foreground truncate mt-0.5">
                               {bl.anchorText}
                             </p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {bl.domainAuthority !== null && (
-                            <span className={`font-mono text-[0.6rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
+                            <span className={`font-mono text-[0.7rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
                               DA {bl.domainAuthority}
                             </span>
                           )}
-                          <span className="font-mono text-[0.6rem] text-muted-foreground">
+                          <span className="font-mono text-[0.7rem] text-muted-foreground">
                             {formatDate(bl.firstSeen)}
                           </span>
                         </div>
@@ -343,7 +343,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
 
               {/* Perdidos */}
               <div>
-                <p className="font-mono text-[0.6rem] uppercase tracking-wider text-ds-red mb-3">
+                <p className="font-mono text-[0.7rem] uppercase tracking-wider text-ds-red mb-3">
                   Perdidos ({recentLost.length})
                 </p>
                 {recentLost.length === 0 ? (
@@ -358,18 +358,18 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                         <div className="min-w-0">
                           <p className="font-mono text-xs text-foreground truncate">{bl.sourceDomain}</p>
                           {bl.anchorText && (
-                            <p className="text-[0.65rem] text-muted-foreground truncate mt-0.5">
+                            <p className="text-[0.75rem] text-muted-foreground truncate mt-0.5">
                               {bl.anchorText}
                             </p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {bl.domainAuthority !== null && (
-                            <span className={`font-mono text-[0.6rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
+                            <span className={`font-mono text-[0.7rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
                               DA {bl.domainAuthority}
                             </span>
                           )}
-                          <span className="font-mono text-[0.6rem] text-muted-foreground">
+                          <span className="font-mono text-[0.7rem] text-muted-foreground">
                             {bl.lostAt ? formatDate(bl.lostAt) : "—"}
                           </span>
                         </div>
@@ -384,7 +384,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
 
         {/* Footer */}
         {lastSnapshot && (
-          <p className="font-mono text-[0.6rem] text-muted-foreground text-right">
+          <p className="font-mono text-[0.7rem] text-muted-foreground text-right">
             Última actualización: {formatDate(lastSnapshot.capturedAt)} · Próximo crawl: jueves 5 AM
           </p>
         )}

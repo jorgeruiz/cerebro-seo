@@ -37,7 +37,7 @@ export function CycleCloseButton({ clientId, yearMonth }: Props) {
   if (toast) {
     return (
       <div
-        className={`flex items-center gap-2 text-[0.65rem] font-mono px-3 py-1.5 rounded border ${
+        className={`flex items-center gap-2 text-[0.75rem] font-mono px-3 py-1.5 rounded border ${
           toast.ok
             ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
             : "bg-destructive/10 border-destructive/30 text-destructive"
@@ -56,13 +56,13 @@ export function CycleCloseButton({ clientId, yearMonth }: Props) {
   if (confirm) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-[0.65rem] font-mono text-muted-foreground">
+        <span className="text-[0.75rem] font-mono text-muted-foreground">
           ¿Cerrar ciclo {yearMonth}? No se puede deshacer.
         </span>
         <button
           onClick={handleClose}
           disabled={isPending}
-          className="inline-flex items-center gap-1 text-[0.65rem] font-mono uppercase tracking-wide px-2.5 py-1 rounded border bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1 text-[0.75rem] font-mono uppercase tracking-wide px-2.5 py-1 rounded border bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -74,7 +74,7 @@ export function CycleCloseButton({ clientId, yearMonth }: Props) {
         <button
           onClick={() => setConfirm(false)}
           disabled={isPending}
-          className="text-[0.65rem] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          className="text-[0.75rem] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
         >
           Cancelar
         </button>
@@ -85,7 +85,7 @@ export function CycleCloseButton({ clientId, yearMonth }: Props) {
   return (
     <button
       onClick={() => setConfirm(true)}
-      className="inline-flex items-center gap-1.5 text-[0.65rem] font-mono uppercase tracking-wide px-2.5 py-1 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+      className="inline-flex items-center gap-1.5 text-[0.75rem] font-mono uppercase tracking-wide px-2.5 py-1 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
     >
       <XCircle className="h-3 w-3" />
       Cerrar ciclo

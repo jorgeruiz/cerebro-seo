@@ -247,7 +247,7 @@ export default function NuevoClientePage() {
         <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
           Nuevo cliente
         </h1>
-        <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+        <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
           Paso {step + 1} de {STEPS.length} — {STEPS[step].label}
         </p>
       </div>
@@ -258,7 +258,7 @@ export default function NuevoClientePage() {
           <div key={i} className="flex items-center gap-2">
             <div
               className={cn(
-                "h-6 w-6 rounded-full flex items-center justify-center font-mono text-[0.6rem] font-bold transition-colors border",
+                "h-6 w-6 rounded-full flex items-center justify-center font-mono text-[0.7rem] font-bold transition-colors border",
                 i < step
                   ? "bg-ds-green/10 text-ds-green border-ds-green/40"
                   : i === step
@@ -270,7 +270,7 @@ export default function NuevoClientePage() {
             </div>
             <span
               className={cn(
-                "font-mono text-[0.6rem] hidden sm:block",
+                "font-mono text-[0.7rem] hidden sm:block",
                 i === step ? "text-foreground" : "text-muted-foreground/50"
               )}
             >

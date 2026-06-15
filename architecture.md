@@ -339,7 +339,7 @@ Nunca hacer INSERT manual a `_prisma_migrations` — Prisma verifica el checksum
 | `REDIS_URL` | `redis://default:[pwd]@apps_cerebro-seo-redis:6379` | Hostname Easypanel: `<proyecto>_<servicio>` — underscore separa proyecto de servicio, guiones se preservan dentro del nombre del servicio. Password embebido. |
 | `NEXTAUTH_URL` | `https://seo.clicksociety.com.mx` | URL pública. NO `localhost`. |
 | `NEXTAUTH_URL_INTERNAL` | `https://seo.clicksociety.com.mx` | Igual que `NEXTAUTH_URL`. Si apunta a `localhost`, el middleware falla en el contenedor. |
-| `DATABASE_URL` | `postgresql://cerebro:[pwd]@apps-cerebro-db:5432/cerebro_seo` | BD interna Easypanel. Compartida con cerebro-web — rotar password en sesión coordinada. |
+| `DATABASE_URL` | `postgresql://cerebro:[pwd]@apps_cerebro-db:5432/cerebro_seo` | BD interna Easypanel. Servicio Postgres `cerebro-db` (host interno `apps_cerebro-db`), compartido con cerebro-web. La DB de Cerebro SEO es `cerebro_seo`; la de cerebro-web es `cerebro_db`. Rotar password en sesión coordinada con ambos servicios. |
 | `ADMIN_EMAILS` | `jorge@clicksociety.com.mx,felix@clicksociety.com.mx` | Lista de emails ADMIN, separados por coma sin espacios. Cambios requieren restart del servicio. |
 
 > **Nota Redis**: `ioredis` usa dos clientes en el código. `redis` (cache) tiene `maxRetriesPerRequest: 0` + `enableOfflineQueue: false` para fallar rápido. `redisBullMQ` tiene `maxRetriesPerRequest: null` como requiere BullMQ. Ambos tienen `.on('error', ...)` listener para evitar crash por excepción no manejada.

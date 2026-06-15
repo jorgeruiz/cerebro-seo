@@ -62,7 +62,7 @@ export default async function AnalisisPage({
             <Sparkles className="h-6 w-6 text-primary shrink-0" />
             Análisis Claude
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · análisis ejecutivo on-demand con todo el contexto SEO del cliente
           </p>
         </div>

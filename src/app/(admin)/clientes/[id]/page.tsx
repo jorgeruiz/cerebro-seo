@@ -201,7 +201,7 @@ export default async function ClienteDetallePage({
             <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
               {client.name}
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">{client.domain}</p>
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">{client.domain}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-1">
             <Link
@@ -292,7 +292,7 @@ export default async function ClienteDetallePage({
 
         {/* Operativa del mes */}
         <section>
-          <div className="flex items-center gap-2.5 font-mono text-[0.6rem] text-muted-foreground uppercase tracking-[0.1em] mb-5">
+          <div className="flex items-center gap-2.5 font-mono text-[0.7rem] text-muted-foreground uppercase tracking-[0.1em] mb-5">
             <span className="text-primary">{"//"}</span>
             <span>Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}</span>
             <span className="flex-1 h-px bg-border" />

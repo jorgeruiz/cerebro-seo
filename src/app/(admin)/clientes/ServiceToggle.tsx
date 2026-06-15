@@ -37,7 +37,7 @@ export function ServiceToggle() {
       <button
         onClick={() => toggle("seo")}
         className={cn(
-          "px-3 py-1 font-mono text-[0.65rem] uppercase tracking-wide rounded-full transition-colors",
+          "px-3 py-1 font-mono text-[0.75rem] uppercase tracking-wide rounded-full transition-colors",
           filter === "seo"
             ? "bg-primary/15 text-ds-green border border-ds-gd"
             : "text-muted-foreground hover:text-foreground"
@@ -48,7 +48,7 @@ export function ServiceToggle() {
       <button
         onClick={() => toggle("all")}
         className={cn(
-          "px-3 py-1 font-mono text-[0.65rem] uppercase tracking-wide rounded-full transition-colors",
+          "px-3 py-1 font-mono text-[0.75rem] uppercase tracking-wide rounded-full transition-colors",
           filter === "all"
             ? "bg-primary/15 text-ds-green border border-ds-gd"
             : "text-muted-foreground hover:text-foreground"

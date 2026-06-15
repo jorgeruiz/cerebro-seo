@@ -63,7 +63,7 @@ export default async function TerminosBusquedaPage({
             <Search className="h-6 w-6 text-ds-blue shrink-0" />
             Términos de búsqueda
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · Google Search Console
           </p>
         </div>

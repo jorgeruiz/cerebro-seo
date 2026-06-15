@@ -50,3 +50,4 @@ docker-compose.override.yml
 
 # Artifacts generados localmente (no para el repo)
 validation-report.md
+.playwright-mcp/

@@ -49,7 +49,7 @@ export default async function TraficoPaginasPage({
               <BarChart2 className="h-6 w-6 text-ds-green shrink-0" />
               Tráfico de páginas
             </h1>
-            <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
               {client.domain} · GA4 + GSC
             </p>
           </div>
@@ -104,7 +104,7 @@ export default async function TraficoPaginasPage({
             <BarChart2 className="h-6 w-6 text-ds-green shrink-0" />
             Tráfico de páginas
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} ·{" "}
             {hasGa4 && hasGsc ? "GA4 + GSC" : hasGa4 ? "GA4" : "GSC"}
           </p>

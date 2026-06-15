@@ -55,7 +55,7 @@ function ItemRow({ item, onRemove }: { item: ClipboardItem; onRemove: () => void
   return (
     <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3">
       <div className="flex-1 min-w-0">
-        <p className="font-mono text-[0.72rem] text-foreground truncate">{item.label}</p>
+        <p className="font-mono text-[0.82rem] text-foreground truncate">{item.label}</p>
       </div>
       <button
         onClick={onRemove}
@@ -123,7 +123,7 @@ export function PortapapelesPanel({ clientId, clientName }: Props) {
             <ClipboardList className="h-6 w-6 text-ds-orange shrink-0" />
             Portapapeles
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {count} elemento{count !== 1 ? "s" : ""} seleccionado{count !== 1 ? "s" : ""} · para copiar a Cerebro
           </p>
         </div>
@@ -135,7 +135,7 @@ export function PortapapelesPanel({ clientId, clientName }: Props) {
         >
           <AlertTriangle className="h-4 w-4 text-ds-yellow shrink-0 mt-0.5" />
           <div>
-            <p className="font-mono text-[0.65rem] font-semibold text-ds-yellow uppercase tracking-wide mb-1">
+            <p className="font-mono text-[0.75rem] font-semibold text-ds-yellow uppercase tracking-wide mb-1">
               El portapapeles es temporal
             </p>
             <p className="text-xs text-muted-foreground leading-relaxed">
@@ -213,7 +213,7 @@ export function PortapapelesPanel({ clientId, clientName }: Props) {
                 <SectionHeader>
                   <span className="flex items-center gap-2">
                     {label}
-                    <span className="font-mono text-[0.6rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                    <span className="font-mono text-[0.7rem] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                       {groupItems.length}
                     </span>
                   </span>
@@ -233,7 +233,7 @@ export function PortapapelesPanel({ clientId, clientName }: Props) {
             {/* Vista previa del markdown */}
             <section>
               <SectionHeader>Vista previa del texto a copiar</SectionHeader>
-              <pre className="bg-muted/20 border border-border rounded-xl p-5 font-mono text-[0.68rem] text-muted-foreground leading-relaxed overflow-x-auto whitespace-pre-wrap">
+              <pre className="bg-muted/20 border border-border rounded-xl p-5 font-mono text-[0.78rem] text-muted-foreground leading-relaxed overflow-x-auto whitespace-pre-wrap">
                 {buildMarkdown(items)}
               </pre>
             </section>

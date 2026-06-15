@@ -60,7 +60,7 @@ export default async function AeoResearchPage({
             <Brain className="h-6 w-6 text-ds-yellow shrink-0" />
             AEO Research
           </h1>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-1">
+          <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · clusters de preguntas clasificados para featured snippets (AEO) y motores de IA (GEO)
           </p>
         </div>
