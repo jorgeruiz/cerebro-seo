@@ -20,6 +20,7 @@ export async function initJobs(): Promise<void> {
 
   // Importar workers — los efectos de módulo registran los Workers en BullMQ
   await import("./workers/insights-worker");
+  await import("./workers/seo-advisor-worker");
   await import("./workers/audit-quick-worker");
   await import("./workers/audit-complete-worker");
   await import("./workers/rank-tracking-worker");

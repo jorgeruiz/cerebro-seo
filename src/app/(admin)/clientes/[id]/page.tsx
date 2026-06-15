@@ -32,9 +32,11 @@ import { GscSnapshotCards } from "./GscSnapshotCards";
 import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
 import { CycleCloseButton } from "./CycleCloseButton";
+import { NextStepsPanel } from "./NextStepsPanel";
 import { SectionHeader } from "@/components/ui-darkui";
 import { buttonVariants } from "@/components/ui/button";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
+import { getLatestNextStepPlan } from "./next-steps-actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { GscSnapshot, Ga4Snapshot } from "./actions";
 import { env } from "@/env";
@@ -182,6 +184,11 @@ export default async function ClienteDetallePage({
   }
 
   const hasSeo = client.services.includes("seo");
+  const isAdmin = session?.user?.role === "ADMIN";
+
+  // Próximos pasos sugeridos — solo para clientes con servicio SEO
+  const nextStepPlan = hasSeo ? await getLatestNextStepPlan(client.id) : null;
+
   const cycle = client.cycles[0];
   const cycleStatus = cycle ? CYCLE_STATUS_LABEL[cycle.status] : null;
   const pendingTasks = cycle?.tasks.filter((t) => t.status !== "DONE") ?? [];
@@ -235,6 +242,17 @@ export default async function ClienteDetallePage({
             )}
           </div>
         </div>
+        {/* Próximos pasos sugeridos — SeoAdvisor */}
+        {hasSeo && (
+          <section>
+            <NextStepsPanel
+              clientId={client.id}
+              initialRecord={nextStepPlan}
+              isAdmin={isAdmin}
+            />
+          </section>
+        )}
+
         {/* Snapshot GSC 28d — solo si hay propiedad configurada y datos */}
         {gscSnapshot && (
           <section>
@@ -296,7 +314,7 @@ export default async function ClienteDetallePage({
             <span className="text-primary">{"//"}</span>
             <span>Operativa del mes{cycle ? ` · ${cycle.yearMonth}` : ""}</span>
             <span className="flex-1 h-px bg-border" />
-            {session?.user?.role === "ADMIN" && cycle && (cycle.status === "ACTIVE" || cycle.status === "CLOSING") && (
+            {isAdmin && cycle && (cycle.status === "ACTIVE" || cycle.status === "CLOSING") && (
               <CycleCloseButton clientId={client.id} yearMonth={cycle.yearMonth} />
             )}
           </div>
