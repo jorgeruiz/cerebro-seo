@@ -13,7 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionHeader, KpiCard } from "@/components/ui-darkui";
+import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AddKeywordButton } from "./AddKeywordButton";
 import { KeywordClipboardButton } from "./KeywordClipboardButton";
 import type { KeywordIdea } from "@/server/providers/dataforseo";
@@ -163,17 +163,24 @@ export default async function KeywordIdeasPage({
           </p>
         </div>
 
+        <SectionIntro>
+          Sugerencias de keywords relacionadas con las seeds del cliente, obtenidas de DataForSEO Labs (caché 7 días).
+          Filtra por KD bajo (≤30) y volumen alto para encontrar las mejores oportunidades. Agrega keywords directamente al tracking del cliente.
+        </SectionIntro>
+
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard label="Ideas encontradas" value={String(ideas.length)} />
           <KpiCard label="Con volumen" value={String(withVolume.length)} />
           <KpiCard
             label="KD fácil (≤30)"
+            tooltip="Keyword Difficulty ≤ 30: keywords donde es posible posicionarse con contenido de calidad sin necesidad de muchos backlinks."
             value={String(easyKws.length)}
             valueColor={easyKws.length > 0 ? "green" : "default"}
           />
           <KpiCard
             label="Alto volumen (≥1k)"
+            tooltip="Keywords con más de 1,000 búsquedas mensuales en el mercado objetivo."
             value={String(highVol.length)}
             valueColor={highVol.length > 0 ? "default" : "default"}
           />
@@ -209,8 +216,18 @@ export default async function KeywordIdeasPage({
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
                     <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
-                    <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
-                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">KD</th>
+                    <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <InfoTooltip>Búsquedas mensuales promedio para esta keyword en el mercado objetivo.</InfoTooltip>
+                        Vol/mes
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                      <span className="inline-flex items-center justify-center gap-1">
+                        <InfoTooltip>Keyword Difficulty (0–100): qué tan difícil es posicionarse para esta keyword. Verde = fácil (≤30), Amarillo = medio (31–60), Rojo = difícil (≥61).</InfoTooltip>
+                        KD
+                      </span>
+                    </th>
                     <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
                     <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
                     <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Copiar</th>

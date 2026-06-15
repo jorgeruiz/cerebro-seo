@@ -16,7 +16,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { KpiCard } from "@/components/ui-darkui";
+import { KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import {
   actionResearchKeywords,
   actionResearchDomain,
@@ -79,8 +79,18 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
-              <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Vol/mes</th>
-              <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">KD</th>
+              <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                <span className="inline-flex items-center justify-end gap-1">
+                  <InfoTooltip>Búsquedas mensuales promedio para esta keyword en el mercado objetivo.</InfoTooltip>
+                  Vol/mes
+                </span>
+              </th>
+              <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                <span className="inline-flex items-center justify-center gap-1">
+                  <InfoTooltip>Keyword Difficulty (0–100): qué tan difícil es posicionarse. Verde ≤ 30, Amarillo 31–60, Rojo ≥ 61.</InfoTooltip>
+                  KD
+                </span>
+              </th>
               <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
               <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
             </tr>
@@ -155,11 +165,13 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
           {cluster.aeoCandidate && (
             <span className="font-mono text-[0.7rem] uppercase px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
               <Mic className="h-2.5 w-2.5" /> AEO
+              <InfoTooltip>Candidato para aparecer como respuesta directa en Google (featured snippet, PAA o búsqueda por voz).</InfoTooltip>
             </span>
           )}
           {cluster.geoCandidate && (
             <span className="font-mono text-[0.7rem] uppercase px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
               <Cpu className="h-2.5 w-2.5" /> GEO
+              <InfoTooltip>Candidato para ser citado por motores de IA como ChatGPT, Perplexity o Gemini en sus respuestas.</InfoTooltip>
             </span>
           )}
           {open ? (
@@ -372,6 +384,11 @@ export function ResearchPanel() {
 
   return (
     <div className="space-y-6">
+      <SectionIntro>
+        Investiga keywords o dominios directamente, sin necesidad de tener un cliente configurado.
+        Modo keywords: volumen, KD, CPC, intención y clusters AEO/GEO. Modo dominio: Domain Rank, tráfico estimado y keywords orgánicas del competidor.
+      </SectionIntro>
+
       {/* Mode tabs */}
       <div className="flex gap-0 border-b border-border">
         {(

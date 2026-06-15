@@ -33,7 +33,7 @@ import { Ga4SnapshotCards } from "./Ga4SnapshotCards";
 import { InsightCards } from "./InsightCards";
 import { CycleCloseButton } from "./CycleCloseButton";
 import { NextStepsPanel } from "./NextStepsPanel";
-import { SectionHeader } from "@/components/ui-darkui";
+import { SectionHeader, SectionIntro } from "@/components/ui-darkui";
 import { buttonVariants } from "@/components/ui/button";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
 import { getLatestNextStepPlan } from "./next-steps-actions";
@@ -245,6 +245,10 @@ export default async function ClienteDetallePage({
         {/* Próximos pasos sugeridos — SeoAdvisor */}
         {hasSeo && (
           <section>
+            <SectionIntro className="mb-5">
+              Vista general del cliente. El SeoAdvisor analiza diariamente el estado SEO y genera los próximos pasos priorizados a las 7 AM.
+              Los datos de Search Console y Analytics se actualizan cada 24h. Usa los módulos de análisis para profundizar en cada área.
+            </SectionIntro>
             <NextStepsPanel
               clientId={client.id}
               initialRecord={nextStepPlan}

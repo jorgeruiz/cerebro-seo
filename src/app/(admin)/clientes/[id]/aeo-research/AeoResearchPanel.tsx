@@ -7,6 +7,7 @@ import {
   Plus, Check,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { InfoTooltip } from "@/components/ui-darkui";
 import { actionGenerateAeoResearch, type AeoResearchRecord } from "./actions";
 import type { AeoCluster, AeoResearchResult } from "@/lib/aeo-classify";
 import { useClipboard } from "../ClipboardContext";
@@ -100,12 +101,14 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
             <span className="font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-blue bg-ds-blue/10 border-ds-blue/30 flex items-center gap-1">
               <Mic className="h-2.5 w-2.5" />
               AEO
+              <InfoTooltip>Answer Engine Optimization: este cluster es candidato para aparecer como respuesta directa en Google (featured snippet).</InfoTooltip>
             </span>
           )}
           {cluster.geoCandidate && (
             <span className="font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border text-ds-yellow bg-ds-yellow/10 border-ds-yellow/30 flex items-center gap-1">
               <Cpu className="h-2.5 w-2.5" />
               GEO
+              <InfoTooltip>Generative Engine Optimization: este cluster es candidato para ser citado por motores de IA como ChatGPT, Perplexity o Gemini.</InfoTooltip>
             </span>
           )}
           {/* Botón portapapeles — stopPropagation para no toggle el acordeón */}

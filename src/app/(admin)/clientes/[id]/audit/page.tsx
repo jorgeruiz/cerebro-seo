@@ -17,7 +17,7 @@ import {
   RefreshCw,
   ExternalLink,
 } from "lucide-react";
-import { SectionHeader } from "@/components/ui-darkui";
+import { SectionHeader, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AuditScoreChart } from "./AuditScoreChart";
 import type { AuditHistoryPoint } from "./AuditScoreChart";
 
@@ -188,6 +188,11 @@ export default async function AuditPage({
 
       <div className="p-8 space-y-8">
 
+        <SectionIntro>
+          Análisis técnico del sitio basado en crawl automático semanal. Los issues críticos y altos son los que más impactan el posicionamiento.
+          Los Core Web Vitals (LCP, CLS) son factores de ranking directo de Google — prioriza los que estén en rojo.
+        </SectionIntro>
+
         {/* Sin audits */}
         {allAudits.length === 0 && (
           <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center gap-4 text-center">
@@ -350,13 +355,13 @@ export default async function AuditPage({
                 <SectionHeader>Core Web Vitals · Mobile</SectionHeader>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: "LCP", value: cwvData.mobile.lcp, unit: "ms", good: 2500, poor: 4000 },
-                    { label: "FCP", value: cwvData.mobile.fcp, unit: "ms", good: 1800, poor: 3000 },
-                    { label: "CLS", value: cwvData.mobile.cls, unit: "",   good: 0.1,  poor: 0.25, decimals: 3 },
-                    { label: "TBT", value: cwvData.mobile.tbt, unit: "ms", good: 200,  poor: 600 },
+                    { label: "LCP", value: cwvData.mobile.lcp, unit: "ms", good: 2500, poor: 4000, tooltip: "Largest Contentful Paint: tiempo que tarda en renderizarse el elemento visual más grande. Bueno: < 2.5s, Necesita mejora: 2.5–4s, Pobre: > 4s." },
+                    { label: "FCP", value: cwvData.mobile.fcp, unit: "ms", good: 1800, poor: 3000, tooltip: "First Contentful Paint: tiempo hasta que el primer contenido aparece en pantalla. Bueno: < 1.8s." },
+                    { label: "CLS", value: cwvData.mobile.cls, unit: "",   good: 0.1,  poor: 0.25, decimals: 3, tooltip: "Cumulative Layout Shift: cuánto 'salta' el contenido mientras carga. Bueno: < 0.1, Pobre: > 0.25. Afecta la experiencia del usuario." },
+                    { label: "TBT", value: cwvData.mobile.tbt, unit: "ms", good: 200,  poor: 600,  tooltip: "Total Blocking Time: tiempo total en que el hilo principal estuvo bloqueado durante la carga. Bueno: < 200ms." },
                   ]
                     .filter((m) => m.value !== undefined)
-                    .map(({ label, value, unit, good, poor, decimals }) => {
+                    .map(({ label, value, unit, good, poor, decimals, tooltip }) => {
                       const v = value ?? 0;
                       const status = v <= good ? "good" : v <= poor ? "needs" : "poor";
                       const colors = {
@@ -366,7 +371,10 @@ export default async function AuditPage({
                       }[status];
                       return (
                         <div key={label} className={`rounded-xl border p-4 ${colors}`}>
-                          <p className="text-[10px] font-mono uppercase tracking-wide mb-1">{label}</p>
+                          <p className="text-[10px] font-mono uppercase tracking-wide mb-1 flex items-center gap-1">
+                            {label}
+                            <InfoTooltip>{tooltip}</InfoTooltip>
+                          </p>
                           <p className="text-xl font-bold font-mono">
                             {decimals ? v.toFixed(decimals) : v.toLocaleString("es-MX")}
                             {unit && <span className="text-sm font-normal ml-1">{unit}</span>}

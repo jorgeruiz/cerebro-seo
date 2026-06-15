@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { InfoTooltip } from "@/components/ui-darkui";
 import {
   Table,
   TableBody,
@@ -33,20 +34,21 @@ type ColDef = {
   label: string;
   source: "ga4" | "gsc";
   format: (v: number | null) => string;
+  tooltip: string;
 };
 
 const GA4_COLS: ColDef[] = [
-  { key: "sessions",    label: "Sesiones",    source: "ga4", format: (v) => v === null ? "—" : fmt.format(v) },
-  { key: "users",       label: "Usuarios",    source: "ga4", format: (v) => v === null ? "—" : fmt.format(v) },
-  { key: "conversions", label: "Conversiones",source: "ga4", format: (v) => v === null ? "—" : fmt.format(v) },
-  { key: "bounceRate",  label: "Rebote",      source: "ga4", format: (v) => v === null ? "—" : `${v.toFixed(1)}%` },
+  { key: "sessions",    label: "Sesiones",    source: "ga4", format: (v) => v === null ? "—" : fmt.format(v), tooltip: "Sesiones de usuarios en esta página según GA4." },
+  { key: "users",       label: "Usuarios",    source: "ga4", format: (v) => v === null ? "—" : fmt.format(v), tooltip: "Usuarios únicos que visitaron esta página en GA4." },
+  { key: "conversions", label: "Conversiones",source: "ga4", format: (v) => v === null ? "—" : fmt.format(v), tooltip: "Conversiones (eventos clave) atribuidas a esta página en GA4." },
+  { key: "bounceRate",  label: "Rebote",      source: "ga4", format: (v) => v === null ? "—" : `${v.toFixed(1)}%`, tooltip: "Tasa de rebote: % de sesiones donde el usuario no interactuó y salió. Menor es mejor." },
 ];
 
 const GSC_COLS: ColDef[] = [
-  { key: "clicks",      label: "Clics",       source: "gsc", format: (v) => v === null ? "—" : fmt.format(v) },
-  { key: "impressions", label: "Impresiones", source: "gsc", format: (v) => v === null ? "—" : fmt.format(v) },
-  { key: "ctr",         label: "CTR",         source: "gsc", format: (v) => v === null ? "—" : `${v.toFixed(2)}%` },
-  { key: "position",    label: "Posición",    source: "gsc", format: (v) => v === null ? "—" : v.toFixed(1) },
+  { key: "clicks",      label: "Clics",       source: "gsc", format: (v) => v === null ? "—" : fmt.format(v), tooltip: "Clics orgánicos desde Google Search Console para esta URL." },
+  { key: "impressions", label: "Impresiones", source: "gsc", format: (v) => v === null ? "—" : fmt.format(v), tooltip: "Veces que esta URL apareció en resultados de Google." },
+  { key: "ctr",         label: "CTR",         source: "gsc", format: (v) => v === null ? "—" : `${v.toFixed(2)}%`, tooltip: "Click-Through Rate: % de impresiones que generaron clic. CTR bajo en buena posición = oportunidad de mejorar title/meta." },
+  { key: "position",    label: "Posición",    source: "gsc", format: (v) => v === null ? "—" : v.toFixed(1), tooltip: "Posición promedio de esta URL en Google. Posiciones 4–10 son oportunidades de mejora rápida." },
 ];
 
 function truncatePage(url: string, max = 50): string {
@@ -159,6 +161,7 @@ export function PagesTrafficTable({ clientId, initialData, hasGsc, hasGa4 }: Pro
                     onClick={() => handleSort(col.key)}
                   >
                     <span className="flex items-center justify-end gap-1">
+                      <InfoTooltip>{col.tooltip}</InfoTooltip>
                       {col.label}
                       {sortBy === col.key ? (
                         sortDir === "desc"

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { buttonVariants } from "@/components/ui/button";
+import { SectionIntro } from "@/components/ui-darkui";
 import { GscConnectSection } from "../GscConnectSection";
 import { GscQueriesTable } from "./GscQueriesTable";
 import { getGscQueries } from "../actions";
@@ -67,6 +68,11 @@ export default async function TerminosBusquedaPage({
             {client.domain} · Google Search Console
           </p>
         </div>
+
+        <SectionIntro className="mb-2">
+          Queries reales por las que el sitio aparece en Google, según Search Console. Ordena por Clics para ver tus mejores términos
+          o por Impresiones para detectar keywords con CTR bajo — esas son oportunidades de mejorar títulos y meta descriptions.
+        </SectionIntro>
 
         {!site?.gscProperty ? (
           <div className="bg-card rounded-xl border border-border p-6">

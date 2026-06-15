@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils";
+import { InfoTooltip } from "./InfoTooltip";
 
 interface KpiCardProps {
   label: string;
   value: string | number;
   delta?: React.ReactNode;
   icon?: React.ReactNode;
+  tooltip?: React.ReactNode;
   variant?: "default" | "highlighted";
   valueColor?: "default" | "green" | "orange" | "red" | "blue";
   className?: string;
@@ -23,6 +25,7 @@ export function KpiCard({
   value,
   delta,
   icon,
+  tooltip,
   variant = "default",
   valueColor = "default",
   className,
@@ -41,6 +44,7 @@ export function KpiCard({
         <div className="flex items-center gap-1.5 font-mono text-[0.68rem] text-muted-foreground uppercase tracking-[0.08em]">
           {icon && <span className="opacity-70">{icon}</span>}
           {label}
+          {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
         </div>
         {delta}
       </div>

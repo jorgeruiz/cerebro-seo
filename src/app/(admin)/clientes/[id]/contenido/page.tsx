@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ArrowLeft, Lightbulb } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { SectionIntro } from "@/components/ui-darkui";
 import { ContentPlanPanel } from "./ContentPlanPanel";
 import { getContentPlanHistory } from "./actions";
 import type { ContentPlanResult } from "@/lib/claude-content-plan";
@@ -64,6 +65,11 @@ export default async function ContenidoPage({
             {client.domain} · ideas de contenido SEO generadas con Claude, basadas en gaps, oportunidades GSC y estrategia del ciclo
           </p>
         </div>
+
+        <SectionIntro>
+          Claude analiza el estado SEO del cliente (gaps, oportunidades GSC, keywords near-top) y genera un plan editorial mensual priorizado.
+          Cada idea incluye keyword objetivo, intención de búsqueda, formato sugerido y justificación basada en datos reales.
+        </SectionIntro>
 
         {/* Panel principal */}
         <ContentPlanPanel

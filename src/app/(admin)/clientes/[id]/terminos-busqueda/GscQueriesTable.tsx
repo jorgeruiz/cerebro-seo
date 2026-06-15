@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { InfoTooltip } from "@/components/ui-darkui";
 import {
   Table,
   TableBody,
@@ -41,11 +42,11 @@ const COUNTRIES = [
   { value: "col", label: "Colombia" },
 ];
 
-const COLUMNS: { key: GscQueriesSortBy; label: string; align: "left" | "right" }[] = [
-  { key: "clicks",      label: "Clics",       align: "right" },
-  { key: "impressions", label: "Impresiones",  align: "right" },
-  { key: "ctr",         label: "CTR",          align: "right" },
-  { key: "position",    label: "Posición",     align: "right" },
+const COLUMNS: { key: GscQueriesSortBy; label: string; align: "left" | "right"; tooltip: string }[] = [
+  { key: "clicks",      label: "Clics",       align: "right", tooltip: "Clics orgánicos desde Google Search Console para esta query en el período seleccionado." },
+  { key: "impressions", label: "Impresiones",  align: "right", tooltip: "Veces que el sitio apareció en Google para esta query, aunque el usuario no haya hecho clic." },
+  { key: "ctr",         label: "CTR",          align: "right", tooltip: "Click-Through Rate: % de impresiones que generaron un clic. CTR bajo en buenas posiciones indica que el title/meta se puede mejorar." },
+  { key: "position",    label: "Posición",     align: "right", tooltip: "Posición promedio del sitio en Google para esta query. 1 = primer resultado orgánico." },
 ];
 
 export function GscQueriesTable({ clientId, initialData }: Props) {
@@ -172,6 +173,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
                   onClick={() => handleSort(col.key)}
                 >
                   <span className="flex items-center justify-end gap-1">
+                    <InfoTooltip>{col.tooltip}</InfoTooltip>
                     {col.label}
                     {sortBy === col.key ? (
                       sortDir === "desc"

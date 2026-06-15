@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import { ArrowLeft, BarChart3, TrendingDown } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionHeader, KpiCard } from "@/components/ui-darkui";
+import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { SovChart } from "./SovChart";
 import { TriggerCompetitorButton } from "./TriggerCompetitorButton";
 
@@ -148,6 +148,11 @@ export default async function CompetenciaPage({
           )}
         </div>
 
+        <SectionIntro>
+          Comparativa de Share of Voice, Domain Rank y keyword gaps vs. competidores. Los gaps son keywords donde la competencia rankea y el cliente no —
+          oportunidades directas de contenido. El análisis se ejecuta los días 1 y 15 de cada mes a las 7 AM.
+        </SectionIntro>
+
         {/* Empty state — sin competidores configurados */}
         {competitors.length === 0 && (
           <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center justify-center gap-4 text-center">
@@ -192,10 +197,12 @@ export default async function CompetenciaPage({
             />
             <KpiCard
               label="Total keyword gaps"
+              tooltip="Keywords donde al menos un competidor rankea y el cliente no — oportunidades directas de contenido."
               value={formatNum(totalGaps)}
             />
             <KpiCard
               label="Mayor SoV"
+              tooltip="Share of Voice: competidor con mayor % de presencia en el pool de keywords relevantes de Google."
               value={topCompetitor ? `${topCompetitor.domain.replace(/^www\./, "")} · ${topCompetitor.sov}%` : "—"}
             />
             <KpiCard
@@ -256,15 +263,16 @@ export default async function CompetenciaPage({
                     {snap ? (
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {[
-                          { label: "DR", value: snap.domainRank ?? "—" },
-                          { label: "Keywords rankeadas", value: snap.rankedKeywords != null ? formatNum(snap.rankedKeywords) : "—" },
-                          { label: "Tráfico estimado", value: snap.estimatedTraffic != null ? formatNum(snap.estimatedTraffic) : "—" },
-                          { label: "Keywords compartidas", value: snap.sharedKeywordsCount != null ? formatNum(snap.sharedKeywordsCount) : "—" },
-                          { label: "Gaps (ventaja)", value: snap.gapsCount != null ? formatNum(snap.gapsCount) : "—" },
-                        ].map(({ label, value }) => (
+                          { label: "DR", value: snap.domainRank ?? "—", tooltip: "Domain Rank (0–100): autoridad del dominio según su perfil de backlinks. Mayor = más difícil superar en rankings." },
+                          { label: "Keywords rankeadas", value: snap.rankedKeywords != null ? formatNum(snap.rankedKeywords) : "—", tooltip: undefined },
+                          { label: "Tráfico estimado", value: snap.estimatedTraffic != null ? formatNum(snap.estimatedTraffic) : "—", tooltip: undefined },
+                          { label: "Keywords compartidas", value: snap.sharedKeywordsCount != null ? formatNum(snap.sharedKeywordsCount) : "—", tooltip: undefined },
+                          { label: "Gaps (ventaja)", value: snap.gapsCount != null ? formatNum(snap.gapsCount) : "—", tooltip: "Keywords donde el competidor rankea y el cliente no — oportunidades de contenido." },
+                        ].map(({ label, value, tooltip }) => (
                           <div key={label}>
-                            <dt className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                            <dt className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                               {label}
+                              {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
                             </dt>
                             <dd className="font-mono text-sm font-medium text-foreground">
                               {value}
@@ -299,10 +307,16 @@ export default async function CompetenciaPage({
                       Keyword
                     </th>
                     <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-20">
-                      Volumen
+                      <span className="inline-flex items-center justify-center gap-1">
+                        <InfoTooltip>Búsquedas mensuales promedio para esta keyword en el mercado objetivo.</InfoTooltip>
+                        Volumen
+                      </span>
                     </th>
                     <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
-                      KD
+                      <span className="inline-flex items-center justify-center gap-1">
+                        <InfoTooltip>Keyword Difficulty (0–100): qué tan difícil es posicionarse. Verde ≤ 30, Amarillo 31–60, Rojo ≥ 61.</InfoTooltip>
+                        KD
+                      </span>
                     </th>
                     <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Intent

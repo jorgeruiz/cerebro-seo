@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { ArrowLeft, AlertCircle, TrendingUp, Trophy, Info, ArrowRight } from "lucide-react";
+import { SectionIntro } from "@/components/ui-darkui";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -99,6 +100,11 @@ export default async function InsightsListPage({
             {client.name} · historial completo
           </p>
         </div>
+
+        <SectionIntro>
+          Alertas, oportunidades y logros detectados automáticamente por el sistema SEO. Se generan cuando hay cambios significativos
+          en rankings, tráfico, backlinks o issues técnicos. Marca como resuelto cuando hayas actuado sobre el insight.
+        </SectionIntro>
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">

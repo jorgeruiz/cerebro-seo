@@ -6,6 +6,7 @@ import { ArrowLeft, Brain, MessageSquare } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { buttonVariants } from "@/components/ui/button";
 import { AeoResearchPanel } from "./AeoResearchPanel";
+import { SectionIntro } from "@/components/ui-darkui";
 import { getAeoResearchHistory } from "./actions";
 
 async function getPageData(clientId: string) {
@@ -64,6 +65,11 @@ export default async function AeoResearchPage({
             {client.domain} · clusters de preguntas clasificados para featured snippets (AEO) y motores de IA (GEO)
           </p>
         </div>
+
+        <SectionIntro>
+          Analiza preguntas de búsqueda relacionadas con las keywords del cliente y las agrupa en clusters.
+          Los clusters AEO son candidatos para featured snippets en Google; los GEO para ser citados en respuestas de ChatGPT, Perplexity o Gemini.
+        </SectionIntro>
 
         {/* Empty state — sin keywords de prioridad */}
         {seeds.length === 0 ? (

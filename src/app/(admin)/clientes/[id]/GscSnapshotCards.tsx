@@ -26,24 +26,28 @@ export function GscSnapshotCards({ snapshot }: Props) {
       <KpiCard
         icon={<MousePointerClick className="h-3 w-3" />}
         label="Clics orgánicos"
+        tooltip="Número de clics orgánicos recibidos desde Google Search Console en los últimos 28 días."
         value={snapshot.clicks.toLocaleString("es-MX")}
         delta={<DeltaBadge delta={snapshot.clicksDelta} />}
       />
       <KpiCard
         icon={<Eye className="h-3 w-3" />}
         label="Impresiones"
+        tooltip="Veces que el sitio apareció en resultados de Google, aunque el usuario no haya hecho clic."
         value={snapshot.impressions.toLocaleString("es-MX")}
         delta={<DeltaBadge delta={snapshot.impressionsDelta} />}
       />
       <KpiCard
         icon={<BarChart3 className="h-3 w-3" />}
         label="Posición prom."
+        tooltip="Posición promedio del sitio en Google para todas las queries donde aparece. Menor número = mejor posición."
         value={`#${snapshot.position}`}
         delta={<DeltaBadge delta={snapshot.positionDelta} lowerIsBetter />}
       />
       <KpiCard
         icon={<TrendingUp className="h-3 w-3" />}
         label="CTR"
+        tooltip="Click-Through Rate: porcentaje de usuarios que hicieron clic al ver el sitio en Google. CTR bajo en buenas posiciones indica oportunidad de mejorar titles y meta descriptions."
         value={`${snapshot.ctr}%`}
         delta={<DeltaBadge delta={snapshot.ctrDelta} />}
       />

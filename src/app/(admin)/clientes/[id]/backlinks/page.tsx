@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import { ArrowLeft, Link2, CheckCircle2, XCircle } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionHeader, KpiCard } from "@/components/ui-darkui";
+import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { BacklinksEvolutionChart } from "./BacklinksEvolutionChart";
 import { TriggerCrawlButton } from "./TriggerCrawlButton";
 
@@ -143,6 +143,11 @@ export default async function BacklinksPage({ params }: { params: { id: string }
           )}
         </div>
 
+        <SectionIntro>
+          Monitoreo del perfil de enlaces entrantes. Los backlinks de alta DA (≥50) son los más valiosos para el posicionamiento.
+          Perder backlinks importantes puede causar caídas de rankings — revisa los perdidos semanalmente. Crawl automático cada jueves a las 5 AM.
+        </SectionIntro>
+
         {/* Empty state */}
         {!hasAnyData && (
           <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center justify-center gap-4 text-center">
@@ -187,6 +192,7 @@ export default async function BacklinksPage({ params }: { params: { id: string }
             />
             <KpiCard
               label="DA promedio"
+              tooltip="Domain Authority promedio de los dominios que enlazan al sitio (0–100). Mayor = perfil de backlinks más fuerte."
               value={lastSnapshot.avgDomainRank !== null ? lastSnapshot.avgDomainRank.toFixed(1) : "—"}
             />
             <KpiCard
@@ -229,7 +235,10 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                         Dominio fuente
                       </th>
                       <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
-                        DA
+                        <span className="inline-flex items-center justify-center gap-1">
+                          <InfoTooltip>Domain Authority (0–100): autoridad del dominio fuente según su perfil de backlinks. ≥50 = alta autoridad.</InfoTooltip>
+                          DA
+                        </span>
                       </th>
                       <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3">
                         Anchor text

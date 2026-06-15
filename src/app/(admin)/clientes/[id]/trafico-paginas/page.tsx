@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getOAuth2Client } from "@/lib/google-oauth";
 import { buttonVariants } from "@/components/ui/button";
+import { SectionIntro } from "@/components/ui-darkui";
 import { GscConnectSection } from "../GscConnectSection";
 import { PagesTrafficTable } from "./PagesTrafficTable";
 import { getPagesTraffic } from "../actions";
@@ -109,6 +110,11 @@ export default async function TraficoPaginasPage({
             {hasGa4 && hasGsc ? "GA4 + GSC" : hasGa4 ? "GA4" : "GSC"}
           </p>
         </div>
+
+        <SectionIntro className="mb-2">
+          Combina GA4 (sesiones, usuarios, conversiones, rebote) con Search Console (clics, impresiones, CTR, posición) por URL.
+          Identifica páginas con buen posicionamiento pero CTR bajo — esas tienen el mayor potencial de mejora rápida con cambios en title/meta.
+        </SectionIntro>
 
         <PagesTrafficTable
           clientId={client.id}
