@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { logApiUsage, calculateClaudeCost } from "@/server/jobs/workers/base-worker";
@@ -179,7 +180,7 @@ export async function runAdvisorProcessor(params: {
   const anthropic = new Anthropic();
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: CLAUDE_MODEL,
     max_tokens: 1500,
     system: ADVISOR_SYSTEM_PROMPT,
     messages: [
@@ -241,7 +242,7 @@ export async function runAdvisorProcessor(params: {
     data: {
       clientId,
       steps: allSteps as unknown as import("@prisma/client").Prisma.InputJsonValue,
-      model: "claude-sonnet-4-6",
+      model: CLAUDE_MODEL,
       inputTokens: usage.input_tokens,
       outputTokens: usage.output_tokens,
       cost,

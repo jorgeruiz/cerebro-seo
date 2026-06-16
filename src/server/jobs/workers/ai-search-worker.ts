@@ -17,6 +17,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL_HAIKU } from "@/lib/anthropic-config";
 import { createWorker, logApiUsage, calculateClaudeCost } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { InsightType } from "@prisma/client";
@@ -26,7 +27,7 @@ interface AiSearchJobData {
 }
 
 // Modelo Haiku para minimizar costo — las queries son simples
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = CLAUDE_MODEL_HAIKU;
 
 // System prompt fijo — se beneficia del prompt caching automático de Anthropic
 const SYSTEM_PROMPT =

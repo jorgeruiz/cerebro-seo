@@ -8,6 +8,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
@@ -249,7 +250,7 @@ export async function generateContentPlan(
   const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: CLAUDE_MODEL,
     max_tokens: 3000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -283,7 +284,7 @@ export async function generateContentPlan(
       clientId,
       month,
       ideas: plan as unknown as Prisma.InputJsonValue,
-      model: "claude-sonnet-4-6",
+      model: CLAUDE_MODEL,
       inputTokens: usage.input_tokens,
       outputTokens: usage.output_tokens,
       cost: new Decimal(cost.toFixed(6)),

@@ -9,6 +9,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
@@ -116,7 +117,7 @@ export async function classifyAeoResearchEphemeral(
     .join("\n");
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: CLAUDE_MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
@@ -199,7 +200,7 @@ export async function classifyAeoResearchForClient(
   ].join("\n");
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: CLAUDE_MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
@@ -238,7 +239,7 @@ export async function classifyAeoResearchForClient(
       clientId,
       seeds,
       clusters: result as unknown as Prisma.InputJsonValue,
-      model: "claude-sonnet-4-6",
+      model: CLAUDE_MODEL,
       inputTokens: usage.input_tokens,
       outputTokens: usage.output_tokens,
       cost: new Decimal(cost.toFixed(6)),

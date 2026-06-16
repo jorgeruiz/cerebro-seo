@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { logApiUsage, calculateClaudeCost } from "../workers/base-worker";
@@ -397,7 +398,7 @@ export async function runInsightsProcessor(
   const anthropic = new Anthropic();
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: CLAUDE_MODEL,
     max_tokens: 2000,
     system: INSIGHTS_SYSTEM_PROMPT,
     messages: [
