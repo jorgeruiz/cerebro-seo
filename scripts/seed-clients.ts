@@ -9,25 +9,31 @@
  *   npx tsx scripts/seed-clients.ts
  */
 import { PrismaClient, SeoPlan, ClientStatus } from "@prisma/client";
-import { getClientsWithSeoActive } from "../src/lib/notion-direct";
+import { getClientsFromNotion } from "../src/lib/notion-direct";
+
+const ESTADO_MAP: Record<string, ClientStatus> = {
+  "Activo": ClientStatus.ACTIVE,
+  "En Pausa": ClientStatus.PAUSED,
+};
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("Leyendo clientes desde Notion...");
-  const clients = await getClientsWithSeoActive();
+  console.log("Leyendo clientes desde Notion (lista blanca: Activo + En Pausa)...");
+  const clients = await getClientsFromNotion();
 
   if (clients.length === 0) {
     console.log("⚠️  No se encontraron clientes. Verificar:");
     console.log("   1. La BD está compartida con la integración de Notion");
-    console.log("   2. El filtro 'Estado = Activo' coincide con los valores reales");
+    console.log("   2. El filtro 'Estado ∈ {Activo, En Pausa}' coincide con los valores reales");
     return;
   }
 
   console.log(`Encontrados ${clients.length} clientes:\n`);
 
   for (const client of clients) {
-    console.log(`→ ${client.name} (${client.domain})`);
+    const status = ESTADO_MAP[client.estado] ?? ClientStatus.PAUSED;
+    console.log(`→ ${client.name} (${client.domain}) [${client.estado}]`);
 
     const upserted = await prisma.client.upsert({
       where: { cerebroClientId: client.notionPageId },
@@ -36,12 +42,13 @@ async function main() {
         name: client.name,
         domain: client.domain,
         plan: SeoPlan.PRO,
-        status: ClientStatus.ACTIVE,
+        status,
         services: client.services,
       },
       update: {
         name: client.name,
         domain: client.domain,
+        status,
         services: client.services,
       },
     });

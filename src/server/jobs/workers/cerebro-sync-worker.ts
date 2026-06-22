@@ -1,92 +1,97 @@
 /**
- * Worker: Sync de clientes desde Cerebro web → Cerebro SEO.
+ * Worker: Sync de clientes desde Notion → Cerebro SEO.
  *
- * ESTADO: Construido pero NO schedulado (2026-05-20).
- * Bloqueador: los endpoints /api/internal/seo/* no existen todavía en Cerebro web.
- * Activar: descomentar el bloque TODO en schedulers.ts cuando los endpoints existan.
+ * Lee directamente de Notion (BD "Clientes Actuales") con lista blanca de Estado.
+ * Solo importa clientes con Estado ∈ {Activo, En Pausa}.
+ * Upsert por cerebroClientId (= notionPageId sin dashes).
+ * Clientes locales que ya no aparecen en el sync → status PAUSED (ocultos, no borrados).
  *
- * Frecuencia prevista: cada 6 horas.
+ * Frecuencia: cada 6 horas vía BullMQ scheduler.
  */
 import { Worker } from "bullmq";
 import { redisBullMQ } from "@/lib/redis";
 import { prisma } from "@/lib/db";
-import { fetchClientsFromCerebro } from "@/lib/cerebro-bridge";
-import { ClientStatus } from "@prisma/client";
+import { getClientsFromNotion } from "@/lib/notion-direct";
+import { ClientStatus, SeoPlan } from "@prisma/client";
+
+const ESTADO_MAP: Record<string, ClientStatus> = {
+  "Activo": ClientStatus.ACTIVE,
+  "En Pausa": ClientStatus.PAUSED,
+};
 
 const worker = new Worker(
   "sync",
   async (job) => {
     if (job.name !== "sync:cerebro") return;
 
-    console.log("[cerebro-sync] Starting client sync...");
+    console.log("[cerebro-sync] Starting client sync from Notion...");
     const start = Date.now();
 
-    const cerebroClients = await fetchClientsFromCerebro();
+    const notionClients = await getClientsFromNotion();
 
-    // Guardar contra falsos negativos: si Cerebro devuelve vacío, no borrar todo
-    if (cerebroClients.length === 0) {
-      console.warn("[cerebro-sync] Received empty client list — skipping to avoid mass inactive marking");
+    // Guard: si Notion devuelve vacío, no desactivar todo — posible error de API
+    if (notionClients.length === 0) {
+      console.warn("[cerebro-sync] Received empty client list from Notion — skipping to avoid mass deactivation");
       await prisma.jobLog.create({
         data: { jobName: "sync:cerebro", status: "success", attempts: 1 },
       });
       return;
     }
 
-    const cerebroIds = cerebroClients.map((c) => c.id);
+    const notionIds = notionClients.map((c) => c.notionPageId);
     let created = 0;
     let updated = 0;
     let deactivated = 0;
 
-    // Upsert cada cliente recibido desde Cerebro
-    for (const cc of cerebroClients) {
+    // Upsert cada cliente por cerebroClientId (= notionPageId)
+    for (const nc of notionClients) {
+      const status = ESTADO_MAP[nc.estado] ?? ClientStatus.PAUSED;
+
       const existing = await prisma.client.findUnique({
-        where: { cerebroClientId: cc.id },
+        where: { cerebroClientId: nc.notionPageId },
         include: { sites: { take: 1 } },
       });
-
-      const status = cc.status === "active" ? ClientStatus.ACTIVE : ClientStatus.PAUSED;
 
       if (!existing) {
         // Crear nuevo cliente + site
         await prisma.client.create({
           data: {
-            cerebroClientId: cc.id,
-            name: cc.name,
-            domain: cc.domain,
-            plan: "BASIC",
+            cerebroClientId: nc.notionPageId,
+            name: nc.name,
+            domain: nc.domain,
+            plan: SeoPlan.BASIC,
             status,
-            services: cc.services,
+            services: nc.services,
             sites: {
               create: {
-                url: `https://${cc.domain}`,
-                // gscProperty y ga4Property: NO se pisan si vienen de Cerebro
-                // (configuración SEO-específica que vive solo en Cerebro SEO)
-                gscProperty: cc.gscProperty ?? null,
-                ga4Property: cc.ga4Property ?? null,
+                url: nc.domain.startsWith("http") ? nc.domain : `https://${nc.domain}`,
+                gscProperty: nc.gscProperty ?? null,
+                ga4Property: nc.ga4PropertyId ?? null,
               },
             },
           },
         });
         created++;
       } else {
-        // Actualizar solo campos que viven en Cerebro — NO tocar gscProperty/ga4Property locales
+        // Actualizar campos que viven en Notion — NO tocar gscProperty/ga4Property locales
         await prisma.client.update({
-          where: { cerebroClientId: cc.id },
+          where: { cerebroClientId: nc.notionPageId },
           data: {
-            name: cc.name,
-            domain: cc.domain,
+            name: nc.name,
+            domain: nc.domain,
             status,
-            services: cc.services,
+            services: nc.services,
           },
         });
         updated++;
       }
     }
 
-    // Marcar como inactive los locales que ya no aparecen en Cerebro
+    // Ocultar clientes locales que ya no pasan el filtro de Notion
+    // (pasaron a Cancelado, Proyecto, Consultoría, o fueron eliminados)
     const { count } = await prisma.client.updateMany({
       where: {
-        cerebroClientId: { not: null, notIn: cerebroIds },
+        cerebroClientId: { not: null, notIn: notionIds },
         status: ClientStatus.ACTIVE,
       },
       data: { status: ClientStatus.PAUSED },
@@ -95,7 +100,7 @@ const worker = new Worker(
 
     const durationMs = Date.now() - start;
     console.log(
-      `[cerebro-sync] Done in ${durationMs}ms — created: ${created}, updated: ${updated}, deactivated: ${deactivated}`
+      `[cerebro-sync] Done in ${durationMs}ms — ${notionClients.length} from Notion, created: ${created}, updated: ${updated}, deactivated: ${deactivated}`
     );
 
     await prisma.jobLog.create({

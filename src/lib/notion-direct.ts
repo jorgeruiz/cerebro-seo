@@ -41,10 +41,16 @@ function toServiceSlug(notionValue: string): string {
   return mapped;
 }
 
+export type NotionEstado = "Activo" | "En Pausa";
+
+/** Estados de Notion que se importan a Cerebro SEO (lista blanca). */
+export const ESTADOS_PERMITIDOS: readonly NotionEstado[] = ["Activo", "En Pausa"] as const;
+
 export interface SeededClient {
   notionPageId: string;
   name: string;
   domain: string;
+  estado: NotionEstado;           // "Activo" | "En Pausa"
   gscProperty: string | null;    // ej: "sc-domain:ejemplo.mx" o "https://www.ejemplo.mx/"
   ga4PropertyId: string | null;  // ej: "123456789" (solo el número)
   services: string[];            // slugs normalizados: ["seo", "google_ads", ...]
@@ -65,13 +71,19 @@ function isFullPage(result: QueryResult): result is PageObjectResponse {
   return result.object === "page" && "properties" in result;
 }
 
-export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
+/**
+ * Lee clientes de Notion filtrando por lista blanca de Estado (Activo, En Pausa).
+ * Cancelado, Proyecto, Consultoría y cualquier otro valor se excluyen.
+ */
+export async function getClientsFromNotion(): Promise<SeededClient[]> {
   // Nota v5: databases.query → dataSources.query, database_id → data_source_id
   const response = await notion.dataSources.query({
     data_source_id: DB_ID,
     filter: {
-      property: "Estado",
-      select: { equals: "Activo" },
+      or: ESTADOS_PERMITIDOS.map((estado) => ({
+        property: "Estado",
+        select: { equals: estado },
+      })),
     },
   });
 
@@ -81,6 +93,13 @@ export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
       const props = page.properties;
 
       const name = extractText(props["Name"]) || "Sin nombre";
+
+      // Estado de Notion — ya filtrado por lista blanca
+      const estadoProp = props["Estado"];
+      const estadoRaw =
+        estadoProp?.type === "select" ? estadoProp.select?.name : undefined;
+      const estado: NotionEstado =
+        estadoRaw === "En Pausa" ? "En Pausa" : "Activo";
 
       // Derivar dominio desde la URL de Search Console
       const gscRaw = extractText(props["Search Console URL"]);
@@ -112,9 +131,13 @@ export async function getClientsWithSeoActive(): Promise<SeededClient[]> {
         notionPageId: page.id.replace(/-/g, ""),
         name,
         domain,
+        estado,
         gscProperty: gscProperty || null,
         ga4PropertyId: ga4PropertyId || null,
         services,
       };
     });
 }
+
+/** @deprecated Use getClientsFromNotion(). Kept for backward compat in seed script. */
+export const getClientsWithSeoActive = getClientsFromNotion;

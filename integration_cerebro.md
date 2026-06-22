@@ -85,28 +85,27 @@ DÍA 1 DEL MES                                    DÍA 30 DEL MES
 
 ## 4. Mecanismos de comunicación
 
-### 4.1 Sync de clientes (Cerebro → Cerebro SEO)
-**Frecuencia:** Cada 6 horas vía job programado, o on-demand.
-**Mecanismo:** REST endpoint en Cerebro:
-```
-GET /api/internal/seo/clients
-Authorization: Bearer ${CEREBRO_INTERNAL_SECRET}
+### 4.1 Sync de clientes (Notion → Cerebro SEO)
+**Frecuencia:** Cada 6 horas vía job programado (`sync:cerebro`), o on-demand (`scripts/seed-clients.ts`).
+**Mecanismo:** Lectura directa a Notion API (BD "Clientes Actuales") via `src/lib/notion-direct.ts`.
 
-Response:
-[
-  {
-    "id": "notion-page-id",
-    "name": "Cliente XYZ",
-    "domain": "xyz.com",
-    "status": "active",
-    "services": ["seo", "google_ads"],
-    "gscProperty": "sc-domain:xyz.com",
-    "ga4Property": "properties/123456789"
-  }
-]
-```
+**Filtro de Estado (lista blanca):**
+- Solo importa clientes con `Estado ∈ {Activo, En Pausa}`.
+- Cancelado, Proyecto, Consultoría y cualquier otro valor NO pasan.
+- Es lista BLANCA (solo pasa lo permitido), NO lista negra — si agregan un estado nuevo en Notion, no se cuela.
 
-Cerebro SEO actualiza/inserta/marca como inactivo según resultado.
+**Upsert por cerebroClientId:**
+- `cerebroClientId` = Notion page ID (sin dashes). Campo `@unique` en modelo Client.
+- Si el cliente ya existe → actualiza name, domain, status, services. NO toca gscProperty/ga4Property (configuración local de Cerebro SEO).
+- Si no existe → crea Client + Site asociado.
+
+**Ocultamiento al salir del filtro:**
+- Clientes locales cuyo `cerebroClientId` ya no aparece en el sync → `status: PAUSED` (ocultos de todas las vistas y workers).
+- NO se borran — el historial (insights, rankings, etc.) se preserva.
+- Si el cliente se reactiva en Notion (vuelve a Activo/En Pausa), el siguiente sync lo restaura automáticamente.
+
+**Guard contra falsos negativos:**
+- Si Notion devuelve 0 clientes (posible error de API), el sync se salta sin desactivar nadie.
 
 ### 4.2 Sync de tareas (Cerebro → Cerebro SEO)
 **Frecuencia:** Cada 15 minutos.
