@@ -196,6 +196,7 @@ async function main() {
       `ANTHROPIC_API_KEY=${localEnv.ANTHROPIC_API_KEY}`,
       `NOTION_API_KEY=${localEnv.NOTION_API_KEY}`,
       `SEO_INTERNAL_SECRET=${localEnv.SEO_INTERNAL_SECRET ?? ""}`,
+      `SEO_EMBED_TOKEN_SECRET=${localEnv.SEO_EMBED_TOKEN_SECRET ?? ""}`,
     ].join("\n");
 
     const envResult = await trpcPost(token, "services.app.updateEnv", {

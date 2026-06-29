@@ -47,6 +47,13 @@ const envSchema = z.object({
   // Ejemplo: "clxyz123abc,clxyz456def,clxyz789ghi"
   INSIGHTS_PILOT_CLIENT_IDS: z.string().optional(),
 
+  // Embed token signing — firma tokens de vida corta para embeber reportes en Constructor.
+  // Canónico en Bitwarden, sincronizar a .env.local y Easypanel.
+  SEO_EMBED_TOKEN_SECRET: z.string().min(1),
+
+  // Internal secret — guard Bearer para endpoints internos (Constructor, Cerebro bridge).
+  SEO_INTERNAL_SECRET: z.string().min(1),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])
