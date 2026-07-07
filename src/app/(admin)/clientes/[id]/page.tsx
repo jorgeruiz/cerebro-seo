@@ -10,21 +10,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  TrendingUp,
-  Search,
-  Link2,
-  BarChart3,
-  Calendar,
-  Zap,
   Activity,
-  FileSearch,
-  FileText,
-  Lightbulb,
   Settings,
-  Lock,
-  Sparkles,
-  Brain,
-  ClipboardList,
 } from "lucide-react";
 import { ClientPortadaChart } from "./ClientPortadaChart";
 import { GscConnectSection } from "./GscConnectSection";
@@ -95,26 +82,6 @@ const CYCLE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
   CLOSED: { label: "Cerrado", color: "bg-muted border-border text-muted-foreground" },
 };
 
-const MODULES = [
-  // active: true = módulo implementado y linkeable
-  // requiresSeo: false = disponible para todos los clientes activos
-  // requiresSeo: true  = solo clientes con servicio SEO contratado
-  { label: "Términos de búsqueda", icon: Search,     href: "terminos-busqueda", color: "text-ds-blue",        requiresSeo: false, active: true  },
-  { label: "AI Search Visibility", icon: Zap,         href: "ai-search",         color: "text-ds-yellow",      requiresSeo: true,  active: true  },
-  { label: "SEO Opportunities",    icon: TrendingUp,  href: "oportunidades",     color: "text-ds-green",       requiresSeo: true,  active: true  },
-  { label: "Keywords objetivo",    icon: TrendingUp,  href: "keywords",          color: "text-primary",        requiresSeo: true,  active: true  },
-  { label: "Tráfico de páginas",   icon: Activity,    href: "trafico-paginas",   color: "text-ds-blue",        requiresSeo: false, active: true  },
-  { label: "Eventos",              icon: Calendar,    href: "timeline",          color: "text-ds-orange",      requiresSeo: false, active: true  },
-  { label: "Site Audit",           icon: FileSearch,  href: "audit",             color: "text-destructive",    requiresSeo: false, active: true  },
-  { label: "Competencia",          icon: BarChart3,   href: "competencia",       color: "text-ds-yellow",      requiresSeo: true,  active: true  },
-  { label: "Backlinks",            icon: Link2,       href: "backlinks",         color: "text-ds-blue",        requiresSeo: true,  active: true  },
-  { label: "Análisis Claude",      icon: Sparkles,    href: "analisis",          color: "text-primary",        requiresSeo: true,  active: true  },
-  { label: "Reporte Mensual",      icon: FileText,    href: "reporte",           color: "text-ds-blue",        requiresSeo: true,  active: true  },
-  { label: "Keyword Ideas",        icon: Lightbulb,   href: "keyword-ideas",     color: "text-ds-yellow",      requiresSeo: true,  active: true  },
-  { label: "Plan de Contenido",    icon: Lightbulb,   href: "contenido",         color: "text-ds-green",       requiresSeo: true,  active: true  },
-  { label: "AEO Research",         icon: Brain,       href: "aeo-research",      color: "text-ds-yellow",      requiresSeo: true,  active: true  },
-  { label: "Portapapeles",         icon: ClipboardList, href: "portapapeles",    color: "text-ds-orange",      requiresSeo: false, active: true  },
-];
 
 export default async function ClienteDetallePage({
   params,
@@ -433,57 +400,6 @@ export default async function ClienteDetallePage({
           </div>
         </section>
 
-        {/* Los 9 módulos */}
-        <section>
-          <SectionHeader>Módulos de análisis</SectionHeader>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {MODULES.map(({ label, icon: Icon, href, color, requiresSeo, active }) => {
-              const locked = requiresSeo && !hasSeo;
-              const moduleUrl = `/clientes/${client.id}/${href}`;
-
-              const inner = (
-                <>
-                  <div className="flex items-center justify-between w-full">
-                    <div className={`h-8 w-8 rounded-lg bg-muted flex items-center justify-center ${locked ? "text-muted-foreground/30" : color}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    {locked && <Lock className="h-3 w-3 text-muted-foreground/30 shrink-0" />}
-                  </div>
-                  <span className={`text-xs font-medium leading-tight ${locked ? "text-muted-foreground/40" : "text-foreground"}`}>{label}</span>
-                </>
-              );
-
-              if (active && !locked) {
-                return (
-                  <Link
-                    key={href}
-                    href={moduleUrl}
-                    className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all duration-150 hover:border-primary/40 hover:bg-card"
-                  >
-                    {inner}
-                  </Link>
-                );
-              }
-
-              return (
-                <button
-                  key={href}
-                  className={[
-                    "flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all duration-150",
-                    locked ? "cursor-not-allowed opacity-40" : "cursor-not-allowed opacity-50",
-                  ].join(" ")}
-                  disabled
-                  title={locked ? "Este cliente no tiene servicio SEO contratado." : "Disponible próximamente"}
-                >
-                  {inner}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground/60 mt-3 text-center font-mono">
-            Los módulos restantes se activarán conforme avance la Fase 2.
-          </p>
-        </section>
       </div>
     </div>
   );

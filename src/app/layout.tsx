@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Syne, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/layout/SessionProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -40,7 +41,11 @@ export default function RootLayout({
       className={`dark ${syne.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="font-sans antialiased bg-background text-foreground">
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+        </SessionProvider>
       </body>
     </html>
   );

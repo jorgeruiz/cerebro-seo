@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-06-15 (Sesión 39 — Primer deploy completo de producción ✅)
+**Última actualización:** 2026-07-07 (Sesión 42 — Doble sidebar + colapso del main nav)
 **Fase actual:** Post-Fase 4 — nuevos módulos + pulido
-**Próximo hito:** Verificar login Google OAuth en producción con dominio real
+**Próximo hito:** Ejecutar cleanup-and-resync en producción, verificar cero duplicados
 
 ---
 
@@ -45,6 +45,15 @@ Las variables de entorno estaban vacías en Easypanel — root cause del 502. En
 
 **✅ Verificado:** Login Google OAuth funcionando. Jorge (ADMIN) y Felix (EDITOR) son los 2 usuarios existentes..
 
+### 🟡 Deuda operativa: Ejecutar cleanup-and-resync en producción (Sesión 41)
+
+La tabla Client tiene 160 registros basura (duplicados del sync viejo). El fix ya está desplegado (`451d55f`), pero falta ejecutar la limpieza + resync en producción:
+1. `docker exec <app-container> npx tsx scripts/cleanup-and-resync.ts`
+2. Verificar: `SELECT COUNT(*), COUNT(DISTINCT "cerebroClientId") FROM "Client"` → iguales
+3. Correr sync una segunda vez para confirmar que no duplica
+
+Backup ya realizado (2026-06-22). Sin riesgo de pérdida de datos — la verdad vive en Notion.
+
 ### 🟡 Deuda de seguridad: Secrets en imagen Docker
 
 El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel logs y capas de imagen pueden exponer metadata de los ARGs. Refactorizar a runtime-only vars en sesión futura (no urgente, los placeholders no son los secrets reales).
@@ -69,7 +78,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Next.js + TypeScript | ✅ Completo | App Router, Tailwind, shadcn base-nova |
 | Prisma schema | ✅ Completo | Todos los modelos + NextAuth (ADMIN/EDITOR) + JobLog |
 | Auth (NextAuth) | ✅ Completo | Google OAuth + JWT strategy + roles. Validado en producción: `https://seo.clicksociety.com.mx` |
-| Layout + branding | ✅ Completo | Sidebar, gradiente Click Society |
+| Layout + branding | ✅ Completo | Main sidebar colapsable + ClientSidebar contextual por cliente. Gradiente Click Society |
 | App arranca con BD real | ✅ Verificado | `npm run dev` → 307 redirect a `/api/auth/signin` (correcto) |
 | Sistema de multiagentes | ✅ Completo | 3 queues BullMQ, base-worker, InsightsAgent con prompt caching |
 | Listado de clientes | ✅ Completo | Grid con alertas, tareas, estado del ciclo |
@@ -364,7 +373,8 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Bloqueador | Dueño | Acción requerida |
 |---|---|---|
 | ~~Validación acceso Félix~~ | ~~Resuelto~~ | **RESUELTO (Sesión 31).** Fix en `session` callback de `auth.ts` — ADMIN_EMAILS re-evaluado en cada request. No requiere re-login. |
-| ~~Workers de sync Cerebro~~ | ~~Automático~~ | **RESUELTO (Sesión 16).** Workers `sync:cerebro` (6h) y `sync:cerebro-tasks` (15min) activos en producción. Verificar `JobLog` en Sesión 17. |
+| ~~Workers de sync Cerebro~~ | ~~Resuelto~~ | **RESUELTO (Sesión 16).** Workers activos. **Fix Sesión 41:** sync reescrito con lista blanca + upsert + ocultamiento. Causa raíz de 160 duplicados identificada y corregida. |
+| **Cleanup producción (Sesión 41)** | Jorge | Ejecutar `npx tsx scripts/cleanup-and-resync.ts` en contenedor app. Backup ya hecho. Deploy `451d55f` activo. |
 | Postgres password pendiente | Sesión coordinada | Compartido con cerebro-web — no rotar solo en Cerebro SEO. |
 | Validar calidad de insights (**en curso**) | Félix (1-2 semanas) | Insights reales generados y verificados visualmente en producción (Sesión 17). Félix debe revisar si son accionables. Si sí → expandir a 12 SEO (borrar `INSIGHTS_PILOT_CLIENT_IDS` de Easypanel). |
 
@@ -385,6 +395,63 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 42 — 2026-07-07 ✅ COMPLETA (Doble sidebar + colapso del main nav)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Navegación reorganizada. Build limpio.
+
+**Cambios realizados:**
+1. **Main Sidebar colapsable** (`Sidebar.tsx`): botón toggle collapse/expand. Colapsado muestra solo íconos con tooltips. Estado persistido en localStorage vía `useSidebarCollapse` hook. Transición suave con CSS transitions.
+2. **ClientSidebar contextual** (`ClientSidebar.tsx`): sidebar secundario dentro de `clientes/[id]/layout.tsx`. Análisis Claude como item destacado. 4 grupos colapsables (Diagnóstico, Oportunidades, Estrategia, Config). Lock icon + tooltip para módulos sin servicio SEO. Footer con accesos rápidos a Configuración y Portapapeles (con badge de count).
+3. **Mobile**: ClientSidebar colapsa a Sheet/drawer (breakpoint `lg`). FAB flotante abre el drawer.
+4. **Portada limpia**: eliminado el grid de tarjetas de módulos de `clientes/[id]/page.tsx`. La portada queda: header + NextStepsPanel + GSC snapshot + gráfica + GA4 + Insights + operativa del mes.
+5. **Infra**: instalados componentes shadcn `tooltip` y `sheet`. TooltipProvider agregado al root layout.
+
+**Archivos creados:**
+- `src/hooks/useSidebarCollapse.ts`
+- `src/components/layout/ClientSidebar.tsx`
+- `src/components/ui/tooltip.tsx` (shadcn)
+- `src/components/ui/sheet.tsx` (shadcn)
+
+**Archivos modificados:**
+- `src/components/layout/Sidebar.tsx` — reescrito con collapse support
+- `src/app/(admin)/clientes/[id]/layout.tsx` — monta ClientSidebar + pasa servicios
+- `src/app/(admin)/clientes/[id]/page.tsx` — eliminado MODULES grid y imports no usados
+- `src/app/layout.tsx` — agregado TooltipProvider
+
+### Sesión 41 — 2026-06-22 ✅ COMPLETA (Fix sync clientes + limpieza duplicados)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Sync corregido. Commit `451d55f` desplegado. Pendiente: ejecutar cleanup-and-resync en producción.
+
+**Problema:** La tabla Client tenía 160 registros basura (42 del seed original + 118 del sync). Duplicados por nombre con IDs distintos. Los clientes duplicados vacíos aparecían en la lista, causando confusión (parecía que se habían perdido insights/datos).
+
+**Causa raíz:** El worker de sync (`cerebro-sync-worker.ts`) tenía 3 defectos:
+1. Insert ciego sin upsert → duplicaba en cada corrida
+2. No filtraba por estado de Notion → traía TODO (Cancelado, Proyecto, etc.)
+3. No ocultaba clientes que salían del filtro
+
+**Fix aplicado:**
+1. `notion-direct.ts`: filtro lista blanca `Estado ∈ {Activo, En Pausa}` — Cancelado/Proyecto/Consultoría no pasan. Lista blanca, no negra (estados nuevos en Notion no se cuelan).
+2. `cerebro-sync-worker.ts`: lee Notion directamente (no bridge Cerebro web). Upsert por `cerebroClientId`. Clientes que salen del filtro → `status: PAUSED` (ocultos, no borrados).
+3. `seed-clients.ts`: actualizado con nuevo `getClientsFromNotion()` y mapeo de estado.
+4. `scripts/cleanup-and-resync.ts`: script para vaciar duplicados y repoblar limpio (20+ tablas hijas borradas en orden de FK).
+5. Tests: 4/4 pasan (nuevo test para "En Pausa").
+
+**Regla de negocio documentada:** Campo "Estado" en Notion → solo lista blanca {Activo, En Pausa}. El resync actualiza name/domain/status/services pero NUNCA toca gscProperty, ga4Property, keywords ni competidores (configuración local de Cerebro SEO).
+
+**Verificación pendiente en producción:**
+- Ejecutar `npx tsx scripts/cleanup-and-resync.ts` en contenedor de la app
+- Confirmar: `SELECT COUNT(*), COUNT(DISTINCT "cerebroClientId") FROM "Client"` → iguales, ~42
+- Correr sync una segunda vez → count no cambia (upsert funciona)
+
+**Diagnóstico adicional realizado esta sesión:**
+- Endpoint `/api/internal/constructor/metrics` existe pero estaba sin commitear (untracked). No se commiteó en esta sesión — es trabajo separado para Constructor.
+- Provider GA4 de Cerebro SEO es autónomo (conexión directa a Google APIs, OAuth propio, property IDs propios). No depende de Cerebro madre para métricas.
+- Insights SÍ existen en la BD (1,566 registros). El "sin insights pendientes" era porque el usuario estaba viendo clientes duplicados vacíos, no los originales con datos.
+
+**Costo de APIs:** $0 (sin llamadas a DataForSEO ni Claude).
+
+---
 
 ### Sesión 40 — 2026-06-15 ✅ COMPLETA (Fix DATABASE_URL → BD real con 42 clientes)
 **Participantes:** Jorge + Claude Code
