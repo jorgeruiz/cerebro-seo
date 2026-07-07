@@ -10,7 +10,37 @@
   }
 }
 
+/* ── Scrollbar sutil para dark theme ─────────────────────────── */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.280 0.004 106) transparent;
+}
+
+/* Chrome / Safari / Edge */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.280 0.004 106);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.360 0.006 106);
+}
+
 @layer base {
+  html {
+    font-size: 18px; /* base 18px — escala todos los rem ~+2px sobre el default 16px */
+  }
+
   .theme {
     --font-heading: var(--font-display);
     --font-sans: var(--font-body);
