@@ -306,7 +306,7 @@ export async function generateClientAnalysis(
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 2000,
+    max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -318,20 +318,52 @@ export async function generateClientAnalysis(
 
   const rawText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
 
-  // Parsear JSON — si falla, retornar estructura mínima
+  // Parsear JSON — si falla, intentar reparar JSON truncado
   let analysis: AnalysisResult;
   try {
     // Claude a veces envuelve el JSON en ```json ... ``` — limpiar
     const jsonStr = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     analysis = JSON.parse(jsonStr) as AnalysisResult;
   } catch {
-    analysis = {
-      resumenEjecutivo: rawText.slice(0, 300),
-      oportunidades: [],
-      riesgos: [],
-      recomendaciones: [],
-      conclusionEstrategica: "",
-    };
+    // Intentar reparar JSON truncado cerrando llaves/corchetes abiertos
+    let repaired = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    // Contar llaves/corchetes sin cerrar
+    let braces = 0, brackets = 0;
+    let inString = false, escape = false;
+    for (const ch of repaired) {
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === "{") braces++;
+      else if (ch === "}") braces--;
+      else if (ch === "[") brackets++;
+      else if (ch === "]") brackets--;
+    }
+    // Cerrar string abierto si es necesario
+    if (inString) repaired += '"';
+    // Truncar último valor incompleto y cerrar estructuras
+    repaired = repaired.replace(/,\s*$/, "");
+    for (let i = 0; i < brackets; i++) repaired += "]";
+    for (let i = 0; i < braces; i++) repaired += "}";
+
+    try {
+      analysis = JSON.parse(repaired) as AnalysisResult;
+      // Asegurar campos mínimos
+      analysis.resumenEjecutivo ??= "";
+      analysis.oportunidades ??= [];
+      analysis.riesgos ??= [];
+      analysis.recomendaciones ??= [];
+      analysis.conclusionEstrategica ??= "";
+    } catch {
+      analysis = {
+        resumenEjecutivo: rawText.slice(0, 500),
+        oportunidades: [],
+        riesgos: [],
+        recomendaciones: [],
+        conclusionEstrategica: "",
+      };
+    }
   }
 
   // Costos
