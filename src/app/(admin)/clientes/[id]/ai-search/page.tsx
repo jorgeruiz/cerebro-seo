@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard } from "@/components/ui-darkui";
 import { AiVisibilityChart } from "./AiVisibilityChart";
 import { TriggerAiSearchButton } from "./TriggerAiSearchButton";
+import { AiSearchClipboardButton } from "./AiSearchClipboardButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -271,6 +272,7 @@ export default async function AiSearchPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="w-10 px-2 py-3" />
                     <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                       Query
                     </th>
@@ -291,6 +293,14 @@ export default async function AiSearchPage({
                       key={rec.id}
                       className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${i % 2 === 0 ? "" : "bg-muted/10"}`}
                     >
+                      <td className="px-2 py-3">
+                        <AiSearchClipboardButton
+                          query={rec.query}
+                          mentioned={rec.mentioned}
+                          position={rec.position}
+                          context={rec.context}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className="text-xs text-foreground max-w-[280px] truncate block"

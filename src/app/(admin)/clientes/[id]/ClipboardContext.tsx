@@ -19,7 +19,16 @@ import {
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 
-export type ClipboardItemType = "keyword" | "aeo_cluster" | "content_idea";
+export type ClipboardItemType =
+  | "keyword"
+  | "aeo_cluster"
+  | "content_idea"
+  | "opportunity"
+  | "audit_issue"
+  | "competitor_gap"
+  | "search_term"
+  | "backlink_action"
+  | "ai_visibility";
 
 export interface ClipboardItem {
   id: string;

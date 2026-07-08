@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { BacklinksEvolutionChart } from "./BacklinksEvolutionChart";
 import { TriggerCrawlButton } from "./TriggerCrawlButton";
+import { BacklinkClipboardButton } from "./BacklinkClipboardButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -335,6 +336,12 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          <BacklinkClipboardButton
+                            sourceDomain={bl.sourceDomain}
+                            domainAuthority={bl.domainAuthority}
+                            anchorText={bl.anchorText}
+                            status="gained"
+                          />
                           {bl.domainAuthority !== null && (
                             <span className={`font-mono text-[0.7rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
                               DA {bl.domainAuthority}
@@ -373,6 +380,12 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          <BacklinkClipboardButton
+                            sourceDomain={bl.sourceDomain}
+                            domainAuthority={bl.domainAuthority}
+                            anchorText={bl.anchorText}
+                            status="lost"
+                          />
                           {bl.domainAuthority !== null && (
                             <span className={`font-mono text-[0.7rem] px-1.5 py-0.5 rounded border ${daBadgeClass(bl.domainAuthority)}`}>
                               DA {bl.domainAuthority}

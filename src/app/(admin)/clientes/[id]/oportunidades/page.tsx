@@ -23,6 +23,7 @@ import {
   type SeoOpportunity,
   type OpportunityType,
 } from "@/lib/seo-opportunities";
+import { OpportunityClipboardButton } from "./OpportunityClipboardButton";
 
 // ─── Helpers visuales ─────────────────────────────────────────────────────────
 
@@ -62,11 +63,23 @@ function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
               : "—"}
           </p>
         </div>
-        <span
-          className={`shrink-0 font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${priorityBadge(opp.priority)}`}
-        >
-          {opp.priority}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <OpportunityClipboardButton
+            label={opp.label}
+            action={opp.action}
+            priority={opp.priority}
+            keyword={opp.keyword}
+            url={opp.url}
+            position={opp.position}
+            impressions={opp.impressions}
+            ctr={opp.ctr}
+          />
+          <span
+            className={`font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${priorityBadge(opp.priority)}`}
+          >
+            {opp.priority}
+          </span>
+        </div>
       </div>
 
       {/* Métricas */}

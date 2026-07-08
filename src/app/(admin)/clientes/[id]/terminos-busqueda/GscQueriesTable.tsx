@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ChevronUp, ChevronDown, Loader2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui-darkui";
+import { QueryClipboardButton } from "./QueryClipboardButton";
 import {
   Table,
   TableBody,
@@ -165,7 +166,8 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-xs font-mono text-muted-foreground py-3 pl-4">Query</TableHead>
+              <TableHead className="w-10 py-3 pl-3" />
+              <TableHead className="text-xs font-mono text-muted-foreground py-3 pl-2">Query</TableHead>
               {COLUMNS.map((col) => (
                 <TableHead
                   key={col.key}
@@ -191,7 +193,8 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
             {isPending ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i} className="border-border/50">
-                  <TableCell className="pl-4 py-2.5">
+                  <TableCell className="pl-3 py-2.5 w-10" />
+                  <TableCell className="pl-2 py-2.5">
                     <div className="h-3.5 bg-muted rounded animate-pulse w-48" />
                   </TableCell>
                   {COLUMNS.map((col) => (
@@ -203,14 +206,23 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
               ))
             ) : queries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
                   Sin queries para los filtros seleccionados
                 </TableCell>
               </TableRow>
             ) : (
               queries.map((row, i) => (
                 <TableRow key={i} className="border-border/50 hover:bg-muted/30">
-                  <TableCell className="pl-4 py-2.5 text-sm text-foreground font-medium max-w-xs truncate">
+                  <TableCell className="pl-3 py-2.5 w-10">
+                    <QueryClipboardButton
+                      query={row.query}
+                      clicks={row.clicks}
+                      impressions={row.impressions}
+                      ctr={row.ctr}
+                      position={row.position}
+                    />
+                  </TableCell>
+                  <TableCell className="pl-2 py-2.5 text-sm text-foreground font-medium max-w-xs truncate">
                     {row.query}
                   </TableCell>
                   <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">

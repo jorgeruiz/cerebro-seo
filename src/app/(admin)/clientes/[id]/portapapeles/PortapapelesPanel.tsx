@@ -19,31 +19,43 @@ import { cn } from "@/lib/utils";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<string, string> = {
-  keyword:      "Keywords",
-  aeo_cluster:  "Temas AEO/GEO",
-  content_idea: "Ideas de contenido",
+  opportunity:     "SEO Opportunities",
+  audit_issue:     "Issues técnicos",
+  competitor_gap:  "Gaps competitivos",
+  search_term:     "Términos de búsqueda",
+  backlink_action: "Backlinks",
+  ai_visibility:   "AI Visibility",
+  keyword:         "Keywords",
+  aeo_cluster:     "Temas AEO/GEO",
+  content_idea:    "Ideas de contenido",
+};
+
+const TYPE_ORDER: string[] = [
+  "opportunity", "audit_issue", "competitor_gap", "search_term",
+  "backlink_action", "ai_visibility", "keyword", "aeo_cluster", "content_idea",
+];
+
+const SECTION_TITLES: Record<string, string> = {
+  opportunity:     "Oportunidades SEO",
+  audit_issue:     "Correcciones técnicas",
+  competitor_gap:  "Gaps competitivos",
+  search_term:     "Términos a optimizar",
+  backlink_action: "Acciones de backlinks",
+  ai_visibility:   "Visibilidad en IA",
+  keyword:         "Keywords identificadas",
+  aeo_cluster:     "Temas AEO/GEO",
+  content_idea:    "Ideas de contenido",
 };
 
 function buildMarkdown(items: ClipboardItem[]): string {
-  const keywords = items.filter((i) => i.type === "keyword");
-  const clusters = items.filter((i) => i.type === "aeo_cluster");
-  const ideas    = items.filter((i) => i.type === "content_idea");
   const parts: string[] = [];
 
-  if (keywords.length > 0) {
-    parts.push(
-      `## Keywords identificadas\n\n${keywords.map((i) => i.payload).join("\n")}`
-    );
-  }
-  if (clusters.length > 0) {
-    parts.push(
-      `## Temas AEO/GEO\n\n${clusters.map((i) => i.payload).join("\n\n")}`
-    );
-  }
-  if (ideas.length > 0) {
-    parts.push(
-      `## Ideas de contenido\n\n${ideas.map((i) => i.payload).join("\n\n")}`
-    );
+  for (const type of TYPE_ORDER) {
+    const group = items.filter((i) => i.type === type);
+    if (group.length === 0) continue;
+    const title = SECTION_TITLES[type] ?? type;
+    const joiner = type === "keyword" ? "\n" : "\n\n";
+    parts.push(`## ${title}\n\n${group.map((i) => i.payload).join(joiner)}`);
   }
 
   return parts.join("\n\n---\n\n");
@@ -98,11 +110,13 @@ export function PortapapelesPanel({ clientId, clientName }: Props) {
     setTimeout(() => setCopied(false), 2500);
   }
 
-  const grouped = [
-    { key: "keyword",      label: TYPE_LABELS.keyword,      items: items.filter((i) => i.type === "keyword") },
-    { key: "aeo_cluster",  label: TYPE_LABELS.aeo_cluster,  items: items.filter((i) => i.type === "aeo_cluster") },
-    { key: "content_idea", label: TYPE_LABELS.content_idea, items: items.filter((i) => i.type === "content_idea") },
-  ].filter((g) => g.items.length > 0);
+  const grouped = TYPE_ORDER
+    .map((key) => ({
+      key,
+      label: TYPE_LABELS[key] ?? key,
+      items: items.filter((i) => i.type === key),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="min-h-full">

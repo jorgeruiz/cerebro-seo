@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { SovChart } from "./SovChart";
 import { TriggerCompetitorButton } from "./TriggerCompetitorButton";
+import { GapClipboardButton } from "./GapClipboardButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -327,6 +328,7 @@ export default async function CompetenciaPage({
                     <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Pos.
                     </th>
+                    <th className="w-10 px-2 py-3" />
                   </tr>
                 </thead>
                 <tbody>
@@ -365,6 +367,16 @@ export default async function CompetenciaPage({
                       </td>
                       <td className="px-3 py-2.5 text-center font-mono text-xs text-foreground">
                         #{gap.competitorPosition}
+                      </td>
+                      <td className="px-2 py-2.5 text-center">
+                        <GapClipboardButton
+                          keyword={gap.keyword}
+                          searchVolume={gap.searchVolume}
+                          keywordDifficulty={gap.keywordDifficulty}
+                          intent={gap.intent}
+                          competitorDomain={gap.competitor.domain}
+                          competitorPosition={gap.competitorPosition}
+                        />
                       </td>
                     </tr>
                   ))}
