@@ -257,13 +257,23 @@ export async function getGscQueries(
   const { startDate, endDate } = rangeToDates(params.range);
 
   const gsc = new GoogleSearchConsoleProvider(oauth);
-  const rows = await gsc.getQueries({
-    siteUrl: site.gscProperty,
-    startDate,
-    endDate,
-    device: params.device,
-    country: params.country,
-  });
+  let rows;
+  try {
+    rows = await gsc.getQueries({
+      siteUrl: site.gscProperty,
+      startDate,
+      endDate,
+      device: params.device,
+      country: params.country,
+    });
+  } catch (err: unknown) {
+    const status = (err as { code?: number })?.code;
+    if (status === 403) {
+      return { error: "Tu cuenta de Google no tiene permisos en esta propiedad de Search Console. Pide acceso al propietario del sitio." };
+    }
+    console.error("[getGscQueries] Error:", err);
+    return { error: "Error al consultar Search Console. Intenta recargar." };
+  }
 
   // Log a ApiUsage (GSC es free tier — cost: 0)
   await prisma.apiUsage.create({
@@ -329,12 +339,16 @@ export async function getPagesTraffic({
   const hasGa4 = !!site.ga4Property;
 
   // Llamadas en paralelo — solo las propiedades configuradas
+  // try/catch individual para que un 403 en GSC no bloquee GA4 y viceversa
   const [gscPages, ga4Pages] = await Promise.all([
     hasGsc
       ? new GoogleSearchConsoleProvider(oauth).getPages({
           siteUrl: site.gscProperty!,
           startDate,
           endDate,
+        }).catch((err) => {
+          console.error("[getPagesTraffic] GSC error:", (err as Error).message);
+          return [] as Awaited<ReturnType<GoogleSearchConsoleProvider["getPages"]>>;
         })
       : Promise.resolve([] as Awaited<ReturnType<GoogleSearchConsoleProvider["getPages"]>>),
     hasGa4
@@ -342,7 +356,10 @@ export async function getPagesTraffic({
           site.ga4Property!,
           startDate,
           endDate
-        )
+        ).catch((err) => {
+          console.error("[getPagesTraffic] GA4 error:", (err as Error).message);
+          return [] as Ga4PageRow[];
+        })
       : Promise.resolve([] as Ga4PageRow[]),
   ]);
 
