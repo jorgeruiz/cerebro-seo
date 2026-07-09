@@ -3,8 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { getOAuth2Client } from "@/lib/google-oauth";
+import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import {
   ArrowLeft,
@@ -159,13 +158,10 @@ export default async function OportunidadesPage({
 }: {
   params: { id: string };
 }) {
-  const [session, client] = await Promise.all([
-    getSession(),
-    prisma.client.findUnique({
-      where: { id: params.id },
-      select: { id: true, name: true, domain: true, services: true },
-    }),
-  ]);
+  const client = await prisma.client.findUnique({
+    where: { id: params.id },
+    select: { id: true, name: true, domain: true, services: true },
+  });
 
   if (!client) notFound();
   if (!client.services.includes("seo")) redirect(`/clientes/${client.id}`);
@@ -177,7 +173,7 @@ export default async function OportunidadesPage({
   });
 
   // OAuth client del usuario actual
-  const oauth = session?.user?.id ? await getOAuth2Client(session.user.id) : null;
+  const oauth = await getServiceOAuth2Client();
 
   // ── Sin GSC configurado ───────────────────────────────────────────────────
 

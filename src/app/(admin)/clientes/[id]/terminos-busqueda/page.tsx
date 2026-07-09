@@ -4,8 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Search } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { getOAuth2Client } from "@/lib/google-oauth";
+import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { buttonVariants } from "@/components/ui/button";
 import { SectionIntro } from "@/components/ui-darkui";
 import { GscConnectSection } from "../GscConnectSection";
@@ -17,13 +16,10 @@ export default async function TerminosBusquedaPage({
 }: {
   params: { id: string };
 }) {
-  const [client, session] = await Promise.all([
-    prisma.client.findUnique({
-      where: { id: params.id },
-      include: { sites: { take: 1 } },
-    }),
-    getSession(),
-  ]);
+  const client = await prisma.client.findUnique({
+    where: { id: params.id },
+    include: { sites: { take: 1 } },
+  });
 
   if (!client) notFound();
 
@@ -31,8 +27,8 @@ export default async function TerminosBusquedaPage({
 
   // Pre-cargar datos default para SSR rápido
   let initialData = null;
-  if (site?.gscProperty && session?.user?.id) {
-    const oauth = await getOAuth2Client(session.user.id);
+  if (site?.gscProperty) {
+    const oauth = await getServiceOAuth2Client();
     if (oauth) {
       const result = await getGscQueries({
         clientId: client.id,

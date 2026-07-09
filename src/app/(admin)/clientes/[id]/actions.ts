@@ -4,7 +4,7 @@ import { google } from "googleapis";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { getOAuth2Client } from "@/lib/google-oauth";
+import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import type { GscQueryRow } from "@/server/providers/google-search-console";
@@ -107,7 +107,7 @@ export async function listGscSites(): Promise<GscSite[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
 
-  const oauth = await getOAuth2Client(session.user.id);
+  const oauth = await getServiceOAuth2Client();
   if (!oauth) return [];
 
   try {
@@ -161,7 +161,7 @@ export async function getGscSnapshot(
   const site = await prisma.site.findFirst({ where: { clientId } });
   if (!site?.gscProperty) return null;
 
-  const oauth = await getOAuth2Client(session.user.id);
+  const oauth = await getServiceOAuth2Client();
   if (!oauth) return null;
 
   const gsc = new GoogleSearchConsoleProvider(oauth);
@@ -204,7 +204,7 @@ export async function getGa4Snapshot(
   const site = await prisma.site.findFirst({ where: { clientId } });
   if (!site?.ga4Property) return null;
 
-  const oauth = await getOAuth2Client(session.user.id);
+  const oauth = await getServiceOAuth2Client();
   if (!oauth) return null;
 
   const ga4 = new GoogleAnalytics4Provider(oauth);
@@ -251,7 +251,7 @@ export async function getGscQueries(
   });
   if (!site?.gscProperty) return { error: "no_property_configured" };
 
-  const oauth = await getOAuth2Client(session.user.id);
+  const oauth = await getServiceOAuth2Client();
   if (!oauth) return { error: "no_oauth_token" };
 
   const { startDate, endDate } = rangeToDates(params.range);
@@ -331,7 +331,7 @@ export async function getPagesTraffic({
     return { error: "no_properties_configured" };
   }
 
-  const oauth = await getOAuth2Client(session.user.id);
+  const oauth = await getServiceOAuth2Client();
   if (!oauth) return { error: "no_oauth_token" };
 
   const { startDate, endDate } = rangeToDates(range);

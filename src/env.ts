@@ -41,6 +41,10 @@ const envSchema = z.object({
   // Si no se define, el rol viene del campo role en la BD (default: EDITOR).
   ADMIN_EMAILS: z.string().optional(),
 
+  // Google Service Token — email del usuario cuyo token OAuth se usa para consultas GSC/GA4.
+  // Todos los usuarios del equipo ven los datos con este token compartido.
+  GSC_SERVICE_EMAIL: z.string().email().optional(),
+
   // InsightsAgent — IDs de clientes locales para piloto (separados por coma, sin espacios).
   // Si está definido, el agente solo corre para esos clientes.
   // Si NO está definido, corre para TODOS los clientes con servicio SEO.

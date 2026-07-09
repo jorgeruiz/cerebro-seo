@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getOAuth2Client } from "@/lib/google-oauth";
+import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import {
   AlertCircle,
@@ -105,8 +105,8 @@ export default async function ClienteDetallePage({
   let gscSnapshot: GscSnapshot | null = null;
   let ga4Snapshot: Ga4Snapshot | null = null;
 
-  if (session?.user?.id && site) {
-    const oauth = await getOAuth2Client(session.user.id);
+  if (site) {
+    const oauth = await getServiceOAuth2Client();
 
     if (oauth) {
       // GSC — siempre pedimos 365 días para que el selector 12m funcione sin nueva llamada
