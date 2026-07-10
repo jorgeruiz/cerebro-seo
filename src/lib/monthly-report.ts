@@ -429,7 +429,7 @@ export async function generateMonthlyReport(
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 2500,
+    max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
       {

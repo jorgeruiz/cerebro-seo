@@ -251,7 +251,7 @@ export async function generateContentPlan(
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 3000,
+    max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -263,16 +263,42 @@ export async function generateContentPlan(
 
   const rawText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
 
+  // Detectar respuesta truncada (Claude llegó al max_tokens)
+  if (response.stop_reason === "max_tokens") {
+    console.warn("[content-plan] Respuesta truncada por max_tokens. Tokens usados:", response.usage.output_tokens);
+  }
+
   let plan: ContentPlanResult;
   try {
     const jsonStr = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     plan = JSON.parse(jsonStr) as ContentPlanResult;
   } catch {
-    plan = {
-      resumen: rawText.slice(0, 300),
-      ideas: [],
-      notaEstrategica: "",
-    };
+    // Si el JSON está truncado, intentar reparar cerrando arrays/objetos
+    try {
+      let repaired = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      // Cerrar strings, arrays y objetos abiertos
+      const openBraces = (repaired.match(/{/g) || []).length;
+      const closeBraces = (repaired.match(/}/g) || []).length;
+      const openBrackets = (repaired.match(/\[/g) || []).length;
+      const closeBrackets = (repaired.match(/]/g) || []).length;
+      // Cortar al último item completo y cerrar
+      const lastCompleteObj = repaired.lastIndexOf("},");
+      if (lastCompleteObj > 0 && openBraces > closeBraces) {
+        repaired = repaired.slice(0, lastCompleteObj + 1);
+        // Cerrar brackets y braces restantes
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
+        for (let i = 0; i < openBraces - closeBraces - 1; i++) repaired += "}";
+        repaired += "}";
+      }
+      plan = JSON.parse(repaired) as ContentPlanResult;
+      console.warn("[content-plan] JSON reparado exitosamente tras truncamiento.");
+    } catch {
+      plan = {
+        resumen: rawText.slice(0, 300),
+        ideas: [],
+        notaEstrategica: "Error: la respuesta fue truncada. Intenta regenerar.",
+      };
+    }
   }
 
   const usage = response.usage;
