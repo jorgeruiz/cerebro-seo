@@ -180,7 +180,7 @@ export default async function OportunidadesPage({
   if (!site?.gscProperty || !oauth) {
     return (
       <div className="min-h-full">
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-8">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Link
@@ -248,7 +248,7 @@ export default async function OportunidadesPage({
 
   return (
     <div className="min-h-full">
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* Header */}
         <div>

@@ -45,7 +45,7 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
 
   return (
     <div className="min-h-full">
-      <div className="p-8 space-y-10">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-10">
 
         {/* Page header */}
         <div className="flex items-start gap-3">

@@ -21,7 +21,7 @@ export default async function PortapapelesPage({
   if (!client) notFound();
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <SectionIntro>
         Colección de snippets y textos SEO del cliente: meta descriptions, títulos, fragmentos de contenido optimizados.
         Guarda aquí cualquier texto que quieras reutilizar o compartir con el equipo. Los snippets se pueden copiar con un clic.

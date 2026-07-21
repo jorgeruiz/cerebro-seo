@@ -47,7 +47,7 @@ export default function RootLayout({
     >
       <head>
         <meta name="theme-color" content="#6366f1" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body className="font-sans antialiased bg-background text-foreground">
         <SessionProvider>

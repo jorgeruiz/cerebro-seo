@@ -241,7 +241,7 @@ export default function NuevoClientePage() {
   const isLast = step === STEPS.length - 1;
 
   return (
-    <div className="p-8 max-w-xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-xl">
       {/* Header */}
       <div className="mb-8">
         <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">

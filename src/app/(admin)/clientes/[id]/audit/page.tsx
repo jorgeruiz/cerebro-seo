@@ -187,7 +187,7 @@ export default async function AuditPage({
         </div>
       </div>
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-8">
 
         <SectionIntro>
           Análisis técnico del sitio basado en crawl automático semanal. Los issues críticos y altos son los que más impactan el posicionamiento.

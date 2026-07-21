@@ -71,7 +71,7 @@ export default async function InsightDetailPage({
         </div>
       </div>
 
-      <div className="p-8 max-w-3xl">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl">
         {/* Estado banner */}
         {(isResolved || isIgnored) && (
           <div className={`mb-6 rounded-lg px-4 py-3 text-sm font-medium border ${

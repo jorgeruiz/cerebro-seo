@@ -81,7 +81,7 @@ export default async function KeywordIdeasPage({
   if (seedKeywords.length === 0) {
     return (
       <div className="min-h-full">
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-8">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Link
@@ -141,7 +141,7 @@ export default async function KeywordIdeasPage({
 
   return (
     <div className="min-h-full">
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* Header */}
         <div>

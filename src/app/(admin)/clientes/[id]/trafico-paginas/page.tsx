@@ -31,7 +31,7 @@ export default async function TraficoPaginasPage({
   if (!hasGsc && !hasGa4) {
     return (
       <div className="min-h-full">
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-8">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Link
@@ -85,7 +85,7 @@ export default async function TraficoPaginasPage({
 
   return (
     <div className="min-h-full">
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-8">
         {/* Header */}
         <div>
           <div className="flex items-center gap-2 mb-2">
