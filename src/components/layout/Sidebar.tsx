@@ -199,9 +199,9 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile: top bar + sheet drawer */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-12 bg-sidebar/95 backdrop-blur border-b border-sidebar-border flex items-center px-4 gap-3">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-12 bg-sidebar/95 backdrop-blur border-b border-sidebar-border flex items-center px-4 gap-3 overflow-hidden max-w-[100vw]">
         <Sheet>
-          <SheetTrigger className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors">
+          <SheetTrigger className="h-8 w-8 shrink-0 rounded-md bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 active:scale-95 transition-all duration-150">
             <Menu className="h-4 w-4" />
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0 bg-sidebar">
@@ -211,7 +211,7 @@ export function Sidebar() {
             </div>
           </SheetContent>
         </Sheet>
-        <div className="font-display font-bold text-[0.8rem] text-foreground tracking-tight">
+        <div className="font-display font-bold text-[0.8rem] text-foreground tracking-tight truncate">
           Cerebro <span className="text-primary">SEO</span>
         </div>
       </div>

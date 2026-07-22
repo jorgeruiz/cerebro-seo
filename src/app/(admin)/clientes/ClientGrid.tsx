@@ -120,53 +120,49 @@ export function ClientGrid({ clients }: { clients: ClientRow[] }) {
               <Link
                 key={client.id}
                 href={`/clientes/${client.id}`}
-                className="group block rounded-xl border border-border bg-card p-5 hover:border-primary/40 transition-all duration-150"
+                className="group block rounded-xl border border-border bg-card p-4 sm:p-5 hover:border-primary/40 active:scale-[0.98] transition-all duration-150"
               >
-                {/* Top row: name + cycle badge */}
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h2 className="font-display font-semibold text-foreground text-[15px] leading-tight group-hover:text-primary transition-colors flex-1 min-w-0">
-                    {client.name}
-                  </h2>
+                {/* Top: name */}
+                <h2 className="font-display font-semibold text-foreground text-[15px] leading-tight group-hover:text-primary transition-colors min-w-0 truncate mb-0.5">
+                  {client.name}
+                </h2>
+                <p className="text-xs text-muted-foreground font-mono truncate">{client.domain}</p>
+
+                {/* Badges: cycle + services */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
                   {cycleBadge && (
-                    <span className={`shrink-0 inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleBadge.cls}`}>
+                    <span className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleBadge.cls}`}>
                       {cycleBadge.label}
                     </span>
                   )}
+                  {client.services.map((slug) => {
+                    const cfg = SERVICE_LABEL[slug] ?? { label: slug, color: "bg-muted text-muted-foreground border-border" };
+                    return (
+                      <span key={slug} className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded border ${cfg.color}`}>
+                        {cfg.label}
+                      </span>
+                    );
+                  })}
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 font-mono">{client.domain}</p>
-
-                {/* Badges de servicios */}
-                {client.services.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {client.services.map((slug) => {
-                      const cfg = SERVICE_LABEL[slug] ?? { label: slug, color: "bg-muted text-muted-foreground border-border" };
-                      return (
-                        <span key={slug} className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded border ${cfg.color}`}>
-                          {cfg.label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
 
                 {/* Indicators */}
-                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-3 pt-3 border-t border-border">
                   {criticalAlerts > 0 ? (
                     <span className="flex items-center gap-1.5 text-xs text-destructive">
-                      <AlertCircle className="h-3.5 w-3.5" />
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                       {criticalAlerts} alerta{criticalAlerts > 1 ? "s" : ""}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-xs text-ds-green">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                       Sin alertas
                     </span>
                   )}
 
                   {pendingTasks > 0 && (
                     <span className="flex items-center gap-1.5 text-xs text-ds-yellow">
-                      <Clock className="h-3.5 w-3.5" />
-                      {pendingTasks} tarea{pendingTasks > 1 ? "s" : ""} pendiente{pendingTasks > 1 ? "s" : ""}
+                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                      {pendingTasks} tarea{pendingTasks > 1 ? "s" : ""}
                     </span>
                   )}
 

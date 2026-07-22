@@ -128,8 +128,10 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-size: 14px;
     line-height: 1.6;
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
+    overflow-x: hidden;
   }
 }

@@ -170,21 +170,30 @@ export default async function ClienteDetallePage({
     <div className="min-h-full">
       <div className="p-4 sm:p-6 lg:p-8 space-y-8">
         {/* Inline page header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
-              {client.name}
-            </h1>
-            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">{client.domain}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap mt-1">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="font-display font-extrabold text-[clamp(1.5rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground truncate">
+                {client.name}
+              </h1>
+              <p className="font-mono text-[0.75rem] text-muted-foreground mt-1 truncate">{client.domain}</p>
+            </div>
             <Link
               href={`/clientes/${client.id}/configuracion`}
-              className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2"}
+              className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2 shrink-0 hidden sm:inline-flex"}
             >
               <Settings className="h-3.5 w-3.5" />
               Configuración
             </Link>
+            <Link
+              href={`/clientes/${client.id}/configuracion`}
+              className={buttonVariants({ variant: "outline-mono", size: "icon" }) + " shrink-0 sm:hidden h-8 w-8"}
+              title="Configuración"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             {cycleStatus && (
               <span className={`inline-flex items-center text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${cycleStatus.color}`}>
                 {cycleStatus.label}{cycle?.yearMonth ? ` · ${cycle.yearMonth}` : ""}

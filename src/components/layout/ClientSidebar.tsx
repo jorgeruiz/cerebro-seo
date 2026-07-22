@@ -193,19 +193,22 @@ function CollapsibleGroup({
         <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", !open && "-rotate-90")} />
         {title}
       </button>
-      {open && (
-        <div className="space-y-0.5 mt-0.5">
-          {items.map((item) => (
-            <SidebarNavItem
-              key={item.href}
-              item={item}
-              clientId={clientId}
-              hasSeo={hasSeo}
-              pathname={pathname}
-            />
-          ))}
-        </div>
-      )}
+      <div
+        className={cn(
+          "space-y-0.5 mt-0.5 overflow-hidden transition-all duration-200 ease-out",
+          open ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        {items.map((item) => (
+          <SidebarNavItem
+            key={item.href}
+            item={item}
+            clientId={clientId}
+            hasSeo={hasSeo}
+            pathname={pathname}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -318,7 +321,7 @@ export function ClientSidebar({
       {/* Mobile: sheet trigger + drawer */}
       <div className="lg:hidden fixed bottom-4 right-4 z-40">
         <Sheet>
-          <SheetTrigger className="h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors">
+          <SheetTrigger className="h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all duration-200">
             <Menu className="h-5 w-5" />
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0 bg-sidebar">

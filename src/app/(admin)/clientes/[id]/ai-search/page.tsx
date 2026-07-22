@@ -134,26 +134,30 @@ export default async function AiSearchPage({
       <div className="p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <Link
                 href={`/clientes/${client.id}`}
                 className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-1.5"}
               >
                 <ArrowLeft className="h-3 w-3" />
-                {client.name}
+                <span className="truncate max-w-[120px] sm:max-w-none">{client.name}</span>
               </Link>
             </div>
-            <h1 className="font-display font-extrabold text-[clamp(1.6rem,2.5vw,2.4rem)] tracking-tight leading-[1.05] text-foreground flex items-center gap-3">
-              <Zap className="h-6 w-6 text-ds-yellow shrink-0" />
-              AI Search Visibility
+            <h1 className="font-display font-extrabold text-[clamp(1.3rem,2.5vw,2.4rem)] tracking-tight leading-[1.05] text-foreground flex items-center gap-2 sm:gap-3">
+              <Zap className="h-5 w-5 sm:h-6 sm:w-6 text-ds-yellow shrink-0" />
+              <span className="truncate">AI Search Visibility</span>
             </h1>
-            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
-              {client.domain} · ¿te mencionan los LLMs cuando buscan lo que ofreces?
+            <p className="font-mono text-[0.75rem] text-muted-foreground mt-1 truncate">
+              {client.domain} · ¿te mencionan los LLMs?
             </p>
           </div>
-          {isAdmin && <TriggerAiSearchButton clientId={client.id} />}
+          {isAdmin && (
+            <div className="shrink-0">
+              <TriggerAiSearchButton clientId={client.id} />
+            </div>
+          )}
         </div>
 
         {/* Empty state */}

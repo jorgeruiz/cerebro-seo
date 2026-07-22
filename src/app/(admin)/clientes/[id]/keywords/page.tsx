@@ -148,24 +148,24 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
       <div className="p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col gap-3">
           <div className="flex items-start gap-3">
-            <Link href={`/clientes/${client.id}`} className="text-muted-foreground hover:text-foreground transition-colors mt-1">
+            <Link href={`/clientes/${client.id}`} className="text-muted-foreground hover:text-foreground transition-colors mt-1 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Link>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <TrendingUp className="h-4 w-4 text-primary" />
-                <h1 className="font-display font-extrabold text-[clamp(1.4rem,2.5vw,2rem)] tracking-tight leading-[1.05] text-foreground">
+                <TrendingUp className="h-4 w-4 text-primary shrink-0" />
+                <h1 className="font-display font-extrabold text-[clamp(1.3rem,2.5vw,2rem)] tracking-tight leading-[1.05] text-foreground truncate">
                   Keywords objetivo
                 </h1>
               </div>
-              <p className="font-mono text-[0.75rem] text-muted-foreground">
+              <p className="font-mono text-[0.75rem] text-muted-foreground truncate">
                 {client.name} · {totalKeywords} keywords{priorityKeywords > 0 && ` · ${priorityKeywords} priority`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 flex-wrap">
             {totalKeywords > 0 && (
               <span className={[
                 "text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border",
@@ -183,7 +183,8 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
               className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2"}
             >
               <Settings className="h-3.5 w-3.5" />
-              Configurar keywords
+              <span className="hidden sm:inline">Configurar keywords</span>
+              <span className="sm:hidden">Config</span>
             </Link>
             {isAdmin && <TriggerTrackingButton clientId={client.id} />}
           </div>
