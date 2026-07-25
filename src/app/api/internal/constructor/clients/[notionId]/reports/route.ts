@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createEmbedToken } from "@/lib/embed-token";
+import { validateNotionClientId } from "@/lib/notion-client-id";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -18,7 +19,8 @@ function yearMonthToTitle(yearMonth: string): string {
  * GET /api/internal/constructor/clients/{notionId}/reports
  * Authorization: Bearer ${SEO_INTERNAL_SECRET}
  *
- * Lista los reportes mensuales de un cliente identificado por su cerebroClientId (notionId).
+ * Lista los reportes mensuales de un cliente identificado por su notion_client_id
+ * (route param [notionId], mapeado internamente a cerebroClientId).
  * Cada reporte incluye un embed_url con token firmado de vida corta (1h).
  */
 export async function GET(
@@ -32,17 +34,22 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { notionId } = params;
+  // 2. Validar notion_client_id (route param [notionId])
+  const idValidation = validateNotionClientId(params.notionId);
+  if (!idValidation.valid) {
+    return NextResponse.json({ error: idValidation.message }, { status: 400 });
+  }
+  const notionClientId = idValidation.normalized;
 
-  // 2. Lookup cerebroClientId → Client
+  // 3. Lookup cerebroClientId → Client
   const client = await prisma.client.findUnique({
-    where: { cerebroClientId: notionId },
+    where: { cerebroClientId: notionClientId },
     select: { id: true, name: true, cerebroClientId: true },
   });
 
   if (!client || !client.cerebroClientId) {
     return NextResponse.json({
-      client: { notionId, nombre: null },
+      client: { notion_client_id: notionClientId, notionId: notionClientId, nombre: null },
       reports: [],
     });
   }
@@ -74,7 +81,8 @@ export async function GET(
 
   return NextResponse.json({
     client: {
-      notionId: client.cerebroClientId,
+      notion_client_id: client.cerebroClientId,
+      notionId: client.cerebroClientId, // alias legacy
       nombre: client.name,
     },
     reports: reportsPayload,

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { validateNotionClientId } from "@/lib/notion-client-id";
 
 // Formato: "YYYY-MM" → primer y último día del mes
 function monthRange(yearMonth: string): { startDate: string; endDate: string } {
@@ -31,7 +32,14 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2. Parámetros
+  // 2. Validar notion_client_id (route param [id])
+  const idValidation = validateNotionClientId(params.id);
+  if (!idValidation.valid) {
+    return NextResponse.json({ error: idValidation.message }, { status: 400 });
+  }
+  const notionClientId = idValidation.normalized;
+
+  // 3. Parámetros
   const yearMonth = req.nextUrl.searchParams.get("yearMonth");
   if (!yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth)) {
     return NextResponse.json(
@@ -40,9 +48,9 @@ export async function GET(
     );
   }
 
-  // 3. Buscar cliente por cerebroClientId
+  // 4. Buscar cliente por cerebroClientId
   const client = await prisma.client.findFirst({
-    where: { cerebroClientId: params.id },
+    where: { cerebroClientId: notionClientId },
     include: { sites: { take: 1 } },
   });
 
@@ -91,7 +99,8 @@ export async function GET(
   // 5. Construir respuesta según contrato integration_cerebro.md §4.3
   const summary = {
     yearMonth,
-    clientId: params.id,
+    notion_client_id: notionClientId,
+    clientId: notionClientId, // alias legacy
     metrics: {
       // Datos de métricas de tráfico: se calculan vía GSC/GA4 cuando hay tokens OAuth del cliente
       // Por ahora se devuelven placeholders — se completará en Fase 3 con CycleCloseAgent
