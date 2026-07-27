@@ -67,17 +67,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // 4. Fetch in parallel — allSettled so partial failure doesn't kill both
-  const [overviewResult, backlinksResult] = await Promise.allSettled([
+  const [overviewResult, backlinksResult, topKwResult] = await Promise.allSettled([
     dataForSeoProvider.getDomainRankOverview(domain),
     dataForSeoProvider.getBacklinksSummary(domain),
+    dataForSeoProvider.getTopKeywords(domain, 5),
   ]);
 
   const overview =
     overviewResult.status === "fulfilled" ? overviewResult.value : null;
   const backlinks =
     backlinksResult.status === "fulfilled" ? backlinksResult.value : null;
+  const topKeywords =
+    topKwResult.status === "fulfilled" ? topKwResult.value : [];
 
-  // 5. Both failed → 502
+  // 5. Both overview and backlinks failed → 502
   if (!overview && !backlinks) {
     const reasons = [
       overviewResult.status === "rejected"
@@ -107,5 +110,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           domainAuthority: nullIfZero(backlinks.domainAuthority),
         }
       : null,
+    topKeywords,
   });
 }

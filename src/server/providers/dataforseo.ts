@@ -715,6 +715,52 @@ export class DataForSeoProvider implements SeoDataProvider {
 
     return questions;
   }
+  // ── getTopKeywords ──────────────────────────────────────────────────────
+  // DataForSEO Labs — Ranked Keywords. Devuelve las top N keywords por las
+  // que un dominio rankea, ordenadas por volumen de búsqueda descendente.
+  // Costo: ~$0.05/req. Cache: 7 días.
+
+  async getTopKeywords(
+    domain: string,
+    limit = 5
+  ): Promise<TopKeywordResult[]> {
+    const cacheKey = `cache:dataforseo:topkw:${domain}:${limit}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as TopKeywordResult[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsRankedKeywordsResult>(
+      "/dataforseo_labs/google/ranked_keywords/live",
+      [{
+        target: domain,
+        location_name: "Mexico",
+        language_name: "Spanish",
+        limit,
+        order_by: ["keyword_data.keyword_info.search_volume,desc"],
+        filters: [
+          "ranked_serp_element.serp_item.rank_group", "<=", 100,
+        ],
+      }]
+    );
+
+    void logUsage({ endpoint: "labs/ranked_keywords", cost: cost || 0.05 });
+
+    const items: DfsRankedKeywordItem[] = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: TopKeywordResult[] = items.map((item) => ({
+      keyword: item.keyword_data?.keyword ?? "",
+      position: item.ranked_serp_element?.serp_item?.rank_group ?? null,
+      searchVolume: item.keyword_data?.keyword_info?.search_volume ?? null,
+    })).filter((r) => r.keyword.length > 0);
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(results));
+    } catch { /* Redis caído */ }
+
+    return results;
+  }
 }
 
 // ─── Singleton export ──────────────────────────────────────────────────────
@@ -892,4 +938,30 @@ interface DfsKeywordSuggestionsItem {
 
 interface DfsKeywordSuggestionsResult {
   items?: DfsKeywordSuggestionsItem[];
+}
+
+// ─── Ranked Keywords types ───────────────────────────────────────────────
+
+export interface TopKeywordResult {
+  keyword: string;
+  position: number | null;
+  searchVolume: number | null;
+}
+
+interface DfsRankedKeywordItem {
+  keyword_data?: {
+    keyword?: string;
+    keyword_info?: {
+      search_volume?: number | null;
+    };
+  };
+  ranked_serp_element?: {
+    serp_item?: {
+      rank_group?: number | null;
+    };
+  };
+}
+
+interface DfsRankedKeywordsResult {
+  items?: DfsRankedKeywordItem[];
 }
