@@ -134,7 +134,7 @@ export async function GET(
   return NextResponse.json({
     clientId: cerebroClientId,
     month,
-    nextSteps: plan ? (plan.steps as NextStep[]) : [],
+    nextSteps: plan ? (plan.steps as unknown as NextStep[]) : [],
     analysis: analysisData,
     generatedAt: plan?.generatedAt.toISOString() ?? null,
   });
