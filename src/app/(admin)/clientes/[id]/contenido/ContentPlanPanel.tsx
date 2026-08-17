@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import {
   Lightbulb, Loader2, ChevronDown, ChevronRight,
   FileText, Globe, BookOpen, Layers,
-  Plus, Check,
+  Plus, Check, Send, Merge, AlertCircle,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { actionGenerateContentPlan, type ContentPlanRecord } from "./actions";
+import { actionGenerateContentPlan, actionSendToOrchestrator, type ContentPlanRecord } from "./actions";
 import type { ContentIdea, ContentType, ContentPriority } from "@/lib/claude-content-plan";
 import { useClipboard } from "../ClipboardContext";
 import { cn } from "@/lib/utils";
@@ -36,13 +36,28 @@ function formatDate(d: Date) {
 
 // ─── IdeaCard ─────────────────────────────────────────────────────────────
 
-function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
+function IdeaCard({ idea, index, clientId }: { idea: ContentIdea; index: number; clientId: string }) {
   const type = TYPE_CONFIG[idea.tipo] ?? TYPE_CONFIG.blog;
   const prio = PRIORITY_CONFIG[idea.prioridad] ?? PRIORITY_CONFIG.media;
   const Icon = type.icon;
   const { toggleItem, hasItem } = useClipboard();
 
   const added = hasItem(idea.titulo, "content_idea");
+
+  // Orchestrator state: idle | sending | sent | merged | error
+  const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
+
+  async function handleSendToOrchestrator() {
+    setOrchState("sending");
+    const result = await actionSendToOrchestrator(clientId, idea);
+    if (result.ok) {
+      setOrchState(result.merged ? "merged" : "sent");
+    } else {
+      console.error("[orchestrator]", result.error);
+      setOrchState("error");
+      setTimeout(() => setOrchState("idle"), 4000);
+    }
+  }
 
   function buildPayload(): string {
     const lines: string[] = [
@@ -92,6 +107,36 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
           >
             {added ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
           </button>
+          {/* Botón Orquestador */}
+          <button
+            onClick={handleSendToOrchestrator}
+            disabled={orchState === "sending" || orchState === "sent" || orchState === "merged"}
+            title={
+              orchState === "merged" ? "Enviado — merged"
+              : orchState === "sent" ? "Enviado al Orquestador"
+              : orchState === "sending" ? "Enviando..."
+              : orchState === "error" ? "Error al enviar — reintentar"
+              : "Enviar al Orquestador"
+            }
+            className={cn(
+              "h-6 w-6 rounded border flex items-center justify-center transition-colors",
+              orchState === "merged"
+                ? "bg-ds-blue/10 border-ds-blue/30 text-ds-blue"
+                : orchState === "sent"
+                  ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
+                  : orchState === "error"
+                    ? "bg-destructive/10 border-destructive/30 text-destructive"
+                    : orchState === "sending"
+                      ? "bg-muted border-border text-muted-foreground cursor-wait"
+                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+            )}
+          >
+            {orchState === "sending" ? <Loader2 className="h-3 w-3 animate-spin" />
+              : orchState === "merged" ? <Merge className="h-3 w-3" />
+              : orchState === "sent" ? <Check className="h-3 w-3" />
+              : orchState === "error" ? <AlertCircle className="h-3 w-3" />
+              : <Send className="h-3 w-3" />}
+          </button>
         </div>
       </div>
 
@@ -122,7 +167,7 @@ function IdeaCard({ idea, index }: { idea: ContentIdea; index: number }) {
 
 // ─── PlanView ─────────────────────────────────────────────────────────────
 
-function PlanView({ record }: { record: ContentPlanRecord }) {
+function PlanView({ record, clientId }: { record: ContentPlanRecord; clientId: string }) {
   const { plan } = record;
   const ideas = Array.isArray(plan.ideas) ? plan.ideas : [];
 
@@ -154,7 +199,7 @@ function PlanView({ record }: { record: ContentPlanRecord }) {
           </p>
           <div className="space-y-4">
             {ideas.map((idea, i) => (
-              <IdeaCard key={i} idea={idea} index={i} />
+              <IdeaCard key={i} idea={idea} index={i} clientId={clientId} />
             ))}
           </div>
         </section>
@@ -246,7 +291,7 @@ export function ContentPlanPanel({ clientId, initialRecord, history }: Props) {
       )}
 
       {/* Plan actual */}
-      {!isPending && current && <PlanView record={current} />}
+      {!isPending && current && <PlanView record={current} clientId={clientId} />}
 
       {/* Empty state */}
       {!isPending && !current && !error && (
