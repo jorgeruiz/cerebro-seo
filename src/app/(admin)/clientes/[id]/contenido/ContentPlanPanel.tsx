@@ -7,7 +7,8 @@ import {
   Plus, Check, Send, Merge, AlertCircle,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { actionGenerateContentPlan, actionSendToOrchestrator, type ContentPlanRecord } from "./actions";
+import { actionGenerateContentPlan, type ContentPlanRecord } from "./actions";
+import { actionSendToOrchestrator } from "../orchestrator-actions";
 import type { ContentIdea, ContentType, ContentPriority } from "@/lib/claude-content-plan";
 import { useClipboard } from "../ClipboardContext";
 import { cn } from "@/lib/utils";
@@ -47,9 +48,33 @@ function IdeaCard({ idea, index, clientId }: { idea: ContentIdea; index: number;
   // Orchestrator state: idle | sending | sent | merged | error
   const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
 
+  const ACTION_TYPE_MAP: Partial<Record<ContentType, string>> = {
+    landing: "site.landing.create",
+    blog:    "blog.create",
+    pilar:   "blog.create",
+    soporte: "blog.create",
+  };
+
   async function handleSendToOrchestrator() {
     setOrchState("sending");
-    const result = await actionSendToOrchestrator(clientId, idea);
+    const result = await actionSendToOrchestrator({
+      clientId,
+      topic: idea.keywords[0] ?? idea.titulo,
+      priority: idea.prioridad,
+      actionType: ACTION_TYPE_MAP[idea.tipo],
+      sourceSystem: "cerebro-seo",
+      sourceUrl: idea.urlSugerida ?? null,
+      sourceCategory: idea.tipo,
+      payload: {
+        titulo: idea.titulo,
+        keywords: idea.keywords,
+        angulo: idea.angulo,
+        razon: idea.razon,
+        prioridad: idea.prioridad,
+        tipo: idea.tipo,
+        urlSugerida: idea.urlSugerida ?? null,
+      },
+    });
     if (result.ok) {
       setOrchState(result.merged ? "merged" : "sent");
     } else {

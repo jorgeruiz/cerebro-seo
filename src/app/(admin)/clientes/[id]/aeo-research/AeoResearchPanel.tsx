@@ -4,11 +4,12 @@ import { useState, useTransition } from "react";
 import {
   Brain, Loader2, ChevronDown, ChevronRight,
   MessageSquare, Cpu, Mic, CheckCircle2, XCircle,
-  Plus, Check,
+  Plus, Check, Send, Merge, AlertCircle,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/ui-darkui";
 import { actionGenerateAeoResearch, type AeoResearchRecord } from "./actions";
+import { actionSendToOrchestrator } from "../orchestrator-actions";
 import type { AeoCluster, AeoResearchResult } from "@/lib/aeo-classify";
 import { useClipboard } from "../ClipboardContext";
 import { cn } from "@/lib/utils";
@@ -52,11 +53,39 @@ function KpiBar({ result, questionCount }: { result: AeoResearchResult; question
 
 // ─── ClusterCard ──────────────────────────────────────────────────────────
 
-function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number }) {
+function ClusterCard({ cluster, index, clientId }: { cluster: AeoCluster; index: number; clientId: string }) {
   const [open, setOpen] = useState(false);
   const { toggleItem, hasItem } = useClipboard();
 
   const added = hasItem(cluster.tema, "aeo_cluster");
+
+  const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
+
+  async function handleOrchestrator(e: React.MouseEvent) {
+    e.stopPropagation();
+    setOrchState("sending");
+    const result = await actionSendToOrchestrator({
+      clientId,
+      topic: cluster.tema,
+      sourceSystem: "cerebro-seo",
+      sourceCategory: "aeo-geo",
+      payload: {
+        tema: cluster.tema,
+        preguntas: cluster.preguntas,
+        intencion: cluster.intencion,
+        aeoCandidate: cluster.aeoCandidate,
+        geoCandidate: cluster.geoCandidate,
+        recomendacion: cluster.recomendacion,
+      },
+    });
+    if (result.ok) {
+      setOrchState(result.merged ? "merged" : "sent");
+    } else {
+      console.error("[orchestrator]", result.error);
+      setOrchState("error");
+      setTimeout(() => setOrchState("idle"), 4000);
+    }
+  }
 
   function buildPayload(): string {
     const lines: string[] = [
@@ -124,6 +153,36 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
           >
             {added ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
           </button>
+          {/* Botón Orquestador */}
+          <button
+            onClick={handleOrchestrator}
+            disabled={orchState === "sending" || orchState === "sent" || orchState === "merged"}
+            title={
+              orchState === "merged" ? "Enviado — merged"
+              : orchState === "sent" ? "Enviado al Orquestador"
+              : orchState === "sending" ? "Enviando..."
+              : orchState === "error" ? "Error al enviar — reintentar"
+              : "Enviar al Orquestador"
+            }
+            className={cn(
+              "h-6 w-6 rounded border flex items-center justify-center transition-colors",
+              orchState === "merged"
+                ? "bg-ds-blue/10 border-ds-blue/30 text-ds-blue"
+                : orchState === "sent"
+                  ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
+                  : orchState === "error"
+                    ? "bg-destructive/10 border-destructive/30 text-destructive"
+                    : orchState === "sending"
+                      ? "bg-muted border-border text-muted-foreground cursor-wait"
+                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+            )}
+          >
+            {orchState === "sending" ? <Loader2 className="h-3 w-3 animate-spin" />
+              : orchState === "merged" ? <Merge className="h-3 w-3" />
+              : orchState === "sent" ? <Check className="h-3 w-3" />
+              : orchState === "error" ? <AlertCircle className="h-3 w-3" />
+              : <Send className="h-3 w-3" />}
+          </button>
           {open ? (
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
@@ -189,7 +248,7 @@ function ClusterCard({ cluster, index }: { cluster: AeoCluster; index: number })
 
 // ─── ResearchView ─────────────────────────────────────────────────────────
 
-function ResearchView({ record }: { record: AeoResearchRecord }) {
+function ResearchView({ record, clientId }: { record: AeoResearchRecord; clientId: string }) {
   const { result } = record;
   const clusters = Array.isArray(result.clusters) ? result.clusters : [];
 
@@ -224,7 +283,7 @@ function ResearchView({ record }: { record: AeoResearchRecord }) {
           </p>
           <div className="space-y-3">
             {clusters.map((cluster, i) => (
-              <ClusterCard key={i} cluster={cluster} index={i} />
+              <ClusterCard key={i} cluster={cluster} index={i} clientId={clientId} />
             ))}
           </div>
         </section>
@@ -327,7 +386,7 @@ export function AeoResearchPanel({ clientId, initialRecord, history, seeds }: Pr
       )}
 
       {/* Resultado actual */}
-      {!isPending && current && <ResearchView record={current} />}
+      {!isPending && current && <ResearchView record={current} clientId={clientId} />}
 
       {/* Empty state */}
       {!isPending && !current && !error && (

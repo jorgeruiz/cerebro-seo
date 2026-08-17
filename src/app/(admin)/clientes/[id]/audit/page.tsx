@@ -448,6 +448,7 @@ export default async function AuditPage({
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <AuditIssueClipboardButton
+                                    clientId={params.id}
                                     title={issue.title}
                                     description={issue.description}
                                     severity={issue.severity}
