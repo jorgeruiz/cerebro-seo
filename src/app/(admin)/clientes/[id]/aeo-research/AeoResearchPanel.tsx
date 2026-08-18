@@ -60,6 +60,7 @@ function ClusterCard({ cluster, index, clientId }: { cluster: AeoCluster; index:
   const added = hasItem(cluster.tema, "aeo_cluster");
 
   const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
+  const [orchError, setOrchError] = useState<string | null>(null);
 
   async function handleOrchestrator(e: React.MouseEvent) {
     e.stopPropagation();
@@ -82,8 +83,9 @@ function ClusterCard({ cluster, index, clientId }: { cluster: AeoCluster; index:
       setOrchState(result.merged ? "merged" : "sent");
     } else {
       console.error("[orchestrator]", result.error);
+      setOrchError(result.error);
       setOrchState("error");
-      setTimeout(() => setOrchState("idle"), 4000);
+      setTimeout(() => { setOrchState("idle"); setOrchError(null); }, 6000);
     }
   }
 
@@ -161,7 +163,7 @@ function ClusterCard({ cluster, index, clientId }: { cluster: AeoCluster; index:
               orchState === "merged" ? "Enviado — merged"
               : orchState === "sent" ? "Enviado al Orquestador"
               : orchState === "sending" ? "Enviando..."
-              : orchState === "error" ? "Error al enviar — reintentar"
+              : orchState === "error" ? (orchError ?? "Error al enviar — reintentar")
               : "Enviar al Orquestador"
             }
             className={cn(

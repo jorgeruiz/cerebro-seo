@@ -53,6 +53,7 @@ export function AuditIssueClipboardButton({
   const added = hasItem(title, "audit_issue");
 
   const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
+  const [orchError, setOrchError] = useState<string | null>(null);
 
   const lines: string[] = [
     `- **[${SEVERITY_LABEL[severity] ?? severity}]** ${title}`,
@@ -90,8 +91,9 @@ export function AuditIssueClipboardButton({
       setOrchState(result.merged ? "merged" : "sent");
     } else {
       console.error("[orchestrator]", result.error);
+      setOrchError(result.error);
       setOrchState("error");
-      setTimeout(() => setOrchState("idle"), 4000);
+      setTimeout(() => { setOrchState("idle"); setOrchError(null); }, 6000);
     }
   }
 
@@ -118,7 +120,7 @@ export function AuditIssueClipboardButton({
           orchState === "merged" ? "Enviado — merged"
           : orchState === "sent" ? "Enviado al Orquestador"
           : orchState === "sending" ? "Enviando..."
-          : orchState === "error" ? "Error al enviar — reintentar"
+          : orchState === "error" ? (orchError ?? "Error al enviar — reintentar")
           : "Enviar al Orquestador"
         }
         className={cn(

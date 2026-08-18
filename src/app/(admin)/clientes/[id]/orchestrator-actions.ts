@@ -2,9 +2,10 @@
 
 import { getSession } from "@/lib/auth";
 import { env } from "@/env";
+import { prisma } from "@/lib/db";
 
 export interface OrchestratorPayload {
-  clientId: string;
+  clientId: string; // local CUID — se resuelve a cerebroClientId antes de enviar
   topic: string;
   priority?: string;
   actionType?: string;
@@ -33,6 +34,22 @@ export async function actionSendToOrchestrator(
     return { ok: false, error: "ORQUESTADOR_URL o CEREBRO_INTERNAL_SECRET no configurados." };
   }
 
+  // Resolver cerebroClientId (Notion page ID) desde el CUID local
+  const client = await prisma.client.findUnique({
+    where: { id: data.clientId },
+    select: { cerebroClientId: true },
+  });
+
+  if (!client?.cerebroClientId) {
+    return {
+      ok: false,
+      error: "Este cliente no está mapeado a Cerebro. Configura su cerebroClientId antes de enviar al Orquestador.",
+    };
+  }
+
+  const { clientId: _, ...rest } = data;
+  const body = { ...rest, clientId: client.cerebroClientId };
+
   try {
     const res = await fetch(`${url}/api/orchestrator/intake`, {
       method: "POST",
@@ -40,7 +57,7 @@ export async function actionSendToOrchestrator(
         "Content-Type": "application/json",
         Authorization: `Bearer ${secret}`,
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
