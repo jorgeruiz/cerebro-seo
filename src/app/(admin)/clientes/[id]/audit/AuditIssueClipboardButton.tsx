@@ -75,7 +75,7 @@ export function AuditIssueClipboardButton({
       actionType: "seo.audit.fix",
       sourceSystem: "cerebro-seo",
       sourceUrl: affectedUrl,
-      sourceCategory: CATEGORY_LABEL[category] ?? category,
+      sourceCategory: category,
       payload: {
         title,
         description,
