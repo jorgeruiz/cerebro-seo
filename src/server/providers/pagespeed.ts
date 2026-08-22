@@ -26,6 +26,12 @@ export interface PageSpeedScores {
   seo: number;            // 0-100
 }
 
+export interface ResourceDetail {
+  url: string;
+  totalBytes?: number;
+  wastedBytes?: number;
+}
+
 export interface PageSpeedResult {
   url: string;
   strategy: "mobile" | "desktop";
@@ -38,6 +44,7 @@ export interface PageSpeedResult {
     description: string;
     score: number | null;
     displayValue?: string;
+    resources?: ResourceDetail[];
   }>;
   fetchedAt: Date;
 }
@@ -189,13 +196,17 @@ export async function runPageSpeed(
   const opportunities = OPPORTUNITY_AUDITS
     .map((id) => audits[id])
     .filter((a) => a !== undefined && (a.score ?? 1) < 0.9)
-    .map((a) => ({
-      id: a.id,
-      title: a.title,
-      description: a.description.split(".")[0] + ".", // primera oración
-      score: a.score,
-      displayValue: a.displayValue,
-    }))
+    .map((a) => {
+      const resources = extractResources(a.details);
+      return {
+        id: a.id,
+        title: a.title,
+        description: a.description.split(".")[0] + ".", // primera oración
+        score: a.score,
+        displayValue: a.displayValue,
+        ...(resources.length > 0 ? { resources } : {}),
+      };
+    })
     .slice(0, 10); // top 10
 
   return {
@@ -206,6 +217,36 @@ export async function runPageSpeed(
     opportunities,
     fetchedAt: new Date(),
   };
+}
+
+/**
+ * Extrae los recursos más pesados del campo details de una auditoría Lighthouse.
+ * Retorna máximo 10, ordenados por wastedBytes desc (o totalBytes si no hay wasted).
+ */
+function extractResources(details: unknown): ResourceDetail[] {
+  if (!details || typeof details !== "object") return [];
+  const d = details as Record<string, unknown>;
+
+  // Lighthouse usa details.items[] con estructura variable por auditoría
+  const items = d.items;
+  if (!Array.isArray(items)) return [];
+
+  const resources: ResourceDetail[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    // url puede estar en .url o .source (render-blocking-resources)
+    const url = (typeof r.url === "string" ? r.url : typeof r.source === "string" ? r.source : null);
+    if (!url) continue;
+    const totalBytes = typeof r.totalBytes === "number" ? r.totalBytes : undefined;
+    const wastedBytes = typeof r.wastedBytes === "number" ? r.wastedBytes : undefined;
+    if (totalBytes === undefined && wastedBytes === undefined) continue;
+    resources.push({ url, totalBytes, wastedBytes });
+  }
+
+  // Ordenar por wastedBytes desc, fallback totalBytes desc
+  resources.sort((a, b) => (b.wastedBytes ?? b.totalBytes ?? 0) - (a.wastedBytes ?? a.totalBytes ?? 0));
+  return resources.slice(0, 10);
 }
 
 function numericValue(

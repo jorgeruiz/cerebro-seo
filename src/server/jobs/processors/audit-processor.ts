@@ -159,6 +159,7 @@ export async function runAuditProcessor(data: AuditJobData): Promise<AuditResult
       type: opp.id,
       severity: opp.score === null ? "info" : opp.score < 0.5 ? "high" : "medium" as PageIssue["severity"],
       message: opp.title + (opp.displayValue ? ` (${opp.displayValue})` : ""),
+      ...(opp.resources?.length ? { data: { resources: opp.resources } } : {}),
     }));
 
     // ── Scores ──────────────────────────────────────────────────────────────
@@ -222,6 +223,7 @@ export async function runAuditProcessor(data: AuditJobData): Promise<AuditResult
       description: getIssueDescription(issue.type),
       affectedUrl: affectedUrl ?? null,
       count,
+      data: issue.data ? (issue.data as Prisma.InputJsonValue) : Prisma.JsonNull,
     }));
 
     if (auditIssuesData.length > 0) {

@@ -455,6 +455,7 @@ export default async function AuditPage({
                                     category={issue.category}
                                     affectedUrl={issue.affectedUrl}
                                     count={issue.count}
+                                    data={issue.data as Record<string, unknown> | null}
                                   />
                                   {issue.count > 1 && (
                                     <span className="text-xs font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border">

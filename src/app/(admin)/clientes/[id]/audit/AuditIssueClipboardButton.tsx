@@ -14,6 +14,7 @@ interface Props {
   category: string;
   affectedUrl: string | null;
   count: number;
+  data?: Record<string, unknown> | null;
 }
 
 const SEVERITY_LABEL: Record<string, string> = {
@@ -48,6 +49,7 @@ export function AuditIssueClipboardButton({
   category,
   affectedUrl,
   count,
+  data,
 }: Props) {
   const { toggleItem, hasItem } = useClipboard();
   const added = hasItem(title, "audit_issue");
@@ -85,6 +87,7 @@ export function AuditIssueClipboardButton({
         categoryLabel: CATEGORY_LABEL[category] ?? category,
         affectedUrl,
         affectedPageCount: count,
+        ...(data ? { resources: data } : {}),
       },
     });
     if (result.ok) {
