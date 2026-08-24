@@ -29,7 +29,12 @@ CATEGORÍAS:
 - "mejora": optimización de mediano plazo (1–3 meses)
 
 SECCIÓN DESTINO (campo seccionDestino — usa EXACTAMENTE uno de estos slugs):
-keywords | audit | backlinks | competencia | oportunidades | terminos-busqueda | aeo-research | contenido | ai-search | analisis
+keywords | audit | backlinks | competencia | oportunidades | terminos-busqueda | trafico-paginas | aeo-research | contenido | ai-search | analisis
+
+Guía para elegir sección destino:
+- CTR bajo de una QUERY específica → terminos-busqueda
+- CTR bajo de una PÁGINA/URL específica (mejorar meta tags) → trafico-paginas
+- Oportunidades de ranking generales → oportunidades
 
 RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON. Si no hay señales suficientes, devuelve [].
 

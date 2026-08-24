@@ -43,7 +43,7 @@ function priorityBadge(p: string) {
   return "text-muted-foreground bg-muted border-border";
 }
 
-function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
+function OpportunityCard({ opp, clientId }: { opp: SeoOpportunity; clientId: string }) {
   const meta = TYPE_META[opp.type];
   const Icon = meta.icon;
 
@@ -64,6 +64,8 @@ function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <OpportunityClipboardButton
+            clientId={clientId}
+            oppType={opp.type}
             label={opp.label}
             action={opp.action}
             priority={opp.priority}
@@ -71,6 +73,7 @@ function OpportunityCard({ opp }: { opp: SeoOpportunity }) {
             url={opp.url}
             position={opp.position}
             impressions={opp.impressions}
+            clicks={opp.clicks}
             ctr={opp.ctr}
           />
           <span
@@ -118,10 +121,12 @@ function OpportunitySection({
   title,
   opportunities,
   emptyText,
+  clientId,
 }: {
   title: string;
   opportunities: SeoOpportunity[];
   emptyText: string;
+  clientId: string;
 }) {
   return (
     <section>
@@ -143,7 +148,7 @@ function OpportunitySection({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {opportunities.map((opp, i) => (
-            <OpportunityCard key={i} opp={opp} />
+            <OpportunityCard key={i} opp={opp} clientId={clientId} />
           ))}
         </div>
       )}
@@ -314,30 +319,35 @@ export default async function OportunidadesPage({
               title="Quick wins — keywords a un paso del top 3"
               opportunities={report.quickWins}
               emptyText="Sin keywords en posición 4-10 con suficientes impresiones."
+              clientId={params.id}
             />
 
             <OpportunitySection
               title="Problema de CTR — buenos rankings sin suficientes clics"
               opportunities={report.ctrIssuesQuery}
               emptyText="Ninguna keyword en top 3 tiene CTR anormalmente bajo."
+              clientId={params.id}
             />
 
             <OpportunitySection
               title="Sin cobertura — keywords prioritarias sin presencia"
               opportunities={report.noCoverage}
               emptyText="Todas las keywords prioritarias tienen visibilidad en GSC."
+              clientId={params.id}
             />
 
             <OpportunitySection
               title="Posición pobre — mucha visibilidad, poco tráfico"
               opportunities={report.poorPosition}
               emptyText="Sin keywords con muchas impresiones en página 2+."
+              clientId={params.id}
             />
 
             <OpportunitySection
               title="CTR bajo por URL — páginas que no convierten impresiones en clics"
               opportunities={report.ctrIssuesPage}
               emptyText="Ninguna URL tiene CTR anormalmente bajo dado su volumen de impresiones."
+              clientId={params.id}
             />
           </>
         )}
