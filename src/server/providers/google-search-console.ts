@@ -35,6 +35,15 @@ export interface GscQueriesParams {
   rowLimit?: number;
 }
 
+export interface GscQueryPageRow {
+  query: string;
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 export interface GscPageRow {
   page: string;      // URL absoluta tal como devuelve GSC
   clicks: number;
@@ -229,5 +238,59 @@ export class GoogleSearchConsoleProvider {
     } catch { /* Redis caído — devolver datos sin cachear */ }
 
     return rows;
+  }
+
+  /**
+   * Devuelve la página principal que rankea para cada query.
+   * Usa dimensiones ["query", "page"] para obtener el cruce exacto.
+   * Retorna un Map<query, url> con la URL de mayor impresiones por query.
+   */
+  async getQueryTopPages(params: {
+    siteUrl: string;
+    startDate: string;
+    endDate: string;
+    rowLimit?: number;
+  }): Promise<Map<string, string>> {
+    const { siteUrl, startDate, endDate, rowLimit = 2000 } = params;
+    const cacheKey = `cache:gsc:${encodeURIComponent(siteUrl)}:${startDate}:${endDate}:query-pages`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return new Map(JSON.parse(cached) as [string, string][]);
+    } catch { /* Redis caído */ }
+
+    const sc = google.webmasters({ version: "v3", auth: this.auth });
+    const { data } = await sc.searchanalytics.query({
+      siteUrl,
+      requestBody: {
+        startDate,
+        endDate,
+        dimensions: ["query", "page"],
+        rowLimit,
+      },
+    });
+
+    // Para cada query, quedarse con la URL de mayor impresiones
+    const best = new Map<string, { page: string; impressions: number }>();
+    for (const row of data.rows ?? []) {
+      const query = row.keys?.[0] ?? "";
+      const page = row.keys?.[1] ?? "";
+      const impressions = row.impressions ?? 0;
+      const existing = best.get(query);
+      if (!existing || impressions > existing.impressions) {
+        best.set(query, { page, impressions });
+      }
+    }
+
+    const result = new Map<string, string>();
+    Array.from(best.entries()).forEach(([query, { page }]) => {
+      result.set(query, page);
+    });
+
+    try {
+      await redis.set(cacheKey, JSON.stringify(Array.from(result.entries())), "EX", 86400);
+    } catch { /* Redis caído */ }
+
+    return result;
   }
 }

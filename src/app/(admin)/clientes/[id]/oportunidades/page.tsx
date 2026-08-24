@@ -234,20 +234,21 @@ export default async function OportunidadesPage({
 
   const gsc = new GoogleSearchConsoleProvider(oauth);
 
-  const [queries, pages, keywordsDb] = await Promise.all([
+  const [queries, pages, keywordsDb, queryPageMap] = await Promise.all([
     gsc.getQueries({ siteUrl: site.gscProperty, startDate: start, endDate: end, rowLimit: 1000 }).catch(() => []),
     gsc.getPages({ siteUrl: site.gscProperty, startDate: start, endDate: end, rowLimit: 500 }).catch(() => []),
     prisma.keyword.findMany({
       where: { clientId: client.id, isPriority: true, deletedAt: null },
       select: { term: true },
     }),
+    gsc.getQueryTopPages({ siteUrl: site.gscProperty, startDate: start, endDate: end }).catch(() => new Map<string, string>()),
   ]);
 
   const priorityKeywords = keywordsDb.map((k) => k.term);
 
   // ── Calcular oportunidades ────────────────────────────────────────────────
 
-  const report = buildOpportunitiesReport(queries, pages, priorityKeywords);
+  const report = buildOpportunitiesReport(queries, pages, priorityKeywords, queryPageMap);
 
   // ── Render ────────────────────────────────────────────────────────────────
 

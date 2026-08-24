@@ -241,15 +241,28 @@ export interface OpportunitiesReport {
   highPriorityCount: number;
 }
 
+/**
+ * Enriquece oportunidades query-level con la URL que rankea para ese keyword.
+ */
+function enrichWithUrls(opps: SeoOpportunity[], queryPageMap?: Map<string, string>): SeoOpportunity[] {
+  if (!queryPageMap) return opps;
+  return opps.map((opp) => {
+    if (opp.url || !opp.keyword) return opp;
+    const page = queryPageMap.get(opp.keyword);
+    return page ? { ...opp, url: page } : opp;
+  });
+}
+
 export function buildOpportunitiesReport(
   queries: GscQueryRow[],
   pages: GscPageRow[],
-  priorityKeywords: string[]
+  priorityKeywords: string[],
+  queryPageMap?: Map<string, string>,
 ): OpportunitiesReport {
-  const quickWins = detectQuickWins(queries);
-  const ctrIssuesQuery = detectLowCtrQueries(queries);
+  const quickWins = enrichWithUrls(detectQuickWins(queries), queryPageMap);
+  const ctrIssuesQuery = enrichWithUrls(detectLowCtrQueries(queries), queryPageMap);
   const noCoverage = detectNoCoverage(priorityKeywords, queries);
-  const poorPosition = detectPoorPosition(queries);
+  const poorPosition = enrichWithUrls(detectPoorPosition(queries), queryPageMap);
   const ctrIssuesPage = detectLowCtrPages(pages);
 
   const all = [...quickWins, ...ctrIssuesQuery, ...noCoverage, ...poorPosition, ...ctrIssuesPage];
