@@ -139,15 +139,19 @@ export async function actionDecomposeAndSendToOrchestrator(
     return { ok: false, error: "Error al descomponer la acción." };
   }
 
-  // Un POST al intake con subtareas dentro del payload
+  // sourceId y oppType van DENTRO de payload — el intake lee payload.sourceId / payload.oppType.
+  // Como campos top-level se ignoran en silencio.
   const sourceId = `analysis:${input.analysisId}:opp:${input.oppIndex}`;
 
-  // sourceUrl: si todas las sub-tareas comparten el mismo targetUrl, usarlo;
-  // si hay varias o ninguna, null.
+  // sourceUrl: si todas las sub-tareas comparten el mismo targetUrl, usarlo.
+  // Si no, usar la URL del análisis en Cerebro SEO como fallback para que
+  // la agrupación del Orquestador (sourceUrl + sourceCategory) siempre dispare.
   const targetUrls = Array.from(
     new Set(subtareas.map((s) => s.targetUrl).filter(Boolean))
   );
-  const sourceUrl = targetUrls.length === 1 ? targetUrls[0] : null;
+  const sourceUrl = targetUrls.length === 1
+    ? targetUrls[0]
+    : `/clientes/${input.clientId}/analisis`;
 
   const body = {
     clientId: client.cerebroClientId,
@@ -156,9 +160,9 @@ export async function actionDecomposeAndSendToOrchestrator(
     sourceSystem: "cerebro-seo" as const,
     sourceUrl,
     sourceCategory: "analysis-opportunity",
-    sourceId,
-    oppType: "analysis-opportunity",
     payload: {
+      sourceId,
+      oppType: "analysis-opportunity",
       titulo: input.titulo,
       descripcion: input.descripcion,
       accion: input.accion,
