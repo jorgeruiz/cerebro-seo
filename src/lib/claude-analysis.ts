@@ -394,3 +394,105 @@ export async function generateClientAnalysis(
 
   return { analysis, analysisId: record.id };
 }
+
+// ─── Descomposición de acciones para Orquestador ─────────────────────────
+
+const VALID_KINDS = new Set([
+  "meta",
+  "contenido-blog",
+  "contenido-landing",
+  "schema",
+  "tecnico",
+  "otro",
+] as const);
+
+export type SubtareaKind = "meta" | "contenido-blog" | "contenido-landing" | "schema" | "tecnico" | "otro";
+
+export interface Subtarea {
+  kind: SubtareaKind;
+  titulo: string;
+  descripcion: string;
+  targetUrl: string | null;
+  keywords: string[];
+}
+
+const DECOMPOSE_PROMPT = `Recibes una oportunidad SEO con su acción concreta. Tu trabajo es descomponerla en sub-tareas atómicas e independientes.
+
+REGLAS:
+- Si la acción ya es atómica (una sola cosa por hacer), devuelve 1 sub-tarea.
+- "kind" DEBE ser uno de: "meta", "contenido-blog", "contenido-landing", "schema", "tecnico", "otro". Si ninguno aplica, usa "otro". NUNCA inventes valores nuevos.
+- "targetUrl": solo si aparece EXPLÍCITA en el texto. Si no está mencionada, null. PROHIBIDO inventar o inferir URLs.
+- "keywords": solo las que aparecen EXPLÍCITAS en el texto. Si no hay, array vacío.
+
+RESPONDE ÚNICAMENTE con JSON válido, sin markdown, sin preámbulo, sin texto adicional:
+{"subtareas":[{"kind":"...","titulo":"...","descripcion":"...","targetUrl":null,"keywords":[]}]}`;
+
+export async function decomposeAction(opp: {
+  titulo: string;
+  descripcion: string;
+  accion: string;
+  impacto: string;
+}): Promise<Subtarea[]> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      system: DECOMPOSE_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Oportunidad: ${opp.titulo}\nDescripción: ${opp.descripcion}\nAcción concreta: ${opp.accion}\nImpacto: ${opp.impacto}`,
+        },
+      ],
+    });
+
+    const rawText =
+      response.content[0]?.type === "text" ? response.content[0].text : "{}";
+    const jsonStr = rawText
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const parsed = JSON.parse(jsonStr) as { subtareas?: unknown[] };
+
+    if (!Array.isArray(parsed.subtareas) || parsed.subtareas.length === 0) {
+      return [makeFallbackSubtarea(opp)];
+    }
+
+    return parsed.subtareas.map((raw) => {
+      const s = raw as Record<string, unknown>;
+      let kind = String(s.kind ?? "otro");
+      if (!VALID_KINDS.has(kind as SubtareaKind)) {
+        console.warn(`[decomposeAction] kind inválido "${kind}", forzando a "otro"`);
+        kind = "otro";
+      }
+      return {
+        kind: kind as SubtareaKind,
+        titulo: String(s.titulo ?? opp.accion).slice(0, 120),
+        descripcion: String(s.descripcion ?? ""),
+        targetUrl: typeof s.targetUrl === "string" ? s.targetUrl : null,
+        keywords: Array.isArray(s.keywords)
+          ? s.keywords.filter((k): k is string => typeof k === "string")
+          : [],
+      };
+    });
+  } catch (err) {
+    console.error("[decomposeAction] Error, usando fallback:", err);
+    return [makeFallbackSubtarea(opp)];
+  }
+}
+
+function makeFallbackSubtarea(opp: {
+  titulo: string;
+  accion: string;
+}): Subtarea {
+  return {
+    kind: "otro",
+    titulo: opp.titulo,
+    descripcion: opp.accion,
+    targetUrl: null,
+    keywords: [],
+  };
+}
