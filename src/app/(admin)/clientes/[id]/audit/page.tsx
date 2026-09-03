@@ -16,6 +16,10 @@ import {
   BarChart3,
   RefreshCw,
   ExternalLink,
+  Bot,
+  ShieldCheck,
+  ShieldAlert,
+  MinusCircle,
 } from "lucide-react";
 import { SectionHeader, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AuditScoreChart } from "./AuditScoreChart";
@@ -41,7 +45,7 @@ async function getAuditData(clientId: string, auditId?: string) {
           id: true, date: true, type: true, status: true, error: true,
           startedAt: true, completedAt: true,
           scoreOverall: true, scoreTechnical: true, scorePerformance: true,
-          scoreContent: true, seoScore: true, accessibilityScore: true,
+          scoreContent: true, seoScore: true, accessibilityScore: true, aeoScore: true,
           pagesCrawled: true, pagesIndexable: true, brokenPages: true, redirectPages: true,
           cwvData: true,
           // Issues solo del audit seleccionado (se incluyen abajo)
@@ -87,6 +91,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   content:       "Contenido",
   seo:           "SEO",
   accessibility: "Accesibilidad",
+  aeo:           "AEO",
 };
 
 function ScoreBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" | "lg" }) {
@@ -386,6 +391,95 @@ export default async function AuditPage({
                 </div>
               </section>
             )}
+
+            {/* AEO Readiness */}
+            {(() => {
+              const aeoScore = selectedAudit.aeoScore;
+              const aeoIssues = selectedAudit.auditIssues.filter((i) => i.category === "aeo");
+
+              if (aeoScore === null || aeoScore === undefined) {
+                return (
+                  <section>
+                    <SectionHeader>Legibilidad para IA (AEO)</SectionHeader>
+                    <div className="bg-card rounded-xl border border-border p-6 flex items-center gap-3">
+                      <Bot className="h-5 w-5 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">
+                        Disponible tras la próxima auditoría completa.
+                      </p>
+                    </div>
+                  </section>
+                );
+              }
+
+              const AEO_STATUS_ICONS = {
+                pass: { icon: CheckCircle2, color: "text-ds-green" },
+                fail: { icon: XCircle, color: "text-destructive" },
+                warn: { icon: AlertTriangle, color: "text-ds-yellow" },
+                skipped: { icon: MinusCircle, color: "text-muted-foreground" },
+              } as const;
+
+              const scoreColor =
+                aeoScore >= 80 ? "text-ds-green bg-primary/10 border-ds-gd"
+                : aeoScore >= 60 ? "text-ds-yellow bg-ds-yellow/10 border-ds-yellow/40"
+                : "text-destructive bg-destructive/10 border-destructive/30";
+
+              const scoreIcon = aeoScore >= 80 ? ShieldCheck : ShieldAlert;
+              const ScoreIcon = scoreIcon;
+
+              return (
+                <section>
+                  <SectionHeader>Legibilidad para IA (AEO)</SectionHeader>
+                  <div className="space-y-3">
+                    {/* Score card */}
+                    <div className={`rounded-xl border p-5 flex items-center gap-4 ${scoreColor}`}>
+                      <ScoreIcon className="h-8 w-8 shrink-0" />
+                      <div>
+                        <p className="text-2xl font-bold font-mono">{aeoScore}<span className="text-sm font-normal ml-1">/100</span></p>
+                        <p className="text-xs mt-0.5 opacity-80">
+                          {aeoScore >= 80
+                            ? "El sitio es legible por crawlers de IA."
+                            : aeoScore >= 60
+                              ? "Legibilidad parcial — hay oportunidades de mejora."
+                              : "El sitio tiene problemas serios de legibilidad para IA."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Check list */}
+                    {aeoIssues.length > 0 && (
+                      <div className="bg-card rounded-xl border border-border p-4 space-y-2">
+                        {aeoIssues.map((issue) => {
+                          const issueData = issue.data as { checkId?: string; fix?: string } | null;
+                          const checkStatus = issue.severity === "critical" || issue.severity === "high" ? "fail" : "warn";
+                          const statusCfg = AEO_STATUS_ICONS[checkStatus];
+                          const StatusIcon = statusCfg.icon;
+
+                          return (
+                            <div key={issue.id} className="flex items-start gap-3 p-2">
+                              <StatusIcon className={`h-4 w-4 mt-0.5 shrink-0 ${statusCfg.color}`} />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground">{issue.title}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{issue.description}</p>
+                                {issueData?.fix && (
+                                  <p className="text-xs text-muted-foreground/70 mt-1 italic">{issueData.fix}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {aeoIssues.length === 0 && aeoScore >= 80 && (
+                      <div className="bg-primary/10 border border-ds-gd rounded-xl p-5 flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-ds-green" />
+                        <p className="text-sm text-foreground">Todos los checks AEO pasaron correctamente.</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Issues */}
             {totalIssues > 0 && (

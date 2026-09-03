@@ -282,6 +282,7 @@ model Audit {
   brokenPages      Int      @default(0)
   redirectPages    Int      @default(0)
   cwvData          Json?
+  aeoScore         Int?
   summary          String?  @db.Text
   error            String?  @db.Text
 

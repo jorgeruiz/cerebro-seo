@@ -12,6 +12,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { crawlSite, type PageIssue } from "@/server/crawler/site-crawler";
 import { runPageSpeed } from "@/server/providers/pagespeed";
+import { probeAeo } from "@/server/crawler/aeo-prober";
+import { buildAeoReport } from "@/lib/aeo-readiness";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -230,6 +232,49 @@ export async function runAuditProcessor(data: AuditJobData): Promise<AuditResult
       await prisma.auditIssue.createMany({ data: auditIssuesData });
     }
 
+    // ── AEO Readiness (solo modo complete) ──────────────────────────────────
+
+    let aeoScore: number | null = null;
+
+    if (mode === "complete") {
+      try {
+        // sampleUrls: top URLs del crawl (las primeras 3 con contenido)
+        const sampleUrls = (crawlResult?.pages ?? [])
+          .filter((p) => p.statusCode === 200 && p.url !== siteUrl)
+          .slice(0, 3)
+          .map((p) => p.url);
+
+        const domain = new URL(siteUrl).hostname;
+        const probeResult = await probeAeo(domain, sampleUrls);
+        const aeoReport = buildAeoReport(probeResult);
+        aeoScore = aeoReport.score;
+
+        // Persistir checks fail/warn como AuditIssues con category "aeo"
+        const aeoIssues = aeoReport.checks
+          .filter((c) => c.status === "fail" || c.status === "warn")
+          .map((c) => ({
+            auditId: audit.id,
+            category: "aeo",
+            severity: c.severity,
+            type: c.id,
+            title: c.title,
+            description: c.detail,
+            affectedUrl: siteUrl,
+            count: 1,
+            data: { checkId: c.id, fix: c.fix } as Prisma.InputJsonValue,
+          }));
+
+        if (aeoIssues.length > 0) {
+          await prisma.auditIssue.createMany({ data: aeoIssues });
+        }
+
+        console.log(`[audit-processor] AEO score: ${aeoScore} (${aeoIssues.length} issues)`);
+      } catch (err) {
+        console.error("[audit-processor] AEO probe failed (non-fatal):", err);
+        // aeoScore stays null — non-fatal
+      }
+    }
+
     // ── Actualizar Audit con resultados finales ──────────────────────────────
 
     await prisma.audit.update({
@@ -243,6 +288,7 @@ export async function runAuditProcessor(data: AuditJobData): Promise<AuditResult
         scoreContent: contentScore,
         accessibilityScore,
         seoScore,
+        aeoScore,
         issues: auditIssuesData.map((i) => ({ type: i.type, severity: i.severity, count: i.count })),
         pagesCrawled: crawlResult?.pagesCrawled ?? 1,
         pagesIndexable: crawlResult?.pagesIndexable ?? (psiMobileResult ? 1 : 0),
