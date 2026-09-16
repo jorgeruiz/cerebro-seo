@@ -9,7 +9,6 @@ export interface OrchestratorPayload {
   clientId: string; // local CUID — se resuelve a cerebroClientId antes de enviar
   topic: string;
   priority?: string;
-  actionType?: string;
   sourceSystem: "cerebro-seo";
   sourceUrl?: string | null;
   sourceCategory?: string;

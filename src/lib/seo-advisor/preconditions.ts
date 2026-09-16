@@ -61,6 +61,11 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       prioridad: 1,
       seccionDestino: "keywords",
       evidencia: `Keywords totales: ${keywordCount} | Prioritarias: ${priorityKeywordCount}`,
+      esfuerzo: "bajo",
+      impacto: "alto",
+      kind: "otro",
+      targetUrl: null,
+      keywords: null,
     });
   }
 
@@ -75,6 +80,11 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       prioridad: 2,
       seccionDestino: "competencia",
       evidencia: `Competidores configurados: ${competitorCount} (mínimo recomendado: 2)`,
+      esfuerzo: "bajo",
+      impacto: "medio",
+      kind: "otro",
+      targetUrl: null,
+      keywords: null,
     });
   }
 
@@ -87,6 +97,11 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       prioridad: 2,
       seccionDestino: "configuracion",
       evidencia: "Propiedad GSC: no configurada",
+      esfuerzo: "bajo",
+      impacto: "alto",
+      kind: "otro",
+      targetUrl: null,
+      keywords: null,
     });
   }
 
@@ -99,6 +114,11 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       prioridad: 3,
       seccionDestino: "audit",
       evidencia: "Audits completados: 0",
+      esfuerzo: "bajo",
+      impacto: "alto",
+      kind: "tecnico",
+      targetUrl: null,
+      keywords: null,
     });
   }
 

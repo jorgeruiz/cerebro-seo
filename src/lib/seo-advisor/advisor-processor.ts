@@ -7,6 +7,7 @@ import { format, endOfMonth } from "date-fns";
 import { checkPreconditions } from "./preconditions";
 import { collectSignals } from "./signals";
 import type { NextStep, AdvisorResult } from "./types";
+import { validateNextSteps } from "./validation";
 
 // ---------------------------------------------------------------------------
 // System prompt — se cachea en Claude automáticamente (es idéntico siempre).
@@ -36,6 +37,27 @@ Guía para elegir sección destino:
 - CTR bajo de una PÁGINA/URL específica (mejorar meta tags) → trafico-paginas
 - Oportunidades de ranking generales → oportunidades
 
+ESFUERZO (campo "esfuerzo"):
+- "bajo": cambio puntual en 1 URL (meta title, meta description, schema markup, ajuste on-page), tarea de < 1 hora
+- "medio": optimización de contenido existente, interlinking, corrección técnica multi-página, 1–4 horas
+- "alto": crear contenido nuevo (landing, blog), rediseño de sección, migración técnica, > 4 horas
+
+IMPACTO (campo "impacto"):
+- "alto": afecta keywords prioritarias con > 500 impresiones/mes, o corrige un problema que bloquea indexación/rastreo
+- "medio": mejora posiciones 4–10, optimiza CTR de páginas con tráfico moderado, o cubre keyword gaps
+- "bajo": mejora incremental, páginas con poco tráfico, o pulido cosmético
+
+KIND (campo "kind" — EXACTAMENTE uno de estos valores):
+- "meta": optimización de title, meta description, Open Graph tags
+- "contenido-blog": crear o mejorar artículo de blog
+- "contenido-landing": crear o mejorar landing page
+- "schema": agregar o corregir structured data (JSON-LD, schema.org)
+- "tecnico": corrección técnica (velocidad, crawlability, canonical, redirects, Core Web Vitals)
+- "otro": cualquier acción que no encaje en las anteriores
+
+targetUrl: la URL específica a la que aplica la acción. Solo incluir si aparece EXPLÍCITA en las señales. Si no hay URL específica, null.
+keywords: array de keywords relevantes. Solo incluir las que aparecen EXPLÍCITAS en las señales. Si no hay, array vacío.
+
 RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON. Si no hay señales suficientes, devuelve [].
 
 Formato de cada item:
@@ -45,7 +67,12 @@ Formato de cada item:
   "categoria": "urgente|oportunidad|mejora",
   "prioridad": 2,
   "seccionDestino": "slug exacto de la sección más relevante",
-  "evidencia": "string menor a 120 chars con el dato clave que justifica este paso"
+  "evidencia": "string menor a 120 chars con el dato clave que justifica este paso",
+  "esfuerzo": "bajo|medio|alto",
+  "impacto": "alto|medio|bajo",
+  "kind": "meta|contenido-blog|contenido-landing|schema|tecnico|otro",
+  "targetUrl": "/pagina-ejemplo o null",
+  "keywords": ["keyword1", "keyword2"]
 }`;
 
 // ---------------------------------------------------------------------------
@@ -181,49 +208,148 @@ export async function runAdvisorProcessor(params: {
     buildSignalsBlock(clientId),
   ]);
 
-  // 5. Llamar a Claude Sonnet 4.6 con prompt caching (3 bloques)
+  // 5. Llamar a Claude con validación Zod (1 reintento si falla validación)
   const anthropic = new Anthropic();
 
-  const response = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 1500,
-    system: ADVISOR_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: profileBlock,
-            cache_control: { type: "ephemeral" },
-          },
-          {
-            type: "text",
-            text: signalsBlock,
-            cache_control: { type: "ephemeral" },
-          },
-          {
-            type: "text",
-            text: "Genera los próximos pasos estratégicos más importantes para este cliente basándote en las señales detectadas. Recuerda: NO incluyas pasos de tipo setup — esos se gestionan automáticamente por separado.",
-          },
-        ],
-      },
-    ],
-  });
-
-  // 6. Parsear respuesta JSON
-  const rawText =
-    response.content[0].type === "text" ? response.content[0].text.trim() : "[]";
+  const userBlocks: Anthropic.Messages.ContentBlockParam[] = [
+    {
+      type: "text",
+      text: profileBlock,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: signalsBlock,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: "Genera los próximos pasos estratégicos más importantes para este cliente basándote en las señales detectadas. Recuerda: NO incluyas pasos de tipo setup — esos se gestionan automáticamente por separado.",
+    },
+  ];
 
   let strategicSteps: NextStep[] = [];
-  try {
-    const match = rawText.match(/\[[\s\S]*\]/);
-    strategicSteps = match ? (JSON.parse(match[0]) as NextStep[]) : [];
-  } catch {
-    console.error(
-      "[advisor-processor] Failed to parse Claude response:",
-      rawText.slice(0, 200)
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCachedTokens = 0;
+  let validationFailed = false;
+  let prevRawText: string | undefined;
+  let prevValidationError: string | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const messages: Anthropic.Messages.MessageParam[] =
+      attempt === 0
+        ? [{ role: "user", content: userBlocks }]
+        : [
+            { role: "user", content: userBlocks },
+            {
+              role: "assistant",
+              content: prevRawText!,
+            },
+            {
+              role: "user",
+              content: `El JSON anterior falló la validación: ${prevValidationError!}\n\nCorrige los errores y devuelve SOLO el JSON array válido.`,
+            },
+          ];
+
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      system: ADVISOR_SYSTEM_PROMPT,
+      messages,
+    });
+
+    const rawText =
+      response.content[0]?.type === "text" ? response.content[0].text.trim() : "[]";
+
+    const usage = response.usage;
+    const cached =
+      (usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
+    totalInputTokens += usage.input_tokens;
+    totalOutputTokens += usage.output_tokens;
+    totalCachedTokens += cached;
+
+    // Extraer JSON array
+    let parsed: unknown[] = [];
+    try {
+      const match = rawText.match(/\[[\s\S]*\]/);
+      parsed = match ? (JSON.parse(match[0]) as unknown[]) : [];
+    } catch {
+      console.error(
+        `[advisor-processor] attempt=${attempt} JSON parse fail:`,
+        rawText.slice(0, 200)
+      );
+      prevRawText = rawText;
+      prevValidationError = "Invalid JSON";
+      continue;
+    }
+
+    // Validar con Zod
+    const validation = validateNextSteps(parsed);
+    if (validation.success) {
+      strategicSteps = validation.data as NextStep[];
+      validationFailed = false;
+      break;
+    }
+
+    console.warn(
+      `[advisor-processor] attempt=${attempt} Zod validation failed:`,
+      validation.error.slice(0, 300)
     );
+    prevRawText = rawText;
+    prevValidationError = validation.error;
+    validationFailed = true;
+  }
+
+  // Si ambos intentos fallaron → guardar como INVALID
+  const cost = calculateClaudeCost(
+    "sonnet-4-6",
+    totalInputTokens,
+    totalOutputTokens,
+    totalCachedTokens
+  );
+
+  if (validationFailed) {
+    console.error("[advisor-processor] Both attempts failed validation — saving as INVALID");
+
+    const plan = await prisma.nextStepPlan.create({
+      data: {
+        clientId,
+        steps: setupSteps as unknown as import("@prisma/client").Prisma.InputJsonValue,
+        status: "invalid",
+        model: CLAUDE_MODEL,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        cost,
+        triggeredBy: triggeredBy ?? null,
+      },
+    });
+
+    await prisma.jobLog.create({
+      data: {
+        jobName: "advisor:generate",
+        clientId,
+        status: "failed",
+        error: `Zod validation failed after 2 attempts: ${(prevValidationError ?? "unknown").slice(0, 500)}`,
+        attempts: 2,
+      },
+    });
+
+    await logApiUsage({
+      provider: "claude",
+      endpoint: "messages/seo-advisor",
+      cost,
+      clientId,
+    });
+
+    if (scheduled) await redis.setex(ranKey, 25 * 3600, "1");
+
+    return {
+      steps: setupSteps,
+      planId: plan.id,
+      tokensUsed: { input: totalInputTokens, output: totalOutputTokens, cached: totalCachedTokens },
+      cost,
+    };
   }
 
   // 7. Merge setup + estratégicos, ordenar por prioridad
@@ -231,31 +357,21 @@ export async function runAdvisorProcessor(params: {
     (a, b) => a.prioridad - b.prioridad
   );
 
-  // 8. Calcular costo
-  const usage = response.usage;
-  const cachedTokens =
-    (usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
-  const cost = calculateClaudeCost(
-    "sonnet-4-6",
-    usage.input_tokens,
-    usage.output_tokens,
-    cachedTokens
-  );
-
-  // 9. Persistir en BD
+  // 8. Persistir en BD
   const plan = await prisma.nextStepPlan.create({
     data: {
       clientId,
       steps: allSteps as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      status: "valid",
       model: CLAUDE_MODEL,
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
       cost,
       triggeredBy: triggeredBy ?? null,
     },
   });
 
-  // 10. Registrar costo
+  // 9. Registrar costo
   await logApiUsage({
     provider: "claude",
     endpoint: "messages/seo-advisor",
@@ -263,17 +379,18 @@ export async function runAdvisorProcessor(params: {
     clientId,
   });
 
-  // 11. Marcar como corrido hoy (idempotencia scheduled)
+  // 10. Marcar como corrido hoy (idempotencia scheduled)
   if (scheduled) await redis.setex(ranKey, 25 * 3600, "1");
 
   return {
     steps: allSteps,
     planId: plan.id,
     tokensUsed: {
-      input: usage.input_tokens,
-      output: usage.output_tokens,
-      cached: cachedTokens,
+      input: totalInputTokens,
+      output: totalOutputTokens,
+      cached: totalCachedTokens,
     },
     cost,
   };
 }
+

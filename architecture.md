@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-06-10 (v5)
+**Última actualización:** 2026-09-03 (v6)
 
 ---
 
@@ -110,23 +110,48 @@ prisma/migrations/
 **Módulos del cliente (todos activos):**
 ```
 src/app/(admin)/clientes/[id]/
-├── page.tsx                    # Portada: GSC real, GA4, operativa del mes, grid módulos
+├── page.tsx                    # Portada: GSC real, GA4, NextStepsPanel, operativa del mes
 ├── keywords/page.tsx           # Rankings con sparkline, filtros, export CSV
 ├── terminos-busqueda/page.tsx  # Queries GSC con filtros
 ├── trafico-paginas/page.tsx    # Tráfico GA4+GSC fusionado por URL
 ├── backlinks/page.tsx          # BacklinksAgent: perfil, evolución, cambios semana
 ├── competencia/page.tsx        # CompetitorAgent: SoV, keyword gaps
 ├── ai-search/page.tsx          # AI Search Visibility semanal por LLM
-├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6
-├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC)
+├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6 + botón Orquestador
+├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC) + botón Orquestador
 ├── reporte/page.tsx            # Reporte mensual Claude + PDF exportable
 ├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs
 ├── timeline/page.tsx           # Eventos/Timeline 7 fuentes 90 días
-├── audit/page.tsx              # Site Audit con historial + gráfica evolución
-├── contenido/page.tsx          # Plan de Contenido on-demand Claude ★ Sesión 34
+├── audit/page.tsx              # Site Audit + AEO Readiness (10 checks) + botón Orquestador
+├── contenido/page.tsx          # Plan de Contenido on-demand Claude + botón Orquestador
+├── aeo-research/page.tsx       # AEO/GEO Research (clusters + Claude) + botón Orquestador
 ├── configuracion/page.tsx      # CRUD keywords/competidores/GSC/GA4
+├── portapapeles/page.tsx       # Portapapeles de estrategia (markdown, en memoria)
 ├── insights/page.tsx           # Historial insights (tabs: activos/resueltos/ignorados)
 └── insights/[insightId]/page.tsx # Detalle de insight
+```
+
+**Integración con Orquestador de Cerebro:**
+```
+src/app/(admin)/clientes/[id]/
+├── orchestrator-actions.ts     # Server actions: actionSendToOrchestrator (genérica)
+│                               #   + actionDecomposeAndSendToOrchestrator (análisis → sub-tareas)
+├── ClipboardContext.tsx        # React Context portapapeles por cliente
+└── layout.tsx                  # ClientSidebar contextual + ClipboardContext
+```
+
+**Lógica AEO/GEO y análisis:**
+```
+src/lib/
+├── aeo-readiness.ts            # Scoring AEO (puro, sin Prisma): buildAeoReport()
+├── aeo-classify.ts             # Clasificación clusters AEO/GEO con Claude
+├── claude-analysis.ts          # Análisis on-demand + decomposeAction() para Orquestador
+├── claude-content-plan.ts      # Plan de contenido on-demand
+└── seo-advisor/                # Asesor SEO (NextStepPlan)
+
+src/server/crawler/
+├── site-crawler.ts             # Crawler Cheerio BFS 50 págs
+└── aeo-prober.ts               # Prober AEO: 10 checks vía fetch ($0 costo)
 ```
 
 **Pendiente de implementar:**
@@ -265,6 +290,48 @@ model ContentPlan {
   client       Client   @relation(fields: [clientId], references: [id])
 
   @@index([clientId, createdAt])
+}
+
+// ★ nuevo modelo (Sesión 36): investigación AEO/GEO con clusters de preguntas
+model AeoResearch {
+  id            String   @id @default(cuid())
+  clientId      String
+  seeds         String[]
+  clusters      Json                       // AeoResearchResult serializado
+  model         String
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  cost          Decimal  @db.Decimal(10, 6)
+  questionCount Int      @default(0)
+  triggeredBy   String?
+  createdAt     DateTime @default(now())
+
+  client        Client   @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, createdAt])
+}
+
+// ★ nuevo modelo: planes de próximos pasos (asesor SEO)
+model NextStepPlan {
+  id           String   @id @default(cuid())
+  clientId     String
+  steps        Json                        // NextStep[]
+  generatedAt  DateTime @default(now())
+  model        String                      // "claude-sonnet-4-6" | "deterministic"
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cost         Decimal  @db.Decimal(10, 6)
+  triggeredBy  String?
+
+  client       Client   @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, generatedAt])
+}
+
+// ★ Audit.aeoScore (Sesión 35): score 0-100 de legibilidad para IA, nullable para audits viejos
+model Audit {
+  // ... campos base ...
+  aeoScore     Int?                        // 0-100, solo en audits "complete"
 }
 ```
 
@@ -425,15 +492,15 @@ Los agentes coordinan a través de:
 
 | Agente | Queue | Modelo Claude | Estado |
 |---|---|---|---|
-| InsightsAgent | ai-analysis | Sonnet 4.6 | ✅ Implementado |
-| CrawlerAgent | data-collection | Haiku 4.5 (solo síntesis) | Pendiente Fase 2 |
-| RankTrackingAgent | data-collection | Sin Claude | Pendiente Fase 2 |
-| CerebroSyncAgent | sync | Sin Claude | Pendiente Fase 2 |
-| BacklinksAgent | data-collection | Sin Claude | Pendiente Fase 3 |
-| CompetitorAgent | data-collection | Haiku 4.5 (3 observaciones) | Pendiente Fase 3 |
-| AiSearchAgent | data-collection | Sin Claude | Pendiente Fase 4 |
-| CycleCloseAgent | ai-analysis | Sonnet 4.6 | Pendiente Fase 4 |
-| ReportAgent | ai-analysis | Sonnet 4.6 + Haiku 4.5 | Pendiente Fase 4 |
+| InsightsAgent | ai-analysis | Sonnet 4.6 | ✅ Activo |
+| CrawlerAgent (Site Audit) | data-collection | Sin Claude | ✅ Activo (semanal quick + mensual complete) |
+| RankTrackingAgent | data-collection | Sin Claude | ✅ Activo (diario priority + semanal bulk) |
+| CerebroSyncAgent | sync | Sin Claude | ✅ Activo (6h clientes + 15min tareas) |
+| BacklinksAgent | data-collection | Sin Claude | ✅ Activo (jueves 5 AM) |
+| CompetitorAgent | data-collection | Sin Claude | ✅ Activo (días 1 y 15, 7 AM) |
+| AiSearchAgent | data-collection | Haiku 4.5 | ✅ Activo (viernes 6 AM) |
+| CycleCloseAgent | ai-analysis | Sonnet 4.6 | ✅ Activo (día 1 del mes) |
+| ReportAgent | ai-analysis | Sonnet 4.6 | ✅ Activo (día 2 del mes) |
 
 ### InsightsAgent — optimización de contexto
 
@@ -491,17 +558,18 @@ insights:ran:{clientId}:{dateISO}:{trigger}  Idempotencia, TTL 25h
 
 | Job | Agente | Frecuencia | Estado |
 |---|---|---|---|
-| `tracking:rankings-priority` | RankTrackingAgent | Diario 3 AM | Pendiente Fase 2 |
-| `tracking:rankings-bulk` | RankTrackingAgent | Lunes 4 AM | Pendiente Fase 2 |
-| `crawler:audit-quick` | CrawlerAgent | Miércoles 2 AM | Pendiente Fase 2 |
-| `crawler:audit` | CrawlerAgent | Día 1 del mes, 1 AM | Pendiente Fase 2 |
-| `insights:generate` | InsightsAgent | Diario 6 AM | ✅ Código listo; espera datos reales |
-| `sync:cerebro` | CerebroSyncAgent | Cada 6 horas | Pendiente Fase 2 |
-| `analysis:backlinks` | BacklinksAgent | Jueves 5 AM | Pendiente Fase 3 |
-| `analysis:competitors` | CompetitorAgent | Días 1 y 15, 7 AM | Pendiente Fase 3 |
-| `analysis:ai-search` | AiSearchAgent | Viernes 6 AM | Pendiente Fase 4 |
-| `cycle:close` | CycleCloseAgent | Día 1 del mes, 2 AM | Pendiente Fase 4 |
-| `report:monthly` | ReportAgent | Día 2 del mes, 6 AM | Pendiente Fase 4 |
+| `tracking:rankings-priority` | RankTrackingAgent | Diario 3 AM | ✅ Activo |
+| `tracking:rankings-bulk` | RankTrackingAgent | Lunes 4 AM | ✅ Activo |
+| `crawler:audit-quick` | CrawlerAgent | Miércoles 2 AM | ✅ Activo |
+| `crawler:audit` | CrawlerAgent | Día 1 del mes, 1 AM | ✅ Activo (+ AEO Readiness en complete) |
+| `insights:generate` | InsightsAgent | Diario 6 AM | ✅ Activo |
+| `sync:cerebro` | CerebroSyncAgent | Cada 6 horas | ✅ Activo (upsert + lista blanca) |
+| `sync:cerebro-tasks` | CerebroSyncAgent | Cada 15 min | ✅ Activo (por cliente SEO) |
+| `analysis:backlinks` | BacklinksAgent | Jueves 5 AM | ✅ Activo |
+| `analysis:competitors` | CompetitorAgent | Días 1 y 15, 7 AM | ✅ Activo |
+| `analysis:ai-search` | AiSearchAgent | Viernes 6 AM | ✅ Activo |
+| `cycle:close` | CycleCloseAgent | Día 1 del mes, 2 AM | ✅ Activo |
+| `report:monthly` | ReportAgent | Día 2 del mes, 6 AM | ✅ Activo |
 
 ---
 
@@ -509,7 +577,24 @@ insights:ran:{clientId}:{dateISO}:{trigger}  Idempotencia, TTL 25h
 
 **Decisión tomada (07-may-2026):** REST API interna con shared secret. Descartado Prisma multi-schema.
 
-Implementación pendiente en `src/lib/cerebro-bridge.ts` (Fase 2). Ver `integration_cerebro.md` para detalle de endpoints y contratos de datos.
+### Bridge bidireccional (operativo)
+- `src/lib/cerebro-bridge.ts` — sync clientes y tareas desde Cerebro/Notion
+- Workers BullMQ: `sync:cerebro` (6h) + `sync:cerebro-tasks` (15min por cliente SEO)
+- Upsert por `cerebroClientId`, lista blanca de estados Notion
+
+### Orquestador (operativo)
+- `src/app/(admin)/clientes/[id]/orchestrator-actions.ts` — envía tareas a `POST /api/orchestrator/intake` de Cerebro
+- 5 callers: Oportunidades, Audit Issues, Plan de Contenido, AEO Research, Análisis Claude
+- Análisis Claude usa `decomposeAction()` (Claude Sonnet) para descomponer acciones compuestas en sub-tareas antes de enviar
+- Fire-and-forget (no persiste envíos en BD de Cerebro SEO)
+
+### Endpoints internos expuestos por Cerebro SEO
+- `GET /api/internal/cerebro/clients/[id]/monthly-summary` — resumen mensual para Cerebro
+- `GET /api/internal/diagnostico` — diagnóstico técnico del cliente
+- `GET /api/internal/recommendations` — recomendaciones priorizadas
+- `GET /api/internal/constructor/metrics` — métricas para Constructor
+
+Ver `integration_cerebro.md` para detalle de contratos de datos.
 
 ---
 

@@ -49,20 +49,12 @@ function IdeaCard({ idea, index, clientId }: { idea: ContentIdea; index: number;
   const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
   const [orchError, setOrchError] = useState<string | null>(null);
 
-  const ACTION_TYPE_MAP: Partial<Record<ContentType, string>> = {
-    landing: "site.landing.create",
-    blog:    "blog.create",
-    pilar:   "blog.create",
-    soporte: "blog.create",
-  };
-
   async function handleSendToOrchestrator() {
     setOrchState("sending");
     const result = await actionSendToOrchestrator({
       clientId,
       topic: idea.keywords[0] ?? idea.titulo,
       priority: idea.prioridad,
-      actionType: ACTION_TYPE_MAP[idea.tipo],
       sourceSystem: "cerebro-seo",
       sourceUrl: idea.urlSugerida ?? null,
       sourceCategory: idea.tipo,

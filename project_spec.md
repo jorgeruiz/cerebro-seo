@@ -1,8 +1,8 @@
 # Cerebro SEO — Project Spec
 
 **Owner:** Jorge Ruiz (Click Society)
-**Estado:** Post-Fase 4 — todos los módulos core activos, nuevos módulos en desarrollo
-**Última actualización:** 2026-06-10 (v4)
+**Estado:** Post-Fase 4 — todos los módulos core activos, expansión AEO/GEO + integración Orquestador
+**Última actualización:** 2026-09-03 (v5)
 
 ---
 
@@ -86,10 +86,12 @@ La vista central del producto. Estructura jerárquica:
 | Keyword ideas | Investigación de keywords nuevas con volumen, dificultad, intent. |
 | Tráfico de páginas | Performance por URL: tráfico orgánico, conversiones, tendencias. |
 | Eventos | Timeline de cambios, updates de algoritmo, acciones SEO ejecutadas. |
-| Site Audit | Auditoría técnica on-site (crawler propio + Core Web Vitals). |
+| Site Audit | Auditoría técnica on-site (crawler propio + Core Web Vitals + AEO Readiness). |
 | Análisis de competencia | Comparativa de rankings, share of voice, gap de keywords. |
 | Backlinks | Perfil de enlaces, nuevos/perdidos, comparativa vs competidores. |
 | Plan de Contenido | Ideas de contenido SEO on-demand con Claude Sonnet 4.6. Cruza keyword gaps, oportunidades GSC, ciclo activo. 4 tipos (blog/landing/pilar/soporte), historial de planes. |
+| AEO Research | Recopila preguntas de búsqueda, clasifica en clusters AEO (featured snippets) y GEO (citación por LLMs). |
+| Next Steps (Asesor SEO) | Recomendaciones priorizadas del siguiente paso a tomar, generadas algorítmicamente o por Claude. |
 
 ---
 
@@ -221,7 +223,7 @@ PDF brandeado Click Society. Estructura:
 - ✅ Módulo Reporte Mensual (Claude Sonnet + PDF exportable)
 - ✅ RankTrackingAgent, BacklinksAgent, CompetitorAgent, AiSearchAgent activos
 
-**Fase 4 — IA y reportes ✅ COMPLETA (con mejoras en curso)**
+**Fase 4 — IA y reportes ✅ COMPLETA**
 - ✅ Módulo Keyword Ideas (DataForSEO Labs)
 - ✅ Módulo Eventos/Timeline (7 fuentes, 90 días)
 - ✅ CycleCloseAgent (cierre atómico + validación de hipótesis)
@@ -230,15 +232,19 @@ PDF brandeado Click Society. Estructura:
 - ✅ Dashboard global `/dashboard` con KPIs y alertas
 - ✅ Página `/settings` — sistema, colas, workers, costos
 - ✅ Dark UI sweep completo — todos los módulos usan design system tokens
-- ⏳ Módulo Plan de Contenido (en desarrollo — Sesión 34)
+- ✅ Módulo Plan de Contenido on-demand (Claude Sonnet 4.6, 4 tipos)
 
-**Post-Fase 4 — Expansión de módulos (sin fecha límite)**
+**Post-Fase 4 — Expansión AEO/GEO + Integración Orquestador**
 Nuevas capacidades sobre la base ya construida:
-- Plan de Contenido SEO on-demand (en curso)
-- Análisis de auditoría comparativa (historial multi-audit)
-- Posibles: integración directa con Cerebro chat, notificaciones push de insights
-
-**Total estimado:** 8-10 semanas trabajando en paralelo a operación normal.
+- ✅ Módulo AEO Research (clusters AEO/GEO con Claude)
+- ✅ Research global efímero sin cliente (`/research`)
+- ✅ Portapapeles de estrategia por cliente (en memoria, markdown)
+- ✅ AEO Readiness en Site Audit (10 checks algorítmicos, $0 costo)
+- ✅ Integración Orquestador: botón "Enviar al Orquestador" en Oportunidades, Audit Issues, Plan de Contenido, AEO Research, y Análisis Claude
+- ✅ Desglose de acciones de Análisis Claude en sub-tareas (decomposeAction + Claude Sonnet)
+- ✅ Next Steps / Asesor SEO (recomendaciones priorizadas)
+- ✅ Doble sidebar (main colapsable + client contextual)
+- ✅ Endpoints internos para Cerebro (diagnóstico, recommendations, constructor/metrics)
 
 ---
 
@@ -274,12 +280,7 @@ Escala lineal: 30 clientes ≈ $105–150 USD/mes.
 
 ## 12. Próximo paso concreto
 
-Completar **Sesión 34** — Módulo Plan de Contenido:
-1. Verificar build sin errores
-2. Commit + push → deploy automático en Easypanel
-3. Probar en producción: generar primer plan de contenido para un cliente SEO
-4. Evaluar con Jorge/Félix si el output de Claude es accionable
-
-Después de Sesión 34, posibles próximos módulos a discutir:
-- Mejoras al módulo de Auditoría (comparativa multi-audit más visual)
-- Integración más profunda con Cerebro chat (context pass-through)
+1. Ejecutar `cleanup-and-resync` en producción (pendiente desde Sesión 41)
+2. Probar `trigger-aeo-probe.ts` contra un cliente real para validar AEO Readiness
+3. Probar desglose de acciones de Análisis Claude → Orquestador end-to-end (requiere que el intake de Cerebro acepte `sourceId` y `oppType` en payload)
+4. Persistir envíos al Orquestador para evitar duplicados (actualmente fire-and-forget)

@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-07-07 (Sesión 42 — Doble sidebar + colapso del main nav)
-**Fase actual:** Post-Fase 4 — nuevos módulos + pulido
-**Próximo hito:** Ejecutar cleanup-and-resync en producción, verificar cero duplicados
+**Última actualización:** 2026-09-03 (Sesión 35 — AEO Readiness + Análisis Claude → Orquestador)
+**Fase actual:** Post-Fase 4 — expansión AEO/GEO + integración Orquestador
+**Próximo hito:** Probar AEO Readiness con cliente real + validar desglose Orquestador end-to-end
 
 ---
 
@@ -118,6 +118,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Sidebar navegación | ✅ Completo | Íconos Lucide reales en todos los nav items. Settings solo visible para ADMIN. Sesión 33b (commit `69d9482`). |
 | Módulo Plan de Contenido | ✅ Activo | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. ADMIN-only. Migración `add_content_plan`. Sesión 34 commit `c82b0d6`. |
 | Módulo AEO Research | ✅ Activo | `/clientes/[id]/aeo-research`. Recopila preguntas de búsqueda (DataForSEO Labs + SERP PAA), clasifica con Claude Sonnet 4.6 en clusters AEO (featured snippets) y GEO (citación por LLMs). KPI strip, cluster cards expandibles, historial. ADMIN-only. Migración `20260614120000_add_aeo_research`. Sesión 36 commit `1294d7b`. |
+| AEO Readiness (Site Audit) | ✅ Activo | 10 checks algorítmicos de legibilidad para IA dentro de Site Audit (modo complete). Prober: robots.txt AI bots, llms.txt, content negotiation, .md routes, SSR content, sitemap. Score 0-100 persistido en `Audit.aeoScore`. Costo $0. Migración `20260902120000_add_aeo_readiness`. Sesión 35 commit `4877e92`. |
+| Integración Orquestador | ✅ Activo | Botón "Enviar al Orquestador" en 5 módulos: Oportunidades, Audit Issues, Plan de Contenido, AEO Research, Análisis Claude. `orchestrator-actions.ts` con `actionSendToOrchestrator` (genérica) + `actionDecomposeAndSendToOrchestrator` (análisis con desglose via Claude). Fire-and-forget (sin persistencia de envíos). |
+| Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` de una oportunidad en sub-tareas atómicas. Schema cerrado: kind enum (meta/contenido-blog/contenido-landing/schema/tecnico/otro). Validación runtime con fallback. Sin límite de sub-tareas explícito. Commit `27cdb45` + fix `bba2ea2`. |
 
 ---
 
@@ -200,6 +203,14 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-06-14 | **Sección global `/research` (Sesión 37).** Research ephemero sin cliente: modo keywords (ideas + preguntas + clusters AEO/GEO con Claude) y modo dominio (rank overview). Resultados solo en memoria React — sin modelo Prisma nuevo. `classifyAeoResearchEphemeral` en `aeo-classify.ts` clasifica sin guardar a BD. `ApiUsage` se loggea con `clientId: null` (campo ya nullable). Sidebar: ítem "Research" (FlaskConical, visible ADMIN + EDITOR). Útil para preventa, análisis de campañas y research ad-hoc sin cliente asignado. |
 | 2026-06-14 | **Portapapeles de estrategia por cliente (Sesión 38).** EN MEMORIA — no persiste en BD, localStorage ni sessionStorage. React Context (`ClipboardContext`) montado en `clientes/[id]/layout.tsx` keyed por clientId: persiste al navegar entre módulos del mismo cliente, se resetea al cambiar de cliente. Items: keyword/aeo_cluster/content_idea con payload markdown. Botones Plus/Check en keyword-ideas (columna nueva "Copiar"), AeoResearchPanel (ClusterCard header), ContentPlanPanel (IdeaCard header). Página `/portapapeles`: items agrupados por tipo, "Copiar todo" (navigator.clipboard), "Vaciar", warning temporal, empty state. Guard 4a (beforeunload) implementado. Guard 4b (navegación interna Next.js App Router): NO implementado — router.events no existe en App Router; se documenta como limitación menor. |
 | 2026-06-22 | **Sync de clientes: lista blanca de Estado + upsert + ocultamiento.** CAUSA RAÍZ de 160 duplicados: sync sin filtro ni upsert creaba clientes nuevos en cada corrida. FIX: (1) `notion-direct.ts` lee Notion con filtro OR `Estado ∈ {Activo, En Pausa}` (lista blanca — Cancelado, Proyecto, Consultoría NO pasan). (2) Worker `cerebro-sync-worker.ts` hace upsert por `cerebroClientId` (nunca insert ciego). (3) Clientes que salen del filtro → `status: PAUSED` (ocultos, no borrados). Regla de negocio documentada: solo lista blanca, nunca lista negra. Script `scripts/cleanup-and-resync.ts` para limpieza + repoblado. |
+| 2026-09-03 | **AEO Readiness como capa algorítmica del Site Audit.** 10 checks ($0 costo) que evalúan legibilidad para crawlers de IA: robots.txt (GPTBot/ClaudeBot/PerplexityBot/OAI-SearchBot), Content-Signal, llms.txt, llms-full.txt, rutas .md, content negotiation, Link header/tag alternate, SSR content (> 200 palabras sin JS), sitemap. Score 0-100 con pesos (robots + SSR pesan doble). Nunca recomendar user-agent sniffing (cloaking). La vía correcta es content negotiation. |
+| 2026-09-03 | **Orquestador: un POST por oportunidad, sub-tareas en el payload.** No mandar 1 tarea por sub-acción — el Orquestador hace fan-out. Preserva el vínculo con el objetivo padre y evita que la regla de agrupación colapse como duplicados. |
+| 2026-09-03 | **sourceId y oppType van dentro de payload, no top-level.** El intake de Cerebro lee `payload.sourceId` y `payload.oppType`. Como campos top-level se ignoran en silencio. |
+| 2026-09-03 | **sourceUrl nunca null para la agrupación del Orquestador.** La agrupación requiere `sourceUrl + sourceCategory` no-null. Si las sub-tareas no comparten targetUrl, usar `/clientes/{clientId}/analisis` como fallback. |
+| 2026-09-03 | **`priority` (no `prioridad`) en el body del intake.** Mantener nombre existente de la interfaz `OrchestratorPayload`. Mapeo: alto→alta, medio→media, bajo→baja. |
+| 2026-09-03 | **NO se manda `actionType` desde Análisis Claude.** La clasificación es lookup del Orquestador, no de Cerebro SEO. |
+| 2026-09-03 | **decomposeAction() no tiene límite explícito de sub-tareas.** max_tokens 1500 es el freno implícito (~10-12 sub-tareas). JSON truncado → fallback a 1 sub-tarea. |
+| 2026-09-03 | **Envíos al Orquestador son fire-and-forget.** No se persisten en BD de Cerebro SEO. El botón pierde estado al recargar. Duplicados prevenidos solo por merge del Orquestador (sourceUrl + sourceCategory). |
 
 ---
 
@@ -365,6 +376,13 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - [x] Módulo AEO Research (`/aeo-research/`) — `classifyAeoResearchForClient`, modelo `AeoResearch`, ADMIN-only, seeds de priority keywords, historial, clusters AEO/GEO ✅ Sesión 36 commit `1294d7b`
 - [x] Sección global `/research` — research efímero sin cliente (keywords + dominio + AEO/GEO), sidebar FlaskConical, `classifyAeoResearchEphemeral`, `ApiUsage` con clientId null ✅ Sesión 37 commit `acec61e`
 - [x] Portapapeles de estrategia por cliente — en memoria, por cliente, NO persistente; layout.tsx keyed; botones en keyword-ideas/aeo-research/contenido; página /portapapeles con copy markdown ✅ Sesión 38 commit `6ef3d69`
+- [x] AEO Readiness en Site Audit — 10 checks algorítmicos de legibilidad para IA ($0 costo), score en Audit, UI con checks y fixes ✅ Sesión 35 commit `4877e92`
+- [x] Integración Orquestador — botón en 5 módulos (Oportunidades, Audit, Contenido, AEO Research, Análisis Claude) ✅ Sesiones varias
+- [x] Desglose de acciones Análisis Claude → Orquestador — decomposeAction + sub-tareas en payload ✅ Sesión 35 commits `27cdb45` + `bba2ea2`
+- [ ] Persistir envíos al Orquestador en BD para evitar duplicados y tracking
+- [ ] Agregar límite explícito de sub-tareas en decomposeAction (prompt + código)
+- [ ] Loguear costo de decomposeAction en ApiUsage
+- [ ] Probar AEO Readiness contra clientes reales (trigger-aeo-probe.ts)
 
 ---
 
@@ -395,6 +413,38 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 35 — 2026-09-03 ✅ COMPLETA (AEO Readiness + Análisis Claude → Orquestador)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Módulo AEO Readiness + desglose de acciones para Orquestador. Build limpio, 26 tests AEO + tests existentes verdes.
+
+**Trabajo realizado:**
+
+1. **AEO Readiness en Site Audit** (commit `4877e92`, 10 archivos, 1199 líneas):
+   - Schema: `aeoScore Int?` en `Audit` + migración `20260902120000_add_aeo_readiness`
+   - `src/lib/aeo-readiness.ts`: tipos + scoring puro (`buildAeoReport`), pesos por check
+   - `src/server/crawler/aeo-prober.ts`: 10 checks vía fetch al dominio del cliente ($0 costo)
+   - `audit-processor.ts`: integra AEO en modo "complete", persiste score + issues con category "aeo"
+   - UI: sección "Legibilidad para IA (AEO)" en audit page con score card y checks
+   - `scripts/trigger-aeo-probe.ts`: CLI para debug sin escribir a BD
+   - Tests: 3 archivos, 26 tests (scoring, prober con fetch mock, audit-processor integration)
+
+2. **Análisis Claude → Orquestador con desglose** (commit `27cdb45` + fix `bba2ea2`, 3 archivos, 309 líneas):
+   - `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` en sub-tareas con schema cerrado (kind enum 6 valores, targetUrl solo explícita, keywords solo explícitas)
+   - `actionDecomposeAndSendToOrchestrator` en `orchestrator-actions.ts`: un POST por oportunidad con sub-tareas en payload, sourceId estable (`analysis:{id}:opp:{index}`)
+   - Botón Orquestador en `OpportunityCard` de `AnalysisPanel.tsx` con feedback "N sub-tareas enviadas"
+   - Fix: sourceId/oppType movidos dentro de payload, sourceUrl nunca null
+
+**Diagnóstico read-only realizado:**
+- Contrato real de `actionSendToOrchestrator` vs lo documentado
+- Verificación de que `AnalysisOpportunity` no tiene id estable (generado como `analysis:{analysisId}:opp:{index}`)
+- Audit completo de los 5 callers del Orquestador (campos, valores, inconsistencias)
+- Verificación de que envíos al Orquestador son fire-and-forget sin persistencia
+- Audit de `decomposeAction()`: prompt, schema, validación, límites
+
+**Costo de APIs:** $0 (AEO Readiness sin APIs externas; decomposeAction no ejecutado aún).
+
+---
 
 ### Sesión 42 — 2026-07-07 ✅ COMPLETA (Doble sidebar + colapso del main nav)
 **Participantes:** Jorge + Claude Code

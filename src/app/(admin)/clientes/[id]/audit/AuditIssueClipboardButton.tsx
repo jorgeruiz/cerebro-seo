@@ -74,7 +74,6 @@ export function AuditIssueClipboardButton({
       clientId,
       topic: title,
       priority: SEVERITY_PRIORITY[severity] ?? "media",
-      actionType: "seo.audit.fix",
       sourceSystem: "cerebro-seo",
       sourceUrl: affectedUrl,
       sourceCategory: category,

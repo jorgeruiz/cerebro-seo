@@ -3,6 +3,12 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateNotionClientId } from "@/lib/notion-client-id";
+import { getServiceOAuth2Client } from "@/lib/google-oauth";
+import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
+import {
+  buildOpportunitiesReport,
+  type SeoOpportunity,
+} from "@/lib/seo-opportunities";
 import type { NextStep } from "@/lib/seo-advisor/types";
 import type {
   AnalysisOpportunity,
@@ -30,12 +36,84 @@ const MX_OFFSET_HOURS = -6;
 
 function monthRange(yearMonth: string): { gte: Date; lte: Date } {
   const [year, month] = yearMonth.split("-").map(Number);
-  // Primer instante del mes en CST, expresado en UTC
   const gte = new Date(Date.UTC(year, month - 1, 1, -MX_OFFSET_HOURS));
-  // Último instante del mes en CST, expresado en UTC
-  const lastDay = new Date(year, month, 0).getDate(); // días en el mes
+  const lastDay = new Date(year, month, 0).getDate();
   const lte = new Date(Date.UTC(year, month - 1, lastDay, 23 - MX_OFFSET_HOURS, 59, 59, 999));
   return { gte, lte };
+}
+
+// ── GSC Opportunities (best-effort) ─────────────────────────────────────────
+
+interface GscOpportunityPayload {
+  oppType: string;
+  keyword?: string | null;
+  url?: string | null;
+  ctr?: number | null;
+  impressions?: number | null;
+  position?: number | null;
+  action: string;
+  priority: string;
+}
+
+async function fetchGscOpportunities(
+  internalClientId: string
+): Promise<GscOpportunityPayload[]> {
+  try {
+    const site = await prisma.site.findFirst({
+      where: { clientId: internalClientId },
+      select: { gscProperty: true },
+    });
+    if (!site?.gscProperty) return [];
+
+    const oauth = await getServiceOAuth2Client();
+    if (!oauth) return [];
+
+    const gsc = new GoogleSearchConsoleProvider(oauth);
+
+    const end = new Date().toISOString().split("T")[0];
+    const start = new Date(Date.now() - 28 * 86400000).toISOString().split("T")[0];
+
+    const [queries, pages, keywordsDb, queryPageMap] = await Promise.all([
+      gsc.getQueries({ siteUrl: site.gscProperty, startDate: start, endDate: end, rowLimit: 500 }).catch(() => []),
+      gsc.getPages({ siteUrl: site.gscProperty, startDate: start, endDate: end, rowLimit: 200 }).catch(() => []),
+      prisma.keyword.findMany({
+        where: { clientId: internalClientId, isPriority: true, deletedAt: null },
+        select: { term: true },
+      }),
+      gsc.getQueryTopPages({ siteUrl: site.gscProperty, startDate: start, endDate: end }).catch(() => new Map<string, string>()),
+    ]);
+
+    const report = buildOpportunitiesReport(
+      queries, pages,
+      keywordsDb.map((k) => k.term),
+      queryPageMap,
+    );
+
+    const allOpps: SeoOpportunity[] = [
+      ...report.quickWins,
+      ...report.ctrIssuesQuery,
+      ...report.noCoverage,
+      ...report.poorPosition,
+      ...report.ctrIssuesPage,
+    ];
+
+    return allOpps
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map((opp) => ({
+        oppType: opp.type,
+        keyword: opp.keyword ?? null,
+        url: opp.url ?? null,
+        ctr: opp.ctr ?? null,
+        impressions: opp.impressions ?? null,
+        position: opp.position ?? null,
+        action: opp.action,
+        priority: opp.priority,
+      }));
+  } catch (err) {
+    console.error("[recommendations] GSC opportunities fetch failed (non-fatal):", err);
+    return [];
+  }
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -125,17 +203,38 @@ export async function GET(
         riesgos: parsed.riesgos ?? [],
       };
     } catch {
-      // content corrupto — devolver null en vez de fallar
       analysisData = null;
     }
   }
 
-  // 9. Respuesta — clientId devuelve el cerebroClientId (Notion page ID)
+  // 9. maxAgeDays — si el plan es más viejo que N días, marcar stale
+  const maxAgeDaysParam = req.nextUrl.searchParams.get("maxAgeDays");
+  const maxAgeDays = maxAgeDaysParam ? parseInt(maxAgeDaysParam, 10) : null;
+  let stale = false;
+  if (plan && maxAgeDays && !isNaN(maxAgeDays)) {
+    const ageMs = Date.now() - plan.generatedAt.getTime();
+    const ageDays = ageMs / (24 * 3600 * 1000);
+    stale = ageDays > maxAgeDays;
+  }
+
+  // 10. GSC Opportunities (best-effort, live data)
+  const gscOpportunities = await fetchGscOpportunities(internalId);
+
+  // 11. Respuesta enriquecida
   return NextResponse.json({
     clientId: cerebroClientId,
     month,
+    // Plan metadata
+    planId: plan?.id ?? null,
+    planStatus: plan?.status ?? null,
+    model: plan?.model ?? null,
+    stale,
+    // Next steps
     nextSteps: plan ? (plan.steps as unknown as NextStep[]) : [],
+    // Analysis
     analysis: analysisData,
+    // GSC opportunities (live)
+    gscOpportunities,
     generatedAt: plan?.generatedAt.toISOString() ?? null,
   });
 }

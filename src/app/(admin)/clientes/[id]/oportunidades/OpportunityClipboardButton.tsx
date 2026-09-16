@@ -20,14 +20,6 @@ interface Props {
   ctr?: number;
 }
 
-const ACTION_TYPE_MAP: Record<string, string> = {
-  "ctr-issue-query": "seo.meta.optimize",
-  "ctr-issue-page":  "seo.meta.optimize",
-  "quick-win":       "seo.content.optimize",
-  "no-coverage":     "blog.create",
-  "poor-position":   "seo.content.optimize",
-};
-
 export function OpportunityClipboardButton({
   clientId,
   oppType,
@@ -69,7 +61,6 @@ export function OpportunityClipboardButton({
       clientId,
       topic: keyword ?? url ?? label,
       priority,
-      actionType: ACTION_TYPE_MAP[oppType],
       sourceSystem: "cerebro-seo",
       sourceUrl: url ?? null,
       sourceCategory: oppType,
