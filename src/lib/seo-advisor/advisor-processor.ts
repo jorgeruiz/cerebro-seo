@@ -287,16 +287,19 @@ export async function runAdvisorProcessor(params: {
     // Validar con Zod
     const validation = validateNextSteps(parsed);
     if (validation.success) {
-      // Post-process: extract targetUrl from evidencia/descripcion when missing
+      // Post-process: extract targetUrl from all available text when missing
       strategicSteps = (validation.data as NextStep[]).map((step) => {
         if (step.targetUrl || !step.kind) return step;
-        // For meta, schema, tecnico: try to extract URL from text fields
         if (["meta", "schema", "tecnico"].includes(step.kind)) {
-          const textToSearch = `${step.evidencia} ${step.descripcion} ${step.titulo}`;
-          const urlMatch = textToSearch.match(/(?:https?:\/\/[^\s,)]+|\/[a-z0-9][a-z0-9\-\/]*(?:\/|(?=\s|$)))/i);
+          // Search in all text fields + seccionDestino
+          const textToSearch = `${step.evidencia} ${step.descripcion} ${step.titulo} ${step.seccionDestino ?? ''}`;
+          const urlMatch = textToSearch.match(/(?:https?:\/\/[^\s,)"]+|\/[a-z0-9][a-z0-9\-\/._]*(?:\/|(?=[\s,)"']|$)))/i);
           if (urlMatch) {
             return { ...step, targetUrl: urlMatch[0].replace(/[,.)]+$/, "") };
           }
+          // If still no URL, demote to "otro" so orquestador creates HUMAN_TASK instead of failing
+          console.warn(`[advisor-processor] step kind=${step.kind} has no targetUrl, demoting to "otro": "${step.titulo}"`);
+          return { ...step, kind: "otro" as const };
         }
         return step;
       });

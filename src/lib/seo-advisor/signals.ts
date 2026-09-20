@@ -114,8 +114,8 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
   ]);
 
   // --- Procesar caídas y near-top ---
-  const dropped: { term: string; currentPos: number; delta: number }[] = [];
-  const nearTop: { term: string; position: number }[] = [];
+  const dropped: { term: string; currentPos: number; delta: number; targetUrl?: string | null }[] = [];
+  const nearTop: { term: string; position: number; targetUrl?: string | null }[] = [];
 
   for (const kw of priorityKeywordsWithRankings) {
     const recent = kw.rankings[0];
@@ -124,14 +124,14 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     if (recent?.position) {
       // Near-top: posiciones 4–10
       if (recent.position >= 4 && recent.position <= 10) {
-        nearTop.push({ term: kw.term, position: recent.position });
+        nearTop.push({ term: kw.term, position: recent.position, targetUrl: kw.targetUrl });
       }
 
       // Caída significativa: ≥5 posiciones vs semana anterior
       if (prev?.position && recent.date >= sevenDaysAgo) {
         const delta = prev.position - recent.position; // negativo = cayó
         if (delta <= -5) {
-          dropped.push({ term: kw.term, currentPos: recent.position, delta });
+          dropped.push({ term: kw.term, currentPos: recent.position, delta, targetUrl: kw.targetUrl });
         }
       }
     }
@@ -155,8 +155,9 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     hasSignals = true;
     lines.push("\n### Keywords con caída significativa (≥5 posiciones en 7 días)");
     for (const d of dropped) {
+      const urlPart = d.targetUrl ? ` | targetUrl="${d.targetUrl}"` : '';
       lines.push(
-        `- "${d.term}": cayó ${Math.abs(d.delta)} posiciones, ahora en #${d.currentPos}`
+        `- "${d.term}": cayó ${Math.abs(d.delta)} posiciones, ahora en #${d.currentPos}${urlPart}`
       );
     }
   }
@@ -165,7 +166,8 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     hasSignals = true;
     lines.push("\n### Keywords near-top (posiciones 4–10) — alta oportunidad");
     for (const n of nearTop.slice(0, 8)) {
-      lines.push(`- "${n.term}": posición #${n.position}`);
+      const urlPart = n.targetUrl ? ` | targetUrl="${n.targetUrl}"` : '';
+      lines.push(`- "${n.term}": posición #${n.position}${urlPart}`);
     }
   }
 
@@ -182,10 +184,11 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
   if (lowCtrPages.length > 0) {
     hasSignals = true;
     lines.push("\n### Páginas con buen posicionamiento pero CTR bajo (últimos 28 días)");
+    lines.push("IMPORTANTE: usa targetUrl con la URL exacta de cada página listada abajo.");
     for (const p of lowCtrPages) {
       const ctrPct = ((p.ctr ?? 0) * 100).toFixed(1);
       lines.push(
-        `- ${p.url}: pos #${p.position?.toFixed(1)}, CTR ${ctrPct}%, ${p.impressions?.toLocaleString("es-MX")} impresiones`
+        `- targetUrl="${p.url}" | pos #${p.position?.toFixed(1)}, CTR ${ctrPct}%, ${p.impressions?.toLocaleString("es-MX")} impresiones`
       );
     }
   }
