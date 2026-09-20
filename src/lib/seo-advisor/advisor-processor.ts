@@ -55,7 +55,7 @@ KIND (campo "kind" — EXACTAMENTE uno de estos valores):
 - "tecnico": corrección técnica (velocidad, crawlability, canonical, redirects, Core Web Vitals)
 - "otro": cualquier acción que no encaje en las anteriores
 
-targetUrl: la URL específica a la que aplica la acción. Solo incluir si aparece EXPLÍCITA en las señales. Si no hay URL específica, null.
+targetUrl: la URL específica a la que aplica la acción. OBLIGATORIO cuando kind es "meta", "schema" o "tecnico" — siempre hay una URL en las señales para esos tipos. Para "contenido-blog" o "contenido-landing" puede ser null (es contenido nuevo). Formato: ruta relativa ("/pagina") o URL completa.
 keywords: array de keywords relevantes. Solo incluir las que aparecen EXPLÍCITAS en las señales. Si no hay, array vacío.
 
 RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON. Si no hay señales suficientes, devuelve [].
@@ -287,7 +287,19 @@ export async function runAdvisorProcessor(params: {
     // Validar con Zod
     const validation = validateNextSteps(parsed);
     if (validation.success) {
-      strategicSteps = validation.data as NextStep[];
+      // Post-process: extract targetUrl from evidencia/descripcion when missing
+      strategicSteps = (validation.data as NextStep[]).map((step) => {
+        if (step.targetUrl || !step.kind) return step;
+        // For meta, schema, tecnico: try to extract URL from text fields
+        if (["meta", "schema", "tecnico"].includes(step.kind)) {
+          const textToSearch = `${step.evidencia} ${step.descripcion} ${step.titulo}`;
+          const urlMatch = textToSearch.match(/(?:https?:\/\/[^\s,)]+|\/[a-z0-9][a-z0-9\-\/]*(?:\/|(?=\s|$)))/i);
+          if (urlMatch) {
+            return { ...step, targetUrl: urlMatch[0].replace(/[,.)]+$/, "") };
+          }
+        }
+        return step;
+      });
       validationFailed = false;
       break;
     }
