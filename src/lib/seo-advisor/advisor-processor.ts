@@ -55,8 +55,12 @@ KIND (campo "kind" — EXACTAMENTE uno de estos valores):
 - "tecnico": corrección técnica (velocidad, crawlability, canonical, redirects, Core Web Vitals)
 - "otro": cualquier acción que no encaje en las anteriores
 
-targetUrl: la URL específica a la que aplica la acción. OBLIGATORIO cuando kind es "meta", "schema" o "tecnico" — siempre hay una URL en las señales para esos tipos. Para "contenido-blog" o "contenido-landing" puede ser null (es contenido nuevo). Formato: ruta relativa ("/pagina") o URL completa.
-keywords: array de keywords relevantes. Solo incluir las que aparecen EXPLÍCITAS en las señales. Si no hay, array vacío.
+targetUrl: OBLIGATORIO para todos los kinds excepto "otro".
+- "meta", "schema", "tecnico": la URL existente donde aplicar el cambio (debe aparecer en las señales).
+- "contenido-blog": el slug sugerido para el artículo nuevo (ej: "/blog/guia-cctv-empresas-monterrey"). Usa un slug SEO-friendly basado en la keyword principal.
+- "contenido-landing": el slug sugerido para la landing nueva (ej: "/servicios/cctv-monterrey"). Usa un slug corto y descriptivo.
+Si NO puedes determinar una URL o slug específico, NO generes el step — un step sin URL accionable es trabajo desperdiciado.
+keywords: array de keywords target. OBLIGATORIO (al menos 1) para meta, schema, contenido-blog y contenido-landing. Para "tecnico" incluir si aplica. Nunca array vacío en kinds accionables.
 
 RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON. Si no hay señales suficientes, devuelve [].
 
@@ -71,8 +75,8 @@ Formato de cada item:
   "esfuerzo": "bajo|medio|alto",
   "impacto": "alto|medio|bajo",
   "kind": "meta|contenido-blog|contenido-landing|schema|tecnico|otro",
-  "targetUrl": "/pagina-ejemplo o null",
-  "keywords": ["keyword1", "keyword2"]
+  "targetUrl": "/pagina-existente o /blog/slug-sugerido (null solo para kind otro)",
+  "keywords": ["keyword1", "keyword2"] // al menos 1 para kinds accionables
 }`;
 
 // ---------------------------------------------------------------------------
@@ -287,22 +291,36 @@ export async function runAdvisorProcessor(params: {
     // Validar con Zod
     const validation = validateNextSteps(parsed);
     if (validation.success) {
-      // Post-process: extract targetUrl from all available text when missing
-      strategicSteps = (validation.data as NextStep[]).map((step) => {
-        if (step.targetUrl || !step.kind) return step;
-        if (["meta", "schema", "tecnico"].includes(step.kind)) {
-          // Search in all text fields + seccionDestino
-          const textToSearch = `${step.evidencia} ${step.descripcion} ${step.titulo} ${step.seccionDestino ?? ''}`;
-          const urlMatch = textToSearch.match(/(?:https?:\/\/[^\s,)"]+|\/[a-z0-9][a-z0-9\-\/._]*(?:\/|(?=[\s,)"']|$)))/i);
-          if (urlMatch) {
-            return { ...step, targetUrl: urlMatch[0].replace(/[,.)]+$/, "") };
+      // Post-process: enforce targetUrl + keywords for actionable kinds
+      const ACTIONABLE_KINDS = ["meta", "schema", "tecnico", "contenido-blog", "contenido-landing"];
+      strategicSteps = (validation.data as NextStep[])
+        .map((step) => {
+          if (!step.kind || !ACTIONABLE_KINDS.includes(step.kind)) return step;
+
+          // Try to extract URL from text fields if missing
+          if (!step.targetUrl) {
+            const textToSearch = `${step.evidencia} ${step.descripcion} ${step.titulo} ${step.seccionDestino ?? ''}`;
+            const urlMatch = textToSearch.match(/(?:https?:\/\/[^\s,)"]+|\/[a-z0-9][a-z0-9\-\/._]*(?:\/|(?=[\s,)"']|$)))/i);
+            if (urlMatch) {
+              step = { ...step, targetUrl: urlMatch[0].replace(/[,.)]+$/, "") };
+            }
           }
-          // If still no URL, demote to "otro" so orquestador creates HUMAN_TASK instead of failing
-          console.warn(`[advisor-processor] step kind=${step.kind} has no targetUrl, demoting to "otro": "${step.titulo}"`);
-          return { ...step, kind: "otro" as const };
-        }
-        return step;
-      });
+
+          // Ensure keywords is a non-empty array for actionable kinds
+          if (!step.keywords || step.keywords.length === 0) {
+            console.warn(`[advisor-processor] step kind=${step.kind} has no keywords, dropping: "${step.titulo}"`);
+            return null;
+          }
+
+          // Final check: actionable step MUST have targetUrl
+          if (!step.targetUrl) {
+            console.warn(`[advisor-processor] step kind=${step.kind} has no targetUrl, dropping: "${step.titulo}"`);
+            return null;
+          }
+
+          return step;
+        })
+        .filter((s): s is NextStep => s !== null);
       validationFailed = false;
       break;
     }
