@@ -95,7 +95,7 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
       },
       orderBy: { count: "desc" },
       take: 5,
-      select: { type: true, title: true, count: true },
+      select: { type: true, title: true, count: true, affectedUrl: true },
     }),
 
     // Último AEO research
@@ -121,17 +121,20 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     const recent = kw.rankings[0];
     const prev = kw.rankings[1];
 
+    // Resolve URL: keyword.targetUrl → ranking.rankingUrl (fallback)
+    const resolvedUrl = kw.targetUrl || recent?.rankingUrl || null;
+
     if (recent?.position) {
       // Near-top: posiciones 4–10
       if (recent.position >= 4 && recent.position <= 10) {
-        nearTop.push({ term: kw.term, position: recent.position, targetUrl: kw.targetUrl });
+        nearTop.push({ term: kw.term, position: recent.position, targetUrl: resolvedUrl });
       }
 
       // Caída significativa: ≥5 posiciones vs semana anterior
       if (prev?.position && recent.date >= sevenDaysAgo) {
         const delta = prev.position - recent.position; // negativo = cayó
         if (delta <= -5) {
-          dropped.push({ term: kw.term, currentPos: recent.position, delta, targetUrl: kw.targetUrl });
+          dropped.push({ term: kw.term, currentPos: recent.position, delta, targetUrl: resolvedUrl });
         }
       }
     }
@@ -197,7 +200,8 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     hasSignals = true;
     lines.push("\n### Issues críticos en el último audit");
     for (const i of criticalAuditIssues) {
-      lines.push(`- ${i.title} (${i.count} ocurrencias)`);
+      const urlPart = i.affectedUrl ? ` | targetUrl="${i.affectedUrl}"` : '';
+      lines.push(`- ${i.title} (${i.count} ocurrencias)${urlPart}`);
     }
   }
 
