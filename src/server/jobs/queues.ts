@@ -66,6 +66,7 @@ export interface InsightsJobData {
 
 export interface SeoAdvisorJobData {
   clientId: string;
+  force?: boolean; // true = skip idempotency + invalidate signals cache
 }
 
 export interface CrawlerJobData {

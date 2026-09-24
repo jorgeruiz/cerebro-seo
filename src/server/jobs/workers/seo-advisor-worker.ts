@@ -18,7 +18,7 @@ export const seoAdvisorWorker = createWorker<SeoAdvisorJobData>(
 
     const result = await runAdvisorProcessor({
       clientId: job.data.clientId,
-      scheduled: true,
+      scheduled: !job.data.force,
     });
 
     console.log(

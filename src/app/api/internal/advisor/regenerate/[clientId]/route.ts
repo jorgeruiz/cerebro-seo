@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { redis } from "@/lib/redis";
 import { aiAnalysisQueue } from "@/server/jobs/queues";
 import { validateNotionClientId } from "@/lib/notion-client-id";
+import { format } from "date-fns";
 
 function authorize(req: NextRequest): boolean {
   const secret = process.env.SEO_INTERNAL_SECRET;
@@ -62,10 +64,19 @@ export async function POST(
     return NextResponse.json({ jobId: existing.id ?? "unknown" });
   }
 
-  // Encolar nuevo job
+  // Invalidar caches de Redis para forzar señales frescas
+  const today = format(new Date(), "yyyy-MM-dd");
+  const month = format(new Date(), "yyyy-MM");
+  await Promise.all([
+    redis.del(`advisor:ran:${client.id}:${today}`),
+    redis.del(`advisor:signals:${client.id}:${today}`),
+    redis.del(`advisor:profile:${client.id}:${month}`),
+  ]);
+
+  // Encolar nuevo job con force=true para skip idempotency
   const job = await aiAnalysisQueue.add(
     "advisor:generate",
-    { clientId: client.id },
+    { clientId: client.id, force: true },
     {
       jobId: `advisor-api:${client.id}:${Date.now()}`,
     }
