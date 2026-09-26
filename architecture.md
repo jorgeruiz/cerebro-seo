@@ -157,6 +157,11 @@ src/lib/
 ├── claude-analysis.ts          # Análisis on-demand + decomposeAction() para Orquestador
 ├── claude-content-plan.ts      # Plan de contenido on-demand
 └── seo-advisor/                # Asesor SEO (NextStepPlan)
+    ├── advisor-processor.ts    # Prompt + Claude + post-procesado + plan mensual
+    ├── signals.ts              # Señales determinísticas desde BD (score breakdown, top pages, gaps)
+    ├── preconditions.ts        # Steps de setup sin Claude
+    ├── validation.ts           # Zod schema para NextStep
+    └── types.ts                # 8 kinds, origin (data/ai-insight)
 
 src/server/crawler/
 ├── site-crawler.ts             # Crawler Cheerio BFS 50 págs

@@ -1,9 +1,10 @@
 import { z } from "zod/v4";
 
 const VALID_CATEGORIAS = ["setup", "urgente", "oportunidad", "mejora"] as const;
-const VALID_KINDS = ["meta", "contenido-blog", "contenido-landing", "schema", "tecnico", "otro"] as const;
+const VALID_KINDS = ["meta", "contenido-blog", "contenido-landing", "contenido-optimizar", "interlinking", "schema", "tecnico", "otro"] as const;
 const VALID_ESFUERZOS = ["bajo", "medio", "alto"] as const;
 const VALID_IMPACTOS = ["alto", "medio", "bajo"] as const;
+const VALID_ORIGINS = ["data", "ai-insight"] as const;
 const VALID_SECCIONES = [
   "keywords", "audit", "backlinks", "competencia", "oportunidades",
   "terminos-busqueda", "trafico-paginas", "aeo-research", "contenido",
@@ -22,6 +23,7 @@ export const NextStepSchema = z.object({
   kind: z.enum(VALID_KINDS).nullable().optional(),
   targetUrl: z.string().nullable().optional(),
   keywords: z.array(z.string()).nullable().optional(),
+  origin: z.enum(VALID_ORIGINS).nullable().optional(),
 });
 
 export const NextStepArraySchema = z.array(NextStepSchema);

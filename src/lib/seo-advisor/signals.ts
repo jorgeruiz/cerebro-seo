@@ -25,6 +25,7 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
     criticalAuditIssues,
     latestAeoResearch,
     latestAudit,
+    topSitePages,
   ] = await Promise.all([
     // Backlinks perdidos DA > 30 en últimos 30 días
     prisma.backlink.findMany({
@@ -105,11 +106,34 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
       select: { clusters: true, questionCount: true, createdAt: true },
     }),
 
-    // Último audit score
+    // Último audit score (con breakdown completo)
     prisma.audit.findFirst({
       where: { clientId, status: "completed" },
       orderBy: { date: "desc" },
-      select: { scoreOverall: true, scoreTechnical: true, date: true },
+      select: {
+        scoreOverall: true,
+        scoreTechnical: true,
+        scorePerformance: true,
+        scoreContent: true,
+        aeoScore: true,
+        pagesCrawled: true,
+        brokenPages: true,
+        redirectPages: true,
+        date: true,
+      },
+    }),
+
+    // Top páginas del sitio por impresiones (últimos 28 días) — para que Claude
+    // pueda asignar targetUrl a gaps y oportunidades
+    prisma.pageMetric.findMany({
+      where: {
+        site: { clientId },
+        date: { gte: twentyEightDaysAgo },
+        impressions: { gte: 10 },
+      },
+      orderBy: { impressions: "desc" },
+      take: 20,
+      select: { url: true, impressions: true, clicks: true, position: true },
     }),
   ]);
 
@@ -208,8 +232,37 @@ export async function collectSignals(clientId: string): Promise<SignalsResult> {
   if (latestAudit) {
     lines.push("\n### Score del sitio (último audit)");
     lines.push(
-      `- Score general: ${latestAudit.scoreOverall}/100 | Técnico: ${latestAudit.scoreTechnical}/100 | Fecha: ${format(latestAudit.date, "dd/MM/yyyy")}`
+      `- Score general: ${latestAudit.scoreOverall}/100 | Técnico: ${latestAudit.scoreTechnical}/100 | Performance: ${latestAudit.scorePerformance}/100 | Contenido: ${latestAudit.scoreContent}/100${latestAudit.aeoScore != null ? ` | AEO: ${latestAudit.aeoScore}/100` : ""} | Fecha: ${format(latestAudit.date, "dd/MM/yyyy")}`
     );
+    if (latestAudit.brokenPages > 0 || latestAudit.redirectPages > 0) {
+      lines.push(
+        `- Páginas crawleadas: ${latestAudit.pagesCrawled} | Rotas: ${latestAudit.brokenPages} | Redirects: ${latestAudit.redirectPages}`
+      );
+    }
+    // Identify weakest area for Claude to focus on
+    const scores = [
+      { area: "técnico", score: latestAudit.scoreTechnical },
+      { area: "performance", score: latestAudit.scorePerformance },
+      { area: "contenido", score: latestAudit.scoreContent },
+    ];
+    const weakest = scores.reduce((a, b) => (a.score < b.score ? a : b));
+    if (weakest.score < 70) {
+      lines.push(
+        `- ÁREA MÁS DÉBIL: ${weakest.area} (${weakest.score}/100) — priorizar steps que mejoren esta área`
+      );
+    }
+  }
+
+  // --- Páginas principales del sitio (para asignar targetUrl a gaps) ---
+  if (topSitePages.length > 0) {
+    lines.push("\n### Páginas principales del sitio (por impresiones, últimos 28 días)");
+    lines.push("REFERENCIA: usa estas URLs como targetUrl cuando un gap o recomendación aplique a una página existente.");
+    for (const p of topSitePages) {
+      const pos = p.position ? `pos #${p.position.toFixed(1)}` : "sin pos";
+      lines.push(
+        `- "${p.url}" | ${p.impressions?.toLocaleString("es-MX") ?? 0} imp, ${p.clicks ?? 0} clics, ${pos}`
+      );
+    }
   }
 
   if (latestAeoResearch) {

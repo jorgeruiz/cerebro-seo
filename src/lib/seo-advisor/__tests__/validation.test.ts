@@ -122,7 +122,7 @@ describe("validateNextSteps", () => {
   });
 
   it("all valid kinds accepted", () => {
-    const kinds = ["meta", "contenido-blog", "contenido-landing", "schema", "tecnico", "otro"];
+    const kinds = ["meta", "contenido-blog", "contenido-landing", "contenido-optimizar", "interlinking", "schema", "tecnico", "otro"];
     for (const kind of kinds) {
       const result = validateNextSteps([
         {

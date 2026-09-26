@@ -10,6 +10,7 @@ import {
   buildOpportunitiesReport,
   type SeoOpportunity,
 } from "@/lib/seo-opportunities";
+import { getOrCreateMonthlyPlan } from "@/lib/seo-advisor/advisor-processor";
 import type { NextStep } from "@/lib/seo-advisor/types";
 import type {
   AnalysisOpportunity,
@@ -159,11 +160,50 @@ export async function GET(
 
   const internalId = client.id;
 
-  // 5. NextStepPlan más reciente del mes
+  // 5. Determinar tipo de plan solicitado
+  const planType = req.nextUrl.searchParams.get("type"); // "monthly" | null
+
+  if (planType === "monthly") {
+    // ── Plan mensual estable ──
+    // Genera lazy la primera vez, devuelve el mismo todo el mes.
+    // Max 6 steps accionables, sin setup, con origin tag.
+    try {
+      const monthlyResult = await getOrCreateMonthlyPlan({
+        clientId: internalId,
+        yearMonth: month,
+      });
+
+      return NextResponse.json({
+        clientId: cerebroClientId,
+        month,
+        type: "monthly",
+        planId: monthlyResult.planId,
+        planStatus: "valid",
+        model: monthlyResult.tokensUsed.input > 0 ? "claude" : "deterministic",
+        stale: false, // monthly plans are never stale within their month
+        nextSteps: monthlyResult.steps,
+        // Monthly plans don't include analysis or GSC — those are for the daily view
+        analysis: null,
+        gscOpportunities: [],
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("[recommendations] monthly plan generation failed:", err);
+      return NextResponse.json(
+        { error: "Error generando plan mensual" },
+        { status: 500 }
+      );
+    }
+  }
+
+  // ── Plan diario (comportamiento original) ──
+
+  // 5b. NextStepPlan más reciente del mes (excluir monthly-plan)
   const plan = await prisma.nextStepPlan.findFirst({
     where: {
       clientId: internalId,
       generatedAt: { gte: range.gte, lte: range.lte },
+      triggeredBy: { not: "monthly-plan" },
     },
     orderBy: { generatedAt: "desc" },
   });
@@ -222,6 +262,7 @@ export async function GET(
   return NextResponse.json({
     clientId: cerebroClientId,
     month,
+    type: "daily",
     // Plan metadata
     planId: plan?.id ?? null,
     planStatus: plan?.status ?? null,

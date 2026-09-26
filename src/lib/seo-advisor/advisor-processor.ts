@@ -13,70 +13,107 @@ import { validateNextSteps } from "./validation";
 // System prompt — se cachea en Claude automáticamente (es idéntico siempre).
 // ---------------------------------------------------------------------------
 
-const ADVISOR_SYSTEM_PROMPT = `Eres el consultor SEO estratégico de Click Society, agencia de marketing digital en Monterrey.
+const ADVISOR_SYSTEM_PROMPT = `Eres el consultor SEO senior de Click Society. Tu trabajo: analizar señales SEO y generar ACCIONES EJECUTABLES para el sitio web del cliente.
 
-Tu trabajo: analizar el estado SEO de un cliente y proponer los PRÓXIMOS PASOS más impactantes — acciones concretas, priorizadas y respaldadas por datos específicos.
+Cada step que generes se envía a un orquestador que lo ejecuta automáticamente. Si un step es vago, le falta URL, o no es un cambio en el sitio web, el orquestador lo descarta y se pierde trabajo.
 
-REGLAS DE CALIDAD:
-- Cada paso debe citar un dato real (número, posición, porcentaje, fecha)
-- Las acciones deben ser ejecutables esta semana, no vagas o genéricas
-- Prioriza por impacto/esfuerzo: primero lo que mueve la aguja más rápido
-- NO incluyas pasos de tipo "setup" — esos se generan automáticamente
-- Máximo 5 pasos estratégicos
+═══ REGLAS CRÍTICAS ═══
 
-CATEGORÍAS:
-- "urgente": problema activo que daña tráfico o posicionamiento ahora mismo
-- "oportunidad": ganancia rápida posible en los próximos 30 días
+1. CADA STEP = 1 ACCIÓN CONCRETA EN 1 URL
+   - "Optimizar title y meta description de /servicios" ✓
+   - "Escalar score a 75+" ✗ (es un objetivo, no una acción)
+   - "3 landings transaccionales" ✗ (son 3 steps separados, uno por landing)
+
+2. NO GENERAR STEPS INTERNOS DE LA PLATAFORMA
+   Estos se generan automáticamente — tú NO los produces:
+   - "Activar benchmark de competidores"
+   - "Configurar tracking de keywords"
+   - "Ejecutar audit"
+   - Cualquier cosa que sea configuración de Cerebro SEO, no un cambio en el sitio web
+
+3. NO GENERAR OBJETIVOS NI RESÚMENES COMO STEPS
+   Si no puedes descomponer un objetivo en acciones con URL y keywords, NO lo generes:
+   - "Mejorar E-E-A-T del sitio" ✗ → descomponer en: agregar página /nosotros, agregar autor a blogs, etc.
+   - "Score técnico bajo" ✗ → descomponer en: reducir JS en /página-x, agregar lazy loading en /servicios, etc.
+   - "Capturar keyword X" ✗ → decidir: ¿existe página? → kind:meta con targetUrl. ¿No existe? → kind:contenido-landing con slug.
+
+4. DESCOMPONER STEPS COMPUESTOS
+   "3 blogs listos para publicar" → 3 items separados, cada uno con su targetUrl (slug), keywords y titulo distintos.
+   "Landings para Chillers y Calderas" → 2 items separados.
+
+5. MÁXIMO 7 STEPS (no 5). Preferir calidad sobre cantidad.
+
+═══ CATEGORÍAS ═══
+- "urgente": problema activo dañando tráfico/posicionamiento ahora
+- "oportunidad": ganancia rápida en los próximos 30 días
 - "mejora": optimización de mediano plazo (1–3 meses)
 
-SECCIÓN DESTINO (campo seccionDestino — usa EXACTAMENTE uno de estos slugs):
+═══ SECCIÓN DESTINO (seccionDestino — slug exacto) ═══
 keywords | audit | backlinks | competencia | oportunidades | terminos-busqueda | trafico-paginas | aeo-research | contenido | ai-search | analisis
 
-Guía para elegir sección destino:
-- CTR bajo de una QUERY específica → terminos-busqueda
-- CTR bajo de una PÁGINA/URL específica (mejorar meta tags) → trafico-paginas
-- Oportunidades de ranking generales → oportunidades
+- CTR bajo de una QUERY → terminos-busqueda
+- CTR bajo de una PÁGINA/URL → trafico-paginas
+- Keyword gaps / oportunidades de ranking → oportunidades
+- Contenido nuevo (blog/landing) → contenido
 
-ESFUERZO (campo "esfuerzo"):
-- "bajo": cambio puntual en 1 URL (meta title, meta description, schema markup, ajuste on-page), tarea de < 1 hora
-- "medio": optimización de contenido existente, interlinking, corrección técnica multi-página, 1–4 horas
-- "alto": crear contenido nuevo (landing, blog), rediseño de sección, migración técnica, > 4 horas
+═══ ESFUERZO ═══
+- "bajo": cambio puntual en 1 URL (meta, schema, on-page), < 1 hora
+- "medio": optimización de contenido existente, interlinking, corrección multi-página, 1–4 horas
+- "alto": contenido nuevo (landing/blog), rediseño de sección, > 4 horas
 
-IMPACTO (campo "impacto"):
-- "alto": afecta keywords prioritarias con > 500 impresiones/mes, o corrige un problema que bloquea indexación/rastreo
-- "medio": mejora posiciones 4–10, optimiza CTR de páginas con tráfico moderado, o cubre keyword gaps
-- "bajo": mejora incremental, páginas con poco tráfico, o pulido cosmético
+═══ IMPACTO ═══
+- "alto": keywords prioritarias > 500 imp/mes, o bloquea indexación/rastreo
+- "medio": posiciones 4–10, CTR moderado, keyword gaps
+- "bajo": mejora incremental, poco tráfico
 
-KIND (campo "kind" — EXACTAMENTE uno de estos valores):
-- "meta": optimización de title, meta description, Open Graph tags
-- "contenido-blog": crear o mejorar artículo de blog
-- "contenido-landing": crear o mejorar landing page
-- "schema": agregar o corregir structured data (JSON-LD, schema.org)
-- "tecnico": corrección técnica (velocidad, crawlability, canonical, redirects, Core Web Vitals)
-- "otro": cualquier acción que no encaje en las anteriores
+═══ KIND — ÁRBOL DE DECISIÓN ═══
 
-targetUrl: OBLIGATORIO para todos los kinds excepto "otro".
-- "meta", "schema", "tecnico": la URL existente donde aplicar el cambio (debe aparecer en las señales).
-- "contenido-blog": el slug sugerido para el artículo nuevo (ej: "/blog/guia-cctv-empresas-monterrey"). Usa un slug SEO-friendly basado en la keyword principal.
-- "contenido-landing": el slug sugerido para la landing nueva (ej: "/servicios/cctv-monterrey"). Usa un slug corto y descriptivo.
-Si NO puedes determinar una URL o slug específico, NO generes el step — un step sin URL accionable es trabajo desperdiciado.
-keywords: array de keywords target. OBLIGATORIO (al menos 1) para meta, schema, contenido-blog y contenido-landing. Para "tecnico" incluir si aplica. Nunca array vacío en kinds accionables.
+Pregúntate: ¿qué ACCIÓN se va a hacer en el sitio web?
+
+¿Cambiar title/description/OG de página EXISTENTE? → "meta"
+¿Reescribir/mejorar el body text de página EXISTENTE? (agregar FAQ, mejorar copy, agregar E-E-A-T) → "contenido-optimizar"
+¿Crear página nueva tipo landing/servicio? → "contenido-landing"
+¿Crear blog post nuevo? → "contenido-blog"
+¿Agregar/corregir JSON-LD, schema.org, structured data? → "schema"
+¿Fix de performance, JS, Core Web Vitals, crawlability, canonical, redirects, robots.txt, sitemap, llms.txt? → "tecnico"
+¿Agregar/mejorar enlaces internos entre páginas existentes? → "interlinking"
+¿No es un cambio en el sitio web del cliente? → NO GENERAR EL STEP
+
+NUNCA defaultear a "meta" cuando no sepas qué poner. Si la acción no encaja en ningún kind, es probable que sea un objetivo vago que necesita descomponerse.
+
+═══ targetUrl — OBLIGATORIO (excepto interlinking) ═══
+
+- "meta", "schema", "tecnico", "contenido-optimizar": URL EXISTENTE del sitio (debe aparecer en señales o en la lista de páginas principales).
+- "contenido-blog": slug sugerido (ej: "/blog/guia-cctv-empresas"). Basado en keyword principal.
+- "contenido-landing": slug sugerido (ej: "/servicios/cctv-monterrey"). Corto y descriptivo.
+- "interlinking": URL de la página ORIGEN del enlace. En descripcion, mencionar la página destino.
+
+Si NO puedes determinar una URL o slug, NO generes el step.
+
+═══ keywords — OBLIGATORIO (≥1) para todos los kinds accionables ═══
+Solo opcional para "tecnico" (incluir si aplica).
+
+═══ ORIGIN — clasificación del step ═══
+- "data": este step responde DIRECTAMENTE a un dato numérico de las señales (CTR bajo en URL X, keyword cayó Y posiciones, audit issue Z con N ocurrencias, backlink DA X perdido). La acción es el paso lógico que dictan los números.
+- "ai-insight": este step es una recomendación estratégica que conecta múltiples señales, identifica una oportunidad no obvia, o sugiere contenido/estrategia nueva. Claude está aportando criterio, no solo leyendo números.
+
+═══ FORMATO DE RESPUESTA ═══
 
 RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON. Si no hay señales suficientes, devuelve [].
 
-Formato de cada item:
 {
-  "titulo": "string menor a 80 chars con al menos un número o dato específico",
-  "descripcion": "string menor a 350 chars explicando contexto y por qué importa ahora",
+  "titulo": "string < 80 chars, incluye al menos 1 dato numérico",
+  "descripcion": "string < 350 chars: qué hacer, en qué URL, por qué importa, qué resultado esperar",
   "categoria": "urgente|oportunidad|mejora",
   "prioridad": 2,
-  "seccionDestino": "slug exacto de la sección más relevante",
-  "evidencia": "string menor a 120 chars con el dato clave que justifica este paso",
+  "seccionDestino": "slug exacto",
+  "evidencia": "string < 120 chars con el dato clave",
   "esfuerzo": "bajo|medio|alto",
   "impacto": "alto|medio|bajo",
-  "kind": "meta|contenido-blog|contenido-landing|schema|tecnico|otro",
-  "targetUrl": "/pagina-existente o /blog/slug-sugerido (null solo para kind otro)",
-  "keywords": ["keyword1", "keyword2"] // al menos 1 para kinds accionables
+  "kind": "meta|contenido-blog|contenido-landing|contenido-optimizar|interlinking|schema|tecnico",
+  "targetUrl": "/url-existente o /slug-sugerido",
+  "keywords": ["keyword1", "keyword2"],
+  "origin": "data|ai-insight"
 }`;
 
 // ---------------------------------------------------------------------------
@@ -258,7 +295,7 @@ export async function runAdvisorProcessor(params: {
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2500,
       system: ADVISOR_SYSTEM_PROMPT,
       messages,
     });
@@ -291,11 +328,49 @@ export async function runAdvisorProcessor(params: {
     // Validar con Zod
     const validation = validateNextSteps(parsed);
     if (validation.success) {
-      // Post-process: enforce targetUrl + keywords for actionable kinds
-      const ACTIONABLE_KINDS = ["meta", "schema", "tecnico", "contenido-blog", "contenido-landing"];
+      // Post-process: enforce quality rules on steps
+      const ACTIONABLE_KINDS = ["meta", "schema", "tecnico", "contenido-blog", "contenido-landing", "contenido-optimizar", "interlinking"];
+
+      // Internal/platform task patterns — these should never be generated
+      const INTERNAL_PATTERNS = [
+        /\b(activar|configurar|ejecutar|habilitar)\s+(benchmark|tracking|monitor|audit|crawl)/i,
+        /\b(configura|activa)\s+keywords?\b/i,
+        /\b(agregar?|añadir)\s+competidor/i,
+        /\bconecta(r)?\s+(google\s+search\s+console|gsc|ga4|analytics)/i,
+      ];
+
+      // Objective/vague patterns — goals, not actions
+      const VAGUE_PATTERNS = [
+        /\bescalar\s+score\b/i,
+        /\bmejorar\s+(el\s+)?score\s+(general|global|técnico)/i,
+        /\bscore\s+.*\ba\s+\d+/i,  // "score ... a 75+"
+        /\bseñales?\s+E-E-A-T\b/i,
+        /\bscore\s+técnico\s+\d+\/100:\s/i,
+      ];
+
       strategicSteps = (validation.data as NextStep[])
         .map((step) => {
-          if (!step.kind || !ACTIONABLE_KINDS.includes(step.kind)) return step;
+          const fullText = `${step.titulo} ${step.descripcion}`;
+
+          // Drop internal platform tasks
+          if (INTERNAL_PATTERNS.some((p) => p.test(fullText))) {
+            console.warn(`[advisor-processor] dropping internal/platform step: "${step.titulo}"`);
+            return null;
+          }
+
+          // Drop vague objectives
+          if (VAGUE_PATTERNS.some((p) => p.test(fullText)) && !step.targetUrl) {
+            console.warn(`[advisor-processor] dropping vague objective without targetUrl: "${step.titulo}"`);
+            return null;
+          }
+
+          // Drop kind:"otro" — these are never actionable by the orchestrator
+          if (step.kind === "otro" || !step.kind) {
+            console.warn(`[advisor-processor] dropping kind=otro/null step: "${step.titulo}"`);
+            return null;
+          }
+
+          if (!ACTIONABLE_KINDS.includes(step.kind)) return step;
 
           // Try to extract URL from text fields if missing
           if (!step.targetUrl) {
@@ -306,8 +381,8 @@ export async function runAdvisorProcessor(params: {
             }
           }
 
-          // Ensure keywords is a non-empty array for actionable kinds
-          if (!step.keywords || step.keywords.length === 0) {
+          // Ensure keywords is a non-empty array for actionable kinds (tecnico is optional)
+          if (step.kind !== "tecnico" && (!step.keywords || step.keywords.length === 0)) {
             console.warn(`[advisor-processor] step kind=${step.kind} has no keywords, dropping: "${step.titulo}"`);
             return null;
           }
@@ -424,6 +499,97 @@ export async function runAdvisorProcessor(params: {
       cached: totalCachedTokens,
     },
     cost,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Plan mensual estable — se genera una vez por mes, se devuelve idéntico
+// hasta el mes siguiente. Max 6 steps accionables, sin setup.
+// ---------------------------------------------------------------------------
+
+const MONTHLY_PLAN_MAX_STEPS = 6;
+const MONTHLY_PLAN_TRIGGER = "monthly-plan";
+
+/**
+ * Devuelve el plan mensual para un cliente. Si no existe, lo genera
+ * (lazy) a partir del advisor y lo persiste. Las llamadas subsecuentes
+ * en el mismo mes devuelven exactamente el mismo plan.
+ */
+export async function getOrCreateMonthlyPlan(params: {
+  clientId: string;
+  yearMonth: string; // "YYYY-MM"
+}): Promise<AdvisorResult> {
+  const { clientId, yearMonth } = params;
+
+  // 1. Buscar plan mensual existente
+  const [year, month] = yearMonth.split("-").map(Number);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+  const existing = await prisma.nextStepPlan.findFirst({
+    where: {
+      clientId,
+      triggeredBy: MONTHLY_PLAN_TRIGGER,
+      generatedAt: { gte: monthStart, lte: monthEnd },
+      status: "valid",
+    },
+    orderBy: { generatedAt: "desc" },
+  });
+
+  if (existing) {
+    return {
+      steps: existing.steps as unknown as NextStep[],
+      planId: existing.id,
+      tokensUsed: {
+        input: existing.inputTokens,
+        output: existing.outputTokens,
+        cached: 0,
+      },
+      cost: Number(existing.cost),
+    };
+  }
+
+  // 2. Generar plan nuevo via advisor (forzar, no scheduled)
+  const result = await runAdvisorProcessor({
+    clientId,
+    triggeredBy: MONTHLY_PLAN_TRIGGER,
+    scheduled: false,
+  });
+
+  // 3. Filtrar: solo steps accionables (no setup, no kind:otro)
+  //    Ordenar por prioridad + impacto, cap a 6
+  const IMPACT_WEIGHT: Record<string, number> = { alto: 3, medio: 2, bajo: 1 };
+  const actionableSteps = result.steps
+    .filter((s) => s.categoria !== "setup" && s.kind && s.kind !== "otro")
+    .sort((a, b) => {
+      // Primary: prioridad (lower = more urgent)
+      if (a.prioridad !== b.prioridad) return a.prioridad - b.prioridad;
+      // Secondary: impacto (higher = better)
+      const aImp = IMPACT_WEIGHT[a.impacto ?? "bajo"] ?? 1;
+      const bImp = IMPACT_WEIGHT[b.impacto ?? "bajo"] ?? 1;
+      return bImp - aImp;
+    })
+    .slice(0, MONTHLY_PLAN_MAX_STEPS);
+
+  // 4. Guardar como plan mensual (separado del plan diario)
+  const monthlyPlan = await prisma.nextStepPlan.create({
+    data: {
+      clientId,
+      steps: actionableSteps as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      status: "valid",
+      model: result.tokensUsed.input > 0 ? CLAUDE_MODEL : "deterministic",
+      inputTokens: result.tokensUsed.input,
+      outputTokens: result.tokensUsed.output,
+      cost: result.cost,
+      triggeredBy: MONTHLY_PLAN_TRIGGER,
+    },
+  });
+
+  return {
+    steps: actionableSteps,
+    planId: monthlyPlan.id,
+    tokensUsed: result.tokensUsed,
+    cost: result.cost,
   };
 }
 

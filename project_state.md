@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-09-26 (Sesión A — resolveSite + guard de pertenencia)
+**Última actualización:** 2026-09-26 (Sesión B — Advisor v3 + plan mensual estable)
 **Fase actual:** Post-Fase 4 — preparación multi-proyecto + integración Orquestador
-**Próximo hito:** Wizard de nuevo proyecto (Research extendido) + migración siteId
+**Próximo hito:** Implementar spec Orquestador (SPEC-orquestador-plan-mensual.md) + wizard nuevo proyecto
 
 ---
 
@@ -119,8 +119,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo Plan de Contenido | ✅ Activo | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. ADMIN-only. Migración `add_content_plan`. Sesión 34 commit `c82b0d6`. |
 | Módulo AEO Research | ✅ Activo | `/clientes/[id]/aeo-research`. Recopila preguntas de búsqueda (DataForSEO Labs + SERP PAA), clasifica con Claude Sonnet 4.6 en clusters AEO (featured snippets) y GEO (citación por LLMs). KPI strip, cluster cards expandibles, historial. ADMIN-only. Migración `20260614120000_add_aeo_research`. Sesión 36 commit `1294d7b`. |
 | AEO Readiness (Site Audit) | ✅ Activo | 10 checks algorítmicos de legibilidad para IA dentro de Site Audit (modo complete). Prober: robots.txt AI bots, llms.txt, content negotiation, .md routes, SSR content, sitemap. Score 0-100 persistido en `Audit.aeoScore`. Costo $0. Migración `20260902120000_add_aeo_readiness`. Sesión 35 commit `4877e92`. |
-| Integración Orquestador | ✅ Activo | Botón "Enviar al Orquestador" en 5 módulos: Oportunidades, Audit Issues, Plan de Contenido, AEO Research, Análisis Claude. `orchestrator-actions.ts` con `actionSendToOrchestrator` (genérica) + `actionDecomposeAndSendToOrchestrator` (análisis con desglose via Claude). Fire-and-forget (sin persistencia de envíos). |
-| Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` de una oportunidad en sub-tareas atómicas. Schema cerrado: kind enum (meta/contenido-blog/contenido-landing/schema/tecnico/otro). Validación runtime con fallback. Sin límite de sub-tareas explícito. Commit `27cdb45` + fix `bba2ea2`. |
+| Integración Orquestador | ✅ Activo | Botón "Enviar al Orquestador" en 5 módulos (ad-hoc). Plan mensual estable vía `GET /recommendations/{id}?type=monthly` (max 6 steps, lazy, idempotente por mes). Contrato v2 en `CONTRACT_SEO_ORQUESTADOR.md`. Spec para Orquestador en `SPEC-orquestador-plan-mensual.md`. |
+| Advisor v3 | ✅ Activo | System prompt reescrito con anti-patrones, árbol de decisión para kinds, regla de descomposición. 8 kinds (meta, contenido-blog, contenido-landing, contenido-optimizar, interlinking, schema, tecnico, otro). Campo `origin` (data/ai-insight). Señales enriquecidas (score breakdown, top 20 páginas, área más débil). Post-procesado con filtros de steps internos/vagos. |
+| Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` en sub-tareas. Schema cerrado: 8 kinds. Validación runtime con fallback. |
 | Módulo Research | ✅ Activo | `/clientes/[id]/research` con tabs: Oportunidades (nuevo), Keyword Ideas (existente), AEO Research (existente). Servicio `src/server/research/` reutilizable por wizard. DataForSEO: `getOrganicCompetitors` (competitors_domain), `getCompetitorPages` (relevant_pages), `getStrikingDistanceKeywords` (ranked_keywords pos 4-20). Claude Sonnet para sugerencias. Modelo `ResearchReport` con `clientId` + `siteId` (multi-proyecto nativo). Costo ≤ $0.45/ejecución. Cache 7d por dominio. Sesión A-F2. |
 | resolveSite guard | ✅ Activo | `src/server/sites/resolve-site.ts`. 10 reemplazos de `Site.findFirst({ where: { clientId } })` en 6 archivos. Errores tipados: `NoSiteError` (0 sites), `AmbiguousSiteError` (>1 sites). Guard de pertenencia siteId↔clientId. Sesión A. |
 
@@ -220,6 +221,11 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-09-03 | **NO se manda `actionType` desde Análisis Claude.** La clasificación es lookup del Orquestador, no de Cerebro SEO. |
 | 2026-09-03 | **decomposeAction() no tiene límite explícito de sub-tareas.** max_tokens 1500 es el freno implícito (~10-12 sub-tareas). JSON truncado → fallback a 1 sub-tarea. |
 | 2026-09-03 | **Envíos al Orquestador son fire-and-forget.** No se persisten en BD de Cerebro SEO. El botón pierde estado al recargar. Duplicados prevenidos solo por merge del Orquestador (sourceUrl + sourceCategory). |
+| 2026-09-26 | **Plan mensual estable (pull, no push).** Cerebro SEO genera plan lazy la primera vez que se pide (`type=monthly`), lo persiste y devuelve idéntico todo el mes. Max 6 steps accionables. El Orquestador pide (pull), Cerebro SEO no empuja (push). |
+| 2026-09-26 | **8 kinds en el catálogo del advisor.** Agregados `contenido-optimizar` (reescribir body text existente) e `interlinking` (enlaces internos). Claude no defaultea a "meta" — tiene árbol de decisión explícito. |
+| 2026-09-26 | **Campo `origin` en NextStep (v3).** `"data"` = métrica lo dicta, `"ai-insight"` = recomendación estratégica. Informativo para el equipo, no afecta ejecución. |
+| 2026-09-26 | **Responsabilidades Cerebro SEO vs Orquestador.** SEO detecta y analiza. Orquestador decide, descompone y ejecuta. `decomposeAction` debería migrar al Orquestador (refactor futuro). |
+| 2026-09-26 | **Steps internos no se generan.** El advisor no genera steps de configuración de la plataforma (benchmark, tracking, keywords). Esos los genera `preconditions.ts` como categoria "setup". |
 
 ---
 
@@ -422,6 +428,60 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión B — 2026-09-26 ✅ COMPLETA (Advisor v3 + plan mensual estable)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Advisor reescrito, plan mensual, 2 kinds nuevos, origin tag. Build limpio, tests verdes.
+
+**Trabajo realizado:**
+
+1. **System prompt reescrito** (`advisor-processor.ts`):
+   - Árbol de decisión explícito para kinds (no defaultear a "meta")
+   - Anti-patrones con ejemplos ✓/✗ (acción vs objetivo vs tarea interna)
+   - Regla de descomposición: "3 blogs" → 3 items separados
+   - Prohibición de steps internos (benchmark, tracking, configuración)
+   - Max 7 steps (antes 5), max_tokens 2500 (antes 1500)
+
+2. **Señales enriquecidas** (`signals.ts`):
+   - Score breakdown completo: técnico + performance + contenido + AEO
+   - Área más débil identificada automáticamente (< 70)
+   - Páginas rotas y redirects del audit
+   - Top 20 páginas del sitio por impresiones (referencia para targetUrl de gaps)
+
+3. **Post-procesado mejorado** (`advisor-processor.ts`):
+   - Regex patterns para filtrar steps internos (activar benchmark, configurar tracking, etc.)
+   - Filtro de objetivos vagos sin targetUrl (escalar score, mejorar E-E-A-T)
+   - kind "otro" siempre descartado (orquestador no lo ejecuta)
+   - "tecnico" ya no requiere keywords
+
+4. **2 kinds nuevos** (types, validation, processor, claude-analysis, contrato):
+   - `contenido-optimizar` → reescribir body text, agregar FAQ, mejorar E-E-A-T
+   - `interlinking` → enlaces internos entre páginas existentes
+
+5. **Campo `origin`** (types, validation, prompt):
+   - `"data"` = métrica lo dicta directamente
+   - `"ai-insight"` = recomendación estratégica de Claude
+
+6. **Plan mensual estable** (`advisor-processor.ts` + `recommendations/route.ts`):
+   - `getOrCreateMonthlyPlan()` — lazy, genera 1 vez por mes
+   - Max 6 steps accionables, sin setup, sin kind:"otro"
+   - `triggeredBy: "monthly-plan"` como discriminador (sin migración)
+   - `GET /recommendations/{id}?type=monthly` — idempotente dentro del mes
+
+7. **Contrato v2** (`CONTRACT_SEO_ORQUESTADOR.md`):
+   - Tabla kind → actionType completa
+   - Documentación de `origin`
+   - Tabla de responsabilidades Cerebro SEO vs Orquestador
+
+8. **Spec para Orquestador** (`SPEC-orquestador-plan-mensual.md`):
+   - 6 cambios necesarios en cerebro-web
+   - Tabla de archivos a tocar
+   - Flujo final esperado
+
+**Archivos modificados:** 8 + 2 docs nuevos
+**Costo de APIs:** $0 (sin ejecución de advisor en esta sesión)
+
+---
 
 ### Sesión 35 — 2026-09-03 ✅ COMPLETA (AEO Readiness + Análisis Claude → Orquestador)
 **Participantes:** Jorge + Claude Code

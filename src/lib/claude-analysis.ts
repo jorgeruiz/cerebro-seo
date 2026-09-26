@@ -401,12 +401,14 @@ const VALID_KINDS = new Set([
   "meta",
   "contenido-blog",
   "contenido-landing",
+  "contenido-optimizar",
+  "interlinking",
   "schema",
   "tecnico",
   "otro",
 ] as const);
 
-export type SubtareaKind = "meta" | "contenido-blog" | "contenido-landing" | "schema" | "tecnico" | "otro";
+export type SubtareaKind = "meta" | "contenido-blog" | "contenido-landing" | "contenido-optimizar" | "interlinking" | "schema" | "tecnico" | "otro";
 
 export interface Subtarea {
   kind: SubtareaKind;
