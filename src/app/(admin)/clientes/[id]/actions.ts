@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
-import { resolveSite, NoSiteError } from "@/server/sites/resolve-site";
+import { resolveSite } from "@/server/sites/resolve-site";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import type { GscQueryRow } from "@/server/providers/google-search-console";
 import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";

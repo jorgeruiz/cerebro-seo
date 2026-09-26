@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { resolveSite, NoSiteError } from "@/server/sites/resolve-site";
+import { resolveSite } from "@/server/sites/resolve-site";
 import type { NextStep } from "./types";
 
 export interface PreconditionResult {

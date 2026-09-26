@@ -9,7 +9,6 @@ import {
   DollarSign,
   TrendingUp,
   Users,
-  FileText,
   Sparkles,
   ChevronDown,
   ChevronRight,
@@ -46,9 +45,9 @@ const TABS: { id: TabId; label: string; icon: typeof FlaskConical }[] = [
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function ResearchTabs({ clientId, domain, latestReport, historyCount, isAdmin }: Props) {
+export function ResearchTabs({ clientId, latestReport, isAdmin }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("oportunidades");
-  const [report, setReport] = useState(latestReport);
+  const [report] = useState(latestReport);
   const [isPending, startTransition] = useTransition();
   const [estimate, setEstimate] = useState<ResearchEstimate | null>(null);
   const [error, setError] = useState<string | null>(null);

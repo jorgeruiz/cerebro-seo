@@ -13,7 +13,6 @@ import {
   TrendingUp,
   Zap,
   Lightbulb,
-  Brain,
   Calendar,
   FileText,
   Settings,

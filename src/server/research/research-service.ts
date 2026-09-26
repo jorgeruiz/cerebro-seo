@@ -208,7 +208,7 @@ async function generateSuggestions(
   strikingDistance: import("@/server/providers/dataforseo").StrikingDistanceKeyword[],
   lowDifficulty: import("@/server/providers/dataforseo").TopKeywordResult[],
   competitors: CompetitorWithPages[],
-  clientId: string,
+  _clientId: string,
 ): Promise<{
   suggestions: ResearchSuggestion[];
   inputTokens: number;
