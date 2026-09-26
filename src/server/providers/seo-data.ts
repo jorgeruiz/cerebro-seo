@@ -107,7 +107,7 @@ export interface SeoDataProvider {
 
   // Competitor analysis
   getCompetitorOverview(domain: string, referenceKeywords: string[]): Promise<CompetitorData>;
-  getOrganicCompetitors(domain: string): Promise<string[]>;
+  getOrganicCompetitors(domain: string, options?: { limit?: number; clientId?: string }): Promise<unknown[]>;
 
   // SERP
   getSerp(keyword: string, country: string): Promise<SerpResult>;

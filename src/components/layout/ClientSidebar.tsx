@@ -74,9 +74,8 @@ const GROUPS: NavGroup[] = [
     title: "Oportunidades",
     items: [
       { label: "SEO Opportunities",    href: "oportunidades",     icon: TrendingUp,  description: "Quick wins detectados", requiresSeo: true },
-      { label: "Keyword Ideas",        href: "keyword-ideas",     icon: Lightbulb,   description: "Expansión semántica",   requiresSeo: true },
+      { label: "Research",             href: "research",          icon: Lightbulb,   description: "Oportunidades, keywords, AEO",   requiresSeo: true },
       { label: "AI Search Visibility", href: "ai-search",         icon: Zap,         description: "Presencia en LLMs",     requiresSeo: true },
-      { label: "AEO Research",         href: "aeo-research",      icon: Brain,       description: "Prompts y clusters",    requiresSeo: true },
     ],
   },
   {

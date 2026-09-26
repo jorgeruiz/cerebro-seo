@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-09-03 (Sesión 35 — AEO Readiness + Análisis Claude → Orquestador)
-**Fase actual:** Post-Fase 4 — expansión AEO/GEO + integración Orquestador
-**Próximo hito:** Probar AEO Readiness con cliente real + validar desglose Orquestador end-to-end
+**Última actualización:** 2026-09-26 (Sesión A — resolveSite + guard de pertenencia)
+**Fase actual:** Post-Fase 4 — preparación multi-proyecto + integración Orquestador
+**Próximo hito:** Wizard de nuevo proyecto (Research extendido) + migración siteId
 
 ---
 
@@ -121,6 +121,12 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | AEO Readiness (Site Audit) | ✅ Activo | 10 checks algorítmicos de legibilidad para IA dentro de Site Audit (modo complete). Prober: robots.txt AI bots, llms.txt, content negotiation, .md routes, SSR content, sitemap. Score 0-100 persistido en `Audit.aeoScore`. Costo $0. Migración `20260902120000_add_aeo_readiness`. Sesión 35 commit `4877e92`. |
 | Integración Orquestador | ✅ Activo | Botón "Enviar al Orquestador" en 5 módulos: Oportunidades, Audit Issues, Plan de Contenido, AEO Research, Análisis Claude. `orchestrator-actions.ts` con `actionSendToOrchestrator` (genérica) + `actionDecomposeAndSendToOrchestrator` (análisis con desglose via Claude). Fire-and-forget (sin persistencia de envíos). |
 | Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` de una oportunidad en sub-tareas atómicas. Schema cerrado: kind enum (meta/contenido-blog/contenido-landing/schema/tecnico/otro). Validación runtime con fallback. Sin límite de sub-tareas explícito. Commit `27cdb45` + fix `bba2ea2`. |
+| Módulo Research | ✅ Activo | `/clientes/[id]/research` con tabs: Oportunidades (nuevo), Keyword Ideas (existente), AEO Research (existente). Servicio `src/server/research/` reutilizable por wizard. DataForSEO: `getOrganicCompetitors` (competitors_domain), `getCompetitorPages` (relevant_pages), `getStrikingDistanceKeywords` (ranked_keywords pos 4-20). Claude Sonnet para sugerencias. Modelo `ResearchReport` con `clientId` + `siteId` (multi-proyecto nativo). Costo ≤ $0.45/ejecución. Cache 7d por dominio. Sesión A-F2. |
+| resolveSite guard | ✅ Activo | `src/server/sites/resolve-site.ts`. 10 reemplazos de `Site.findFirst({ where: { clientId } })` en 6 archivos. Errores tipados: `NoSiteError` (0 sites), `AmbiguousSiteError` (>1 sites). Guard de pertenencia siteId↔clientId. Sesión A. |
+
+### 🟡 Deuda: keyword-ideas SSR en cada page load
+
+`/clientes/[id]/keyword-ideas/page.tsx` llama a `dataForSeoProvider.getKeywordIdeas()` directamente en SSR en cada page load (cacheado 7d en Redis). Si el cache expira y el usuario navega, hace una llamada a DataForSEO ($0.025) sin confirmación. Migrar a on-demand con botón "Generar" en sesión futura.
 
 ---
 
@@ -199,6 +205,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-05-31 | **`Array.from(new Set(...))` en vez de `[...new Set(...)]`** en server actions TypeScript. El spread de iterables requiere `downlevelIteration` o target ES2015+ — `Array.from()` es seguro con cualquier target. |
 | 2026-06-05 | **Sidebar: Settings solo visible para ADMIN.** El nav item de `/settings` se oculta para EDITORs en `Sidebar.tsx` usando la sesión del servidor. Íconos Lucide reales en todos los items (reemplaza placeholders). Commit `69d9482`. |
 | 2026-06-10 | **Plan de Contenido on-demand.** Módulo `/contenido/` genera planes de contenido SEO con Claude Sonnet 4.6. Cruza keywords, gaps de competidores, oportunidades GSC y ciclo activo. Modelo `ContentPlan` en BD (tabla separada, historial por cliente por mes). Costo estimado $0.01–0.03/plan — no se encola en BullMQ (on-demand, igual que Análisis Claude). |
+| 2026-09-26 | **`Client.domain` marcado `@deprecated`** en schema.prisma. Nuevas lecturas deben usar `Site.url`. Campo se mantiene por backward compat con Notion sync. |
+| 2026-09-26 | **`resolveSite(clientId, siteId?)` reemplaza todos los `Site.findFirst({ where: { clientId } })`** — 10 sitios en 6 archivos de producción. Guard de pertenencia: con `siteId` valida `site.clientId === clientId`, sin `siteId` retorna el site único o lanza error tipado (`NoSiteError` / `AmbiguousSiteError`). Preparación para multi-proyecto sin cambios de schema. |
+| 2026-09-26 | **Orden de migración multi-proyecto:** wizard de nuevo proyecto ANTES de migración siteId en modelos. El wizard necesita `getOrganicCompetitors` y Research extendido, no los 14 modelos con siteId. |
 | 2026-06-14 | **AEO Research (Capa A pilar AEO/GEO).** Módulo `/aeo-research/` recopila preguntas via DataForSEO Labs `keyword_suggestions` (filtrado a palabras-pregunta, cache 7d) + SERP PAA extraction (cache 7d, $0.002/req × seed). Las preguntas se clasifican con Claude Sonnet 4.6 en clusters temáticos AEO (featured snippets/PAA/voz) y GEO (citación por ChatGPT/Gemini/Perplexity/Claude). Modelo `AeoResearch` en BD (clusters Json = `AeoResearchResult` completo). ADMIN-only, seeds automáticas desde keywords `isPriority`. Costo estimado $0.01–0.05/análisis (labs + PAA + Claude). Capa B (escalar a Perplexity/SearchGPT APIs reales) queda como próximo push. |
 | 2026-06-14 | **Sección global `/research` (Sesión 37).** Research ephemero sin cliente: modo keywords (ideas + preguntas + clusters AEO/GEO con Claude) y modo dominio (rank overview). Resultados solo en memoria React — sin modelo Prisma nuevo. `classifyAeoResearchEphemeral` en `aeo-classify.ts` clasifica sin guardar a BD. `ApiUsage` se loggea con `clientId: null` (campo ya nullable). Sidebar: ítem "Research" (FlaskConical, visible ADMIN + EDITOR). Útil para preventa, análisis de campañas y research ad-hoc sin cliente asignado. |
 | 2026-06-14 | **Portapapeles de estrategia por cliente (Sesión 38).** EN MEMORIA — no persiste en BD, localStorage ni sessionStorage. React Context (`ClipboardContext`) montado en `clientes/[id]/layout.tsx` keyed por clientId: persiste al navegar entre módulos del mismo cliente, se resetea al cambiar de cliente. Items: keyword/aeo_cluster/content_idea con payload markdown. Botones Plus/Check en keyword-ideas (columna nueva "Copiar"), AeoResearchPanel (ClusterCard header), ContentPlanPanel (IdeaCard header). Página `/portapapeles`: items agrupados por tipo, "Copiar todo" (navigator.clipboard), "Vaciar", warning temporal, empty state. Guard 4a (beforeunload) implementado. Guard 4b (navegación interna Next.js App Router): NO implementado — router.events no existe en App Router; se documenta como limitación menor. |

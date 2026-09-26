@@ -540,8 +540,163 @@ export class DataForSeoProvider implements SeoDataProvider {
     throw new Error("getCompetitorOverview: not implemented yet — Fase 3");
   }
 
-  async getOrganicCompetitors(_domain: string): Promise<string[]> {
-    throw new Error("getOrganicCompetitors: not implemented yet — Fase 3");
+  // ── getOrganicCompetitors ─────────────────────────────────────────────────
+  // DataForSEO Labs — Competitors Domain. Retorna dominios competidores orgánicos
+  // con métricas de intersección y tráfico.
+  // Costo: ~$0.05/req. Cache: 7 días.
+
+  async getOrganicCompetitors(
+    domain: string,
+    options?: { limit?: number; clientId?: string }
+  ): Promise<OrganicCompetitor[]> {
+    const limit = options?.limit ?? 5;
+    const cacheKey = `cache:dataforseo:competitors:${domain}:${limit}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as OrganicCompetitor[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsCompetitorsDomainResult>(
+      "/dataforseo_labs/google/competitors_domain/live",
+      [{
+        target: domain,
+        location_name: "Mexico",
+        language_name: "Spanish",
+        limit,
+        filters: ["relevant_serp_items", ">", 10],
+        order_by: ["intersections,desc"],
+      }]
+    );
+
+    void logUsage({ endpoint: "labs/competitors_domain", cost: cost || 0.05, clientId: options?.clientId });
+
+    const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: OrganicCompetitor[] = items
+      .filter((item) => item.domain && item.domain !== domain)
+      .map((item) => {
+        const metrics = item.full_domain_metrics?.google?.organic;
+        return {
+          domain: item.domain!,
+          avgPosition: item.avg_position ?? 0,
+          serpCount: metrics?.count ?? 0,
+          intersections: item.intersections ?? 0,
+          estimatedTraffic: metrics?.etv ?? 0,
+          rankedKeywords: metrics?.count ?? 0,
+        };
+      });
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(results));
+    } catch { /* Redis caído */ }
+
+    return results;
+  }
+
+  // ── getCompetitorPages ────────────────────────────────────────────────────
+  // DataForSEO Labs — Relevant Pages. Retorna las páginas de un competidor
+  // con mayor tráfico orgánico estimado.
+  // Costo: ~$0.05/req. Cache: 7 días.
+
+  async getCompetitorPages(
+    domain: string,
+    options?: { limit?: number; clientId?: string }
+  ): Promise<CompetitorPage[]> {
+    const limit = options?.limit ?? 10;
+    const cacheKey = `cache:dataforseo:pages:${domain}:${limit}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as CompetitorPage[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsRelevantPagesResult>(
+      "/dataforseo_labs/google/relevant_pages/live",
+      [{
+        target: domain,
+        location_name: "Mexico",
+        language_name: "Spanish",
+        limit,
+        order_by: ["metrics.organic.etv,desc"],
+      }]
+    );
+
+    void logUsage({ endpoint: "labs/relevant_pages", cost: cost || 0.05, clientId: options?.clientId });
+
+    const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: CompetitorPage[] = items
+      .filter((item) => item.page_address)
+      .map((item) => ({
+        url: item.page_address!,
+        mainKeyword: item.page_metrics?.[0]?.keyword ?? null,
+        position: item.page_metrics?.[0]?.rank_group ?? null,
+        estimatedTraffic: item.metrics?.organic?.etv ?? 0,
+        keywordCount: item.metrics?.organic?.count ?? 0,
+      }));
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(results));
+    } catch { /* Redis caído */ }
+
+    return results;
+  }
+
+  // ── getStrikingDistanceKeywords ───────────────────────────────────────────
+  // DataForSEO Labs — Ranked Keywords filtradas a posiciones 4-20.
+  // Para encontrar keywords en striking distance de la primera página.
+  // Costo: ~$0.05/req. Cache: 7 días.
+
+  async getStrikingDistanceKeywords(
+    domain: string,
+    options?: { limit?: number; maxPosition?: number; clientId?: string }
+  ): Promise<StrikingDistanceKeyword[]> {
+    const limit = options?.limit ?? 50;
+    const maxPos = options?.maxPosition ?? 20;
+    const cacheKey = `cache:dataforseo:striking:${domain}:${limit}:${maxPos}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as StrikingDistanceKeyword[];
+    } catch { /* Redis caído */ }
+
+    const { data, cost } = await dfsPost<DfsRankedKeywordsResult>(
+      "/dataforseo_labs/google/ranked_keywords/live",
+      [{
+        target: domain,
+        location_name: "Mexico",
+        language_name: "Spanish",
+        limit,
+        order_by: ["keyword_data.keyword_info.search_volume,desc"],
+        filters: [
+          ["ranked_serp_element.serp_item.rank_group", ">=", 4],
+          "and",
+          ["ranked_serp_element.serp_item.rank_group", "<=", maxPos],
+        ],
+      }]
+    );
+
+    void logUsage({ endpoint: "labs/ranked_keywords/striking", cost: cost || 0.05, clientId: options?.clientId });
+
+    const items: DfsRankedKeywordItem[] = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: StrikingDistanceKeyword[] = items
+      .filter((item) => item.keyword_data?.keyword)
+      .map((item) => ({
+        keyword: item.keyword_data!.keyword!,
+        position: item.ranked_serp_element?.serp_item?.rank_group ?? 0,
+        searchVolume: item.keyword_data?.keyword_info?.search_volume ?? null,
+        keywordDifficulty: (item as Record<string, unknown> & { keyword_data?: { keyword_properties?: { keyword_difficulty?: number | null } } }).keyword_data?.keyword_properties?.keyword_difficulty ?? null,
+        url: (item.ranked_serp_element?.serp_item as Record<string, unknown> | undefined)?.relative_url as string | null ?? null,
+        intent: null,
+      }));
+
+    try {
+      await redis.setex(cacheKey, 7 * 24 * 3600, JSON.stringify(results));
+    } catch { /* Redis caído */ }
+
+    return results;
   }
 
   async getSerp(_keyword: string, _country: string): Promise<SerpResult> {
@@ -964,4 +1119,70 @@ interface DfsRankedKeywordItem {
 
 interface DfsRankedKeywordsResult {
   items?: DfsRankedKeywordItem[];
+}
+
+// ─── Organic Competitors types ──────────────────────────────────────────────
+
+export interface OrganicCompetitor {
+  domain: string;
+  avgPosition: number;
+  serpCount: number;
+  intersections: number;
+  estimatedTraffic: number;
+  rankedKeywords: number;
+}
+
+interface DfsCompetitorsDomainItem {
+  domain?: string;
+  avg_position?: number;
+  se_type?: string;
+  intersections?: number;
+  full_domain_metrics?: Record<string, {
+    organic?: { count?: number; etv?: number; is_up?: number; is_down?: number };
+  }>;
+}
+
+interface DfsCompetitorsDomainResult {
+  items?: DfsCompetitorsDomainItem[];
+}
+
+// ─── Competitor Pages types ─────────────────────────────────────────────────
+
+export interface CompetitorPage {
+  url: string;
+  mainKeyword: string | null;
+  position: number | null;
+  estimatedTraffic: number;
+  keywordCount: number;
+}
+
+interface DfsRelevantPagesItem {
+  page_address?: string;
+  metrics?: {
+    organic?: {
+      count?: number;
+      etv?: number;
+      is_up?: number;
+      is_down?: number;
+    };
+  };
+  page_metrics?: Array<{
+    keyword?: string;
+    rank_group?: number;
+  }>;
+}
+
+interface DfsRelevantPagesResult {
+  items?: DfsRelevantPagesItem[];
+}
+
+// ─── Striking Distance types ────────────────────────────────────────────────
+
+export interface StrikingDistanceKeyword {
+  keyword: string;
+  position: number;
+  searchVolume: number | null;
+  keywordDifficulty: number | null;
+  url: string | null;
+  intent: string | null;
 }

@@ -93,11 +93,19 @@ cerebro-seo/
 **Implementado en Sesión 3 (ahora existe):**
 ```
 src/server/providers/
-├── seo-data.ts    # Interface SeoDataProvider + 8 tipos auxiliares
+├── seo-data.ts    # Interface SeoDataProvider + tipos auxiliares
 └── dataforseo.ts  # DataForSeoProvider: getKeywordRanking, bulkGetRankings,
-                   #   getDomainAuthority, getBacklinksSummary (reales)
-                   #   + stubs: getKeywordSuggestions, getKeywordVolume,
-                   #     getCompetitorOverview, getOrganicCompetitors, getSerp (Fase 2-3)
+                   #   getDomainAuthority, getBacklinksSummary, getOrganicCompetitors,
+                   #   getCompetitorPages, getStrikingDistanceKeywords, getKeywordIdeas,
+                   #   getTopKeywords, getKeywordGaps, getSerpQuestions, getQuestionKeywords
+                   #   + stubs: getKeywordSuggestions, getKeywordVolume, getSerp
+
+src/server/research/
+├── types.ts              # ResearchData, ResearchSuggestion, CostBreakdown, ResearchEstimate
+└── research-service.ts   # runResearch(), estimateResearchCost(), generateSuggestions()
+
+src/server/sites/
+└── resolve-site.ts       # resolveSite(clientId, siteId?) — guard multi-proyecto
 
 scripts/
 └── validate-dataforseo.ts  # Script de validación SERP Live (15 queries, ejecutado ×2)
@@ -120,11 +128,12 @@ src/app/(admin)/clientes/[id]/
 ├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6 + botón Orquestador
 ├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC) + botón Orquestador
 ├── reporte/page.tsx            # Reporte mensual Claude + PDF exportable
-├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs
+├── research/page.tsx           # Research hub (tabs: Oportunidades, Keyword Ideas, AEO)
+├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs (accesible via tab Research)
 ├── timeline/page.tsx           # Eventos/Timeline 7 fuentes 90 días
 ├── audit/page.tsx              # Site Audit + AEO Readiness (10 checks) + botón Orquestador
 ├── contenido/page.tsx          # Plan de Contenido on-demand Claude + botón Orquestador
-├── aeo-research/page.tsx       # AEO/GEO Research (clusters + Claude) + botón Orquestador
+├── aeo-research/page.tsx       # AEO/GEO Research (clusters + Claude) (accesible via tab Research)
 ├── configuracion/page.tsx      # CRUD keywords/competidores/GSC/GA4
 ├── portapapeles/page.tsx       # Portapapeles de estrategia (markdown, en memoria)
 ├── insights/page.tsx           # Historial insights (tabs: activos/resueltos/ignorados)
