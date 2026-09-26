@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { redis } from "@/lib/redis";
+import { resolveSite } from "@/server/sites/resolve-site";
 import { logApiUsage, calculateClaudeCost } from "../workers/base-worker";
 import { InsightsJobData } from "../queues";
 import { subDays, format, startOfMonth, endOfMonth } from "date-fns";
@@ -161,7 +162,7 @@ async function buildTrendsBlock(clientId: string): Promise<string> {
     : await computeRankingsSummary(clientId);
 
   // Último audit disponible
-  const site = await prisma.site.findFirst({ where: { client: { id: clientId } } });
+  const site = await resolveSite(clientId).catch(() => null);
   const lastAudit = site
     ? await prisma.audit.findFirst({
         where: { siteId: site.id },

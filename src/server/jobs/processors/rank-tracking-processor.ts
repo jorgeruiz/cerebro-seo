@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { resolveSite } from "@/server/sites/resolve-site";
 import { dataForSeoProvider } from "@/server/providers/dataforseo";
 import type { KeywordQuery } from "@/server/providers/seo-data";
 
@@ -140,18 +141,13 @@ export async function runRankTrackingProcessor(
 
   // ── Cargar cliente + site + keywords ────────────────────────────────────────
 
-  const [client, site] = await Promise.all([
-    prisma.client.findUnique({
-      where: { id: clientId },
-      select: { id: true, domain: true },
-    }),
-    prisma.site.findFirst({
-      where: { clientId },
-      select: { id: true, url: true },
-    }),
-  ]);
-
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, domain: true },
+  });
   if (!client) throw new Error(`Client not found: ${clientId}`);
+
+  const site = await resolveSite(clientId).catch(() => null);
 
   const domain = site?.url
     ? new URL(site.url.startsWith("http") ? site.url : `https://${site.url}`).hostname.replace(/^www\./, "")

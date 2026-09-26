@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { resolveSite } from "@/server/sites/resolve-site";
 import { validateNotionClientId } from "@/lib/notion-client-id";
 import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
@@ -59,10 +60,7 @@ async function fetchGscOpportunities(
   internalClientId: string
 ): Promise<GscOpportunityPayload[]> {
   try {
-    const site = await prisma.site.findFirst({
-      where: { clientId: internalClientId },
-      select: { gscProperty: true },
-    });
+    const site = await resolveSite(internalClientId).catch(() => null);
     if (!site?.gscProperty) return [];
 
     const oauth = await getServiceOAuth2Client();

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { getServiceOAuth2Client } from "@/lib/google-oauth";
 import { prisma } from "@/lib/db";
+import { resolveSite, NoSiteError } from "@/server/sites/resolve-site";
 import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import type { GscQueryRow } from "@/server/providers/google-search-console";
 import { GoogleAnalytics4Provider } from "@/server/providers/google-analytics-4";
@@ -137,8 +138,12 @@ export async function setClientGscProperty(
   const parsed = z.string().min(1).safeParse(siteUrl);
   if (!parsed.success) return { ok: false, error: "URL de propiedad inválida" };
 
-  const site = await prisma.site.findFirst({ where: { clientId } });
-  if (!site) return { ok: false, error: "Cliente sin sitio configurado" };
+  let site;
+  try {
+    site = await resolveSite(clientId);
+  } catch {
+    return { ok: false, error: "Cliente sin sitio configurado" };
+  }
 
   await prisma.site.update({
     where: { id: site.id },
@@ -158,8 +163,13 @@ export async function getGscSnapshot(
   const session = await getSession();
   if (!session?.user?.id) return null;
 
-  const site = await prisma.site.findFirst({ where: { clientId } });
-  if (!site?.gscProperty) return null;
+  let site;
+  try {
+    site = await resolveSite(clientId);
+  } catch {
+    return null;
+  }
+  if (!site.gscProperty) return null;
 
   const oauth = await getServiceOAuth2Client();
   if (!oauth) return null;
@@ -201,8 +211,13 @@ export async function getGa4Snapshot(
   const session = await getSession();
   if (!session?.user?.id) return null;
 
-  const site = await prisma.site.findFirst({ where: { clientId } });
-  if (!site?.ga4Property) return null;
+  let site;
+  try {
+    site = await resolveSite(clientId);
+  } catch {
+    return null;
+  }
+  if (!site.ga4Property) return null;
 
   const oauth = await getServiceOAuth2Client();
   if (!oauth) return null;
@@ -246,10 +261,13 @@ export async function getGscQueries(
   const session = await getSession();
   if (!session?.user?.id) return { error: "no_session" };
 
-  const site = await prisma.site.findFirst({
-    where: { clientId: params.clientId },
-  });
-  if (!site?.gscProperty) return { error: "no_property_configured" };
+  let site;
+  try {
+    site = await resolveSite(params.clientId);
+  } catch {
+    return { error: "no_property_configured" };
+  }
+  if (!site.gscProperty) return { error: "no_property_configured" };
 
   const oauth = await getServiceOAuth2Client();
   if (!oauth) return { error: "no_oauth_token" };
@@ -326,8 +344,13 @@ export async function getPagesTraffic({
   const session = await getSession();
   if (!session?.user?.id) return { error: "no_session" };
 
-  const site = await prisma.site.findFirst({ where: { clientId } });
-  if (!site?.gscProperty && !site?.ga4Property) {
+  let site;
+  try {
+    site = await resolveSite(clientId);
+  } catch {
+    return { error: "no_properties_configured" };
+  }
+  if (!site.gscProperty && !site.ga4Property) {
     return { error: "no_properties_configured" };
   }
 

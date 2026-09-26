@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { resolveSite, NoSiteError } from "@/server/sites/resolve-site";
 import type { NextStep } from "./types";
 
 export interface PreconditionResult {
@@ -37,10 +38,7 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       orderBy: { date: "desc" },
       select: { id: true },
     }),
-    prisma.site.findFirst({
-      where: { clientId },
-      select: { gscProperty: true },
-    }),
+    resolveSite(clientId).catch(() => null),
   ]);
 
   const hasKeywords = priorityKeywordCount > 0;

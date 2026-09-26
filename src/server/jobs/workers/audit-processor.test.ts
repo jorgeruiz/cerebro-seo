@@ -5,18 +5,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockRunPageSpeed = vi.hoisted(() => vi.fn());
 const mockCrawlSite = vi.hoisted(() => vi.fn());
 const mockProbeAeo = vi.hoisted(() => vi.fn());
+const mockResolveSite = vi.hoisted(() => vi.fn());
 
 // ─── vi.mock ──────────────────────────────────────────────────────────────────
 
 vi.mock("@/lib/db", () => ({
   prisma: {
-    site: { findFirst: vi.fn() },
     audit: {
       create: vi.fn(),
       update: vi.fn(),
     },
     auditIssue: { createMany: vi.fn() },
   },
+}));
+
+vi.mock("@/server/sites/resolve-site", () => ({
+  resolveSite: mockResolveSite,
+  NoSiteError: class NoSiteError extends Error { code = "NO_SITE" as const; },
 }));
 
 vi.mock("@/server/providers/pagespeed", () => ({
@@ -100,7 +105,7 @@ describe("runAuditProcessor", () => {
   it("modo quick — llama PageSpeed, no crawlSite, guarda audit", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-1" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 1 });
@@ -126,7 +131,7 @@ describe("runAuditProcessor", () => {
   it("modo complete — llama crawlSite + PageSpeed mobile + desktop", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-2" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 2 });
@@ -146,10 +151,10 @@ describe("runAuditProcessor", () => {
   it("si no hay site → lanza error, no crea audit", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue(null);
+    mockResolveSite.mockRejectedValue(new Error("Client client-x has no site configured"));
 
     const { runAuditProcessor } = await import("../processors/audit-processor");
-    await expect(runAuditProcessor({ clientId: "client-x", mode: "quick" })).rejects.toThrow("No site found");
+    await expect(runAuditProcessor({ clientId: "client-x", mode: "quick" })).rejects.toThrow("no site");
 
     expect(prisma.audit.create).not.toHaveBeenCalled();
   });
@@ -157,7 +162,7 @@ describe("runAuditProcessor", () => {
   it("si PageSpeed falla → audit completa con scores en 0 (no lanza error)", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://example.com" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://example.com", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-3" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 0 });
@@ -181,7 +186,7 @@ describe("runAuditProcessor", () => {
   it("agrega http:// si siteUrl no tiene protocolo", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-4" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 0 });
@@ -197,7 +202,7 @@ describe("runAuditProcessor", () => {
   it("modo complete — persiste aeoScore del probe AEO", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-aeo" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 0 });
@@ -238,7 +243,7 @@ describe("runAuditProcessor", () => {
   it("modo quick — no ejecuta AEO probe, aeoScore null", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-q" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 0 });
@@ -260,7 +265,7 @@ describe("runAuditProcessor", () => {
   it("probeAeo lanzando error — no tumba el job, aeoScore null", async () => {
     const { prisma } = await import("@/lib/db");
 
-    vi.mocked(prisma.site.findFirst).mockResolvedValue({ id: "site-1", url: "https://molinoazteca.mx" } as never);
+    mockResolveSite.mockResolvedValue({ id: "site-1", clientId: "client-1", url: "https://molinoazteca.mx", gscProperty: null, ga4Property: null });
     vi.mocked(prisma.audit.create).mockResolvedValue({ id: "audit-err" } as never);
     vi.mocked(prisma.audit.update).mockResolvedValue({} as never);
     vi.mocked(prisma.auditIssue.createMany).mockResolvedValue({ count: 0 });

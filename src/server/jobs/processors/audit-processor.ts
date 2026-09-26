@@ -10,6 +10,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { resolveSite } from "@/server/sites/resolve-site";
 import { crawlSite, type PageIssue } from "@/server/crawler/site-crawler";
 import { runPageSpeed } from "@/server/providers/pagespeed";
 import { probeAeo } from "@/server/crawler/aeo-prober";
@@ -107,14 +108,7 @@ export async function runAuditProcessor(data: AuditJobData): Promise<AuditResult
 
   // ── Buscar site del cliente ─────────────────────────────────────────────────
 
-  const site = await prisma.site.findFirst({
-    where: { clientId },
-    select: { id: true, url: true },
-  });
-
-  if (!site) {
-    throw new Error(`No site found for client ${clientId}`);
-  }
+  const site = await resolveSite(clientId);
 
   const siteUrl = site.url.startsWith("http") ? site.url : `https://${site.url}`;
 
