@@ -15,7 +15,7 @@ export const NextStepSchema = z.object({
   titulo: z.string().max(120),
   descripcion: z.string().max(500),
   categoria: z.enum(VALID_CATEGORIAS),
-  prioridad: z.number().int().min(1).max(5),
+  prioridad: z.number().int().min(1).max(7),
   seccionDestino: z.enum(VALID_SECCIONES).optional(),
   evidencia: z.string().max(200),
   esfuerzo: z.enum(VALID_ESFUERZOS).nullable().optional(),
@@ -41,10 +41,32 @@ export function validateNextSteps(raw: unknown): {
   success: false;
   error: string;
 } {
+  // Try full array first (fast path)
   const result = NextStepArraySchema.safeParse(raw);
   if (result.success) {
     return { success: true, data: result.data };
   }
+
+  // Fallback: parse item by item, keep valid ones
+  if (Array.isArray(raw) && raw.length > 0) {
+    const valid: ValidatedNextStep[] = [];
+    const errors: string[] = [];
+    for (const item of raw) {
+      const r = NextStepSchema.safeParse(item);
+      if (r.success) {
+        valid.push(r.data);
+      } else {
+        errors.push(z.prettifyError(r.error).slice(0, 100));
+      }
+    }
+    if (valid.length > 0) {
+      if (errors.length > 0) {
+        console.warn(`[validation] ${errors.length} steps dropped, ${valid.length} kept. Errors: ${errors[0]}`);
+      }
+      return { success: true, data: valid };
+    }
+  }
+
   return {
     success: false,
     error: z.prettifyError(result.error),

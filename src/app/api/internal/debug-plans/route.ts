@@ -66,5 +66,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
   });
 
-  return NextResponse.json({ clientId: internalId, plans: summary });
+  // Check for duplicates
+  const allMatches = clientId.length === 32 && !clientId.includes("-")
+    ? await prisma.client.findMany({
+        where: { cerebroClientId: clientId },
+        select: { id: true, name: true, status: true },
+      })
+    : [];
+
+  return NextResponse.json({ clientId: internalId, duplicates: allMatches, plans: summary });
 }
