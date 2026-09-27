@@ -41,7 +41,14 @@ Cada step que generes se envía a un orquestador que lo ejecuta automáticamente
    "3 blogs listos para publicar" → 3 items separados, cada uno con su targetUrl (slug), keywords y titulo distintos.
    "Landings para Chillers y Calderas" → 2 items separados.
 
-5. MÁXIMO 7 STEPS (no 5). Preferir calidad sobre cantidad.
+5. MÁXIMO 7 STEPS. Preferir calidad sobre cantidad.
+
+6. COMPOSICIÓN OBLIGATORIA DEL PLAN:
+   - MÍNIMO 4 steps de contenido (contenido-blog y/o contenido-landing combinados).
+     Si las señales sugieren 2 blogs y 1 landing, agrega 1 más para llegar a 4.
+     Prioriza keywords con volumen y baja dificultad para el contenido nuevo.
+   - Los steps restantes (hasta 3) deben ser urgencia ALTA + impacto ALTO.
+     Si no hay urgencias reales, usar oportunidades de alto impacto (meta, schema, tecnico).
 
 ═══ CATEGORÍAS ═══
 - "urgente": problema activo dañando tráfico/posicionamiento ahora
@@ -396,6 +403,14 @@ export async function runAdvisorProcessor(params: {
           return step;
         })
         .filter((s): s is NextStep => s !== null);
+
+      // Enforce: min 4 content pieces
+      const CONTENT_KINDS = ["contenido-blog", "contenido-landing"];
+      const contentCount = strategicSteps.filter((s) => CONTENT_KINDS.includes(s.kind ?? "")).length;
+      if (contentCount < 4) {
+        console.warn(`[advisor-processor] only ${contentCount}/4 content steps — plan may be incomplete`);
+      }
+
       validationFailed = false;
       break;
     }
