@@ -42,6 +42,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     take: 10,
     select: {
       id: true,
+      clientId: true,
       generatedAt: true,
       status: true,
       model: true,
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const steps = (Array.isArray(raw) ? raw : []) as Record<string, unknown>[];
     return {
       id: p.id,
+      clientId: p.clientId,
       generatedAt: p.generatedAt.toISOString(),
       status: p.status,
       model: p.model,

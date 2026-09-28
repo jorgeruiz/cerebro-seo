@@ -198,12 +198,13 @@ export async function GET(
 
   // ── Plan diario (comportamiento original) ──
 
-  // 5b. NextStepPlan más reciente del mes (excluir monthly-plan)
+  // 5b. NextStepPlan más reciente del mes (excluir monthly-plan, preferir valid)
   const plan = await prisma.nextStepPlan.findFirst({
     where: {
       clientId: internalId,
       generatedAt: { gte: range.gte, lte: range.lte },
       triggeredBy: { not: "monthly-plan" },
+      status: "valid",
     },
     orderBy: { generatedAt: "desc" },
   });
