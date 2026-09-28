@@ -74,8 +74,8 @@ function KeywordTable({ ideas }: { ideas: KeywordIdea[] }) {
         </span>
         <span className="flex-1 h-px bg-border" />
       </div>
-      <div className="rounded-xl border border-border overflow-hidden">
-        <table className="w-full text-xs">
+      <div className="rounded-xl border border-border overflow-x-auto">
+        <table className="w-full text-xs min-w-[640px]">
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
