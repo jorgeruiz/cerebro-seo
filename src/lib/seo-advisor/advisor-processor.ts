@@ -41,14 +41,15 @@ Cada step que generes se envía a un orquestador que lo ejecuta automáticamente
    "3 blogs listos para publicar" → 3 items separados, cada uno con su targetUrl (slug), keywords y titulo distintos.
    "Landings para Chillers y Calderas" → 2 items separados.
 
-5. MÁXIMO 7 STEPS. Preferir calidad sobre cantidad.
+5. ENTRE 8 Y 10 STEPS. Calidad sobre cantidad, pero cubrir contenido + técnico.
 
 6. COMPOSICIÓN OBLIGATORIA DEL PLAN:
-   - MÍNIMO 4 steps de contenido (contenido-blog y/o contenido-landing combinados).
-     Si las señales sugieren 2 blogs y 1 landing, agrega 1 más para llegar a 4.
-     Prioriza keywords con volumen y baja dificultad para el contenido nuevo.
-   - Los steps restantes (hasta 3) deben ser urgencia ALTA + impacto ALTO.
-     Si no hay urgencias reales, usar oportunidades de alto impacto (meta, schema, tecnico).
+   - MÍNIMO 4 steps de contenido (contenido-blog, contenido-landing o combinados).
+     Landing pages para keywords transaccionales, blogs para informacionales.
+     Si las señales sugieren menos de 4, complementa con keywords de volumen relevante y baja dificultad.
+   - ENTRE 4 Y 6 steps técnicos/de optimización (meta, schema, tecnico, contenido-optimizar, interlinking).
+     Priorizar: urgencia ALTA + impacto ALTO primero.
+     Si no hay urgencias reales, usar oportunidades de alto impacto.
 
 ═══ CATEGORÍAS ═══
 - "urgente": problema activo dañando tráfico/posicionamiento ahora
@@ -519,10 +520,10 @@ export async function runAdvisorProcessor(params: {
 
 // ---------------------------------------------------------------------------
 // Plan mensual estable — se genera una vez por mes, se devuelve idéntico
-// hasta el mes siguiente. Max 6 steps accionables, sin setup.
+// hasta el mes siguiente. Max 10 steps accionables, sin setup.
 // ---------------------------------------------------------------------------
 
-const MONTHLY_PLAN_MAX_STEPS = 6;
+const MONTHLY_PLAN_MAX_STEPS = 10;
 const MONTHLY_PLAN_TRIGGER = "monthly-plan";
 
 /**

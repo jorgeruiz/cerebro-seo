@@ -15,7 +15,7 @@ export const NextStepSchema = z.object({
   titulo: z.string().max(120),
   descripcion: z.string().max(500),
   categoria: z.enum(VALID_CATEGORIAS),
-  prioridad: z.number().int().min(1).max(7),
+  prioridad: z.number().int().min(1).max(10),
   seccionDestino: z.enum(VALID_SECCIONES).optional(),
   evidencia: z.string().max(200),
   esfuerzo: z.enum(VALID_ESFUERZOS).nullable().optional(),
