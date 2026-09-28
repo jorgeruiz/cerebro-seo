@@ -9,6 +9,7 @@ import type {
   ResearchData,
   ResearchSuggestion,
   CompetitorWithPages,
+  KeywordGap,
   CostBreakdown,
   ResearchEstimate,
 } from "./types";
@@ -18,6 +19,7 @@ import type {
 const COST_STRIKING = 0.05;
 const COST_COMPETITORS = 0.05;
 const COST_PAGES = 0.05;
+const COST_GAPS = 0.02;
 const COST_SUGGESTIONS = 0.03; // Claude Sonnet avg
 
 export function estimateResearchCost(
@@ -25,7 +27,8 @@ export function estimateResearchCost(
   pagesPerCompetitor = 10,
 ): ResearchEstimate {
   const competitorPages = competitorCount * COST_PAGES;
-  const total = COST_STRIKING + COST_COMPETITORS + competitorPages + COST_SUGGESTIONS;
+  const keywordGaps = competitorCount * COST_GAPS;
+  const total = COST_STRIKING + COST_COMPETITORS + competitorPages + keywordGaps + COST_SUGGESTIONS;
 
   return {
     competitorCount,
@@ -35,6 +38,7 @@ export function estimateResearchCost(
       strikingDistance: `$${COST_STRIKING.toFixed(2)} (ranked keywords pos 4-20)`,
       competitors: `$${COST_COMPETITORS.toFixed(2)} (top ${competitorCount} orgánicos)`,
       competitorPages: `$${competitorPages.toFixed(2)} (${competitorCount} × $${COST_PAGES.toFixed(2)} relevant pages)`,
+      keywordGaps: `$${keywordGaps.toFixed(2)} (${competitorCount} × $${COST_GAPS.toFixed(2)} domain intersection)`,
       suggestions: `~$${COST_SUGGESTIONS.toFixed(2)} (Claude Sonnet)`,
     },
   };
@@ -67,6 +71,7 @@ export async function runResearch(params: {
     strikingDistance: 0,
     competitors: 0,
     competitorPages: 0,
+    keywordGaps: 0,
     suggestions: 0,
     total: 0,
   };
@@ -92,23 +97,54 @@ export async function runResearch(params: {
     .filter((kw) => (kw.keywordDifficulty ?? 100) <= 30 && (kw.searchVolume ?? 0) >= 10)
     .slice(0, 20);
 
-  // 3. Competitor pages — parallel, capped
-  const competitorPageResults = await Promise.all(
-    rawCompetitors.map((comp) =>
-      dataForSeoProvider
-        .getCompetitorPages(comp.domain, { limit: maxPagesPerCompetitor, clientId })
-        .catch(() => [] as import("@/server/providers/dataforseo").CompetitorPage[])
-    )
-  );
+  // 3. Competitor pages + keyword gaps — parallel per competitor
+  const [competitorPageResults, gapResults] = await Promise.all([
+    Promise.all(
+      rawCompetitors.map((comp) =>
+        dataForSeoProvider
+          .getCompetitorPages(comp.domain, { limit: maxPagesPerCompetitor, clientId })
+          .catch(() => [] as import("@/server/providers/dataforseo").CompetitorPage[])
+      )
+    ),
+    Promise.all(
+      rawCompetitors.map((comp) =>
+        dataForSeoProvider
+          .getKeywordGaps(domain, comp.domain, { limit: 30, minSearchVolume: 10 }, clientId)
+          .catch(() => ({ competitorOnly: [], both: [], clientOnly: [] } as import("@/server/providers/dataforseo").KeywordGapResult))
+      )
+    ),
+  ]);
 
   costBreakdown.competitorPages = rawCompetitors.length * COST_PAGES;
+  costBreakdown.keywordGaps = rawCompetitors.length * COST_GAPS;
 
   const competitors: CompetitorWithPages[] = rawCompetitors.map((comp, i) => ({
     ...comp,
     topPages: competitorPageResults[i],
   }));
 
-  // 4. Claude suggestions (optional)
+  // 4. Aggregate keyword gaps (competitor ranks, domain doesn't) — deduplicated
+  const seenGaps = new Set<string>();
+  const keywordGaps: KeywordGap[] = [];
+  for (let i = 0; i < rawCompetitors.length; i++) {
+    for (const gap of gapResults[i].competitorOnly) {
+      if (seenGaps.has(gap.keyword.toLowerCase())) continue;
+      seenGaps.add(gap.keyword.toLowerCase());
+      keywordGaps.push({
+        keyword: gap.keyword,
+        competitorDomain: rawCompetitors[i].domain,
+        competitorPosition: gap.competitorPosition,
+        searchVolume: gap.searchVolume,
+        keywordDifficulty: gap.keywordDifficulty,
+        intent: gap.intent,
+      });
+    }
+  }
+  // Sort by volume desc, cap at 50
+  keywordGaps.sort((a, b) => (b.searchVolume ?? 0) - (a.searchVolume ?? 0));
+  keywordGaps.splice(50);
+
+  // 5. Claude suggestions (optional)
   let suggestions: ResearchSuggestion[] | null = null;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -118,6 +154,7 @@ export async function runResearch(params: {
       domain,
       strikingDistance.slice(0, 20),
       lowDifficulty,
+      keywordGaps.slice(0, 20),
       competitors,
       clientId,
     );
@@ -131,12 +168,14 @@ export async function runResearch(params: {
     costBreakdown.strikingDistance +
     costBreakdown.competitors +
     costBreakdown.competitorPages +
+    costBreakdown.keywordGaps +
     costBreakdown.suggestions;
 
   const researchData: ResearchData = {
     domain,
     strikingDistance,
     lowDifficulty,
+    keywordGaps,
     competitors,
     suggestions,
     costBreakdown,
@@ -206,7 +245,8 @@ RESPONDE ÚNICAMENTE con un JSON array válido. Sin texto fuera del JSON.`;
 async function generateSuggestions(
   domain: string,
   strikingDistance: import("@/server/providers/dataforseo").StrikingDistanceKeyword[],
-  lowDifficulty: import("@/server/providers/dataforseo").TopKeywordResult[],
+  lowDifficulty: import("@/server/providers/dataforseo").StrikingDistanceKeyword[],
+  keywordGaps: KeywordGap[],
   competitors: CompetitorWithPages[],
   _clientId: string,
 ): Promise<{
@@ -227,7 +267,13 @@ async function generateSuggestions(
     "## Keywords baja dificultad (KD ≤ 30)",
     ...lowDifficulty.map(
       (kw) =>
-        `- "${kw.keyword}" pos #${kw.position ?? "?"} vol ${kw.searchVolume ?? "?"}`
+        `- "${kw.keyword}" pos #${kw.position} vol ${kw.searchVolume ?? "?"} KD ${kw.keywordDifficulty ?? "?"}`
+    ),
+    "",
+    "## Keyword gaps (competidores rankean, dominio no)",
+    ...keywordGaps.map(
+      (g) =>
+        `- "${g.keyword}" → ${g.competitorDomain} pos #${g.competitorPosition} vol ${g.searchVolume ?? "?"} KD ${g.keywordDifficulty ?? "?"}`
     ),
     "",
     "## Competidores orgánicos",

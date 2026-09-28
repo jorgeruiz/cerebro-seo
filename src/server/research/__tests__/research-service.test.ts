@@ -6,6 +6,7 @@ const mockResolveSite = vi.hoisted(() => vi.fn());
 const mockGetStrikingDistance = vi.hoisted(() => vi.fn());
 const mockGetOrganicCompetitors = vi.hoisted(() => vi.fn());
 const mockGetCompetitorPages = vi.hoisted(() => vi.fn());
+const mockGetKeywordGaps = vi.hoisted(() => vi.fn());
 const mockAnthropicCreate = vi.hoisted(() => vi.fn());
 const mockCreateReport = vi.hoisted(() => vi.fn());
 
@@ -20,6 +21,7 @@ vi.mock("@/server/providers/dataforseo", () => ({
     getStrikingDistanceKeywords: mockGetStrikingDistance,
     getOrganicCompetitors: mockGetOrganicCompetitors,
     getCompetitorPages: mockGetCompetitorPages,
+    getKeywordGaps: mockGetKeywordGaps,
   },
 }));
 
@@ -85,6 +87,13 @@ beforeEach(() => {
   mockGetStrikingDistance.mockResolvedValue(STRIKING);
   mockGetOrganicCompetitors.mockResolvedValue(COMPETITORS);
   mockGetCompetitorPages.mockResolvedValue(PAGES);
+  mockGetKeywordGaps.mockResolvedValue({
+    competitorOnly: [
+      { keyword: "seguridad industrial", competitorPosition: 4, searchVolume: 600, keywordDifficulty: 25, intent: "commercial" },
+    ],
+    both: [],
+    clientOnly: [],
+  });
   mockAnthropicCreate.mockResolvedValue(CLAUDE_RESPONSE);
   mockCreateReport.mockResolvedValue({ id: "report-1" });
 });
@@ -96,8 +105,8 @@ describe("estimateResearchCost", () => {
 
     expect(est.competitorCount).toBe(5);
     expect(est.pagesPerCompetitor).toBe(10);
-    // $0.05 striking + $0.05 competitors + 5*$0.05 pages + $0.03 suggestions = $0.38
-    expect(est.estimatedCost).toBe(0.38);
+    // $0.05 striking + $0.05 competitors + 5*$0.05 pages + 5*$0.02 gaps + $0.03 suggestions = $0.48
+    expect(est.estimatedCost).toBe(0.48);
     expect(est.breakdown).toHaveProperty("strikingDistance");
     expect(est.breakdown).toHaveProperty("competitors");
     expect(est.breakdown).toHaveProperty("competitorPages");
@@ -129,6 +138,7 @@ describe("runResearch", () => {
     expect(mockGetStrikingDistance).toHaveBeenCalledWith("example.com", expect.objectContaining({ limit: 50 }));
     expect(mockGetOrganicCompetitors).toHaveBeenCalledWith("example.com", expect.objectContaining({ limit: 5 }));
     expect(mockGetCompetitorPages).toHaveBeenCalledTimes(2); // 2 competitors
+    expect(mockGetKeywordGaps).toHaveBeenCalledTimes(2); // 2 competitors
 
     // Claude called for suggestions
     expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
@@ -149,8 +159,10 @@ describe("runResearch", () => {
     expect(result.data.strikingDistance).toHaveLength(3);
     expect(result.data.competitors).toHaveLength(2);
     expect(result.data.competitors[0].topPages).toHaveLength(2);
+    expect(result.data.keywordGaps.length).toBeGreaterThanOrEqual(1);
     expect(result.data.suggestions).toBeDefined();
     expect(result.data.costBreakdown.total).toBeGreaterThan(0);
+    expect(result.data.costBreakdown.keywordGaps).toBeGreaterThan(0);
   });
 
   it("skips suggestions when includeSuggestions=false", async () => {
@@ -180,6 +192,10 @@ describe("runResearch", () => {
   it("handles competitor pages failure gracefully", async () => {
     mockGetCompetitorPages
       .mockResolvedValueOnce(PAGES)
+      .mockRejectedValueOnce(new Error("API timeout"));
+    // Gaps can also fail gracefully
+    mockGetKeywordGaps
+      .mockResolvedValueOnce({ competitorOnly: [], both: [], clientOnly: [] })
       .mockRejectedValueOnce(new Error("API timeout"));
 
     const { runResearch } = await import("../research-service");

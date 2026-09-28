@@ -12,9 +12,12 @@ import {
   Sparkles,
   ChevronDown,
   ChevronRight,
+  Target,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionRunResearch, actionGetResearchEstimate } from "./actions";
+import { AddKeywordButton } from "../keyword-ideas/AddKeywordButton";
 import type { ResearchData, ResearchEstimate } from "@/server/research/types";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -169,7 +172,7 @@ export function ResearchTabs({ clientId, latestReport, isAdmin }: Props) {
 
           {/* Report content */}
           {report ? (
-            <ResearchReportView data={report.data} createdAt={report.createdAt} cost={report.apiCost + report.claudeCost} />
+            <ResearchReportView clientId={clientId} data={report.data} createdAt={report.createdAt} cost={report.apiCost + report.claudeCost} />
           ) : (
             <div className="text-center py-16 text-muted-foreground">
               <FlaskConical className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -188,10 +191,12 @@ export function ResearchTabs({ clientId, latestReport, isAdmin }: Props) {
 // ── Report view ─────────────────────────────────────────────────────────────
 
 function ResearchReportView({
+  clientId,
   data,
   createdAt,
   cost,
 }: {
+  clientId: string;
   data: ResearchData;
   createdAt: Date;
   cost: number;
@@ -219,42 +224,73 @@ function ResearchReportView({
         icon={TrendingUp}
         count={data.strikingDistance.length}
         defaultOpen
+        actions={<CsvButton data={data.strikingDistance} filename={`striking-${data.domain}`} columns={["keyword","position","searchVolume","keywordDifficulty","url"]} />}
       >
-        {data.strikingDistance.length > 0 ? (
+        <KeywordTable
+          rows={data.strikingDistance}
+          columns={["keyword", "pos", "vol", "kd", "url", "add"]}
+          clientId={clientId}
+        />
+      </CollapsibleSection>
+
+      {/* Low difficulty */}
+      {data.lowDifficulty.length > 0 && (
+        <CollapsibleSection
+          title="Baja Dificultad (KD ≤ 30)"
+          icon={Target}
+          count={data.lowDifficulty.length}
+          actions={<CsvButton data={data.lowDifficulty} filename={`low-kd-${data.domain}`} columns={["keyword","position","searchVolume","keywordDifficulty"]} />}
+        >
+          <KeywordTable
+            rows={data.lowDifficulty}
+            columns={["keyword", "pos", "vol", "kd", "add"]}
+            clientId={clientId}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Keyword gaps */}
+      {data.keywordGaps && data.keywordGaps.length > 0 && (
+        <CollapsibleSection
+          title="Keyword Gaps vs Competencia"
+          icon={Target}
+          count={data.keywordGaps.length}
+          actions={<CsvButton data={data.keywordGaps} filename={`gaps-${data.domain}`} columns={["keyword","competitorDomain","competitorPosition","searchVolume","keywordDifficulty","intent"]} />}
+        >
           <div className="rounded-xl border border-border overflow-x-auto">
-            <table className="w-full text-xs min-w-[600px]">
+            <table className="w-full text-xs min-w-[640px]">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
                   <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Keyword</th>
+                  <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Competidor</th>
                   <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Pos</th>
                   <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Vol</th>
                   <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">KD</th>
-                  <th className="text-left px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">URL</th>
+                  <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">+</th>
                 </tr>
               </thead>
               <tbody>
-                {data.strikingDistance.map((kw, i) => (
+                {data.keywordGaps.map((g, i) => (
                   <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-2.5 font-mono text-[0.8rem]">{kw.keyword}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-[0.75rem]">#{kw.position}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-[0.75rem]">{fmtVol(kw.searchVolume)}</td>
+                    <td className="px-4 py-2.5 font-mono text-[0.8rem]">{g.keyword}</td>
+                    <td className="px-4 py-2.5 font-mono text-[0.7rem] text-muted-foreground">{g.competitorDomain}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-[0.75rem]">#{g.competitorPosition}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-[0.75rem]">{fmtVol(g.searchVolume)}</td>
                     <td className="px-4 py-2.5 text-center">
-                      <span className={cn("font-mono text-[0.7rem] px-1.5 py-0.5 rounded border", kdBadge(kw.keywordDifficulty))}>
-                        {kw.keywordDifficulty ?? "—"}
+                      <span className={cn("font-mono text-[0.7rem] px-1.5 py-0.5 rounded border", kdBadge(g.keywordDifficulty))}>
+                        {g.keywordDifficulty ?? "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-[0.7rem] text-muted-foreground truncate max-w-[200px] hidden lg:table-cell">
-                      {kw.url ?? "—"}
+                    <td className="px-4 py-2.5 text-center">
+                      <AddKeywordButton clientId={clientId} keyword={g.keyword} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <p className="font-mono text-xs text-muted-foreground py-4">Sin keywords en striking distance.</p>
-        )}
-      </CollapsibleSection>
+        </CollapsibleSection>
+      )}
 
       {/* Competitors */}
       <CollapsibleSection
@@ -358,30 +394,136 @@ function CollapsibleSection({
   icon: Icon,
   count,
   defaultOpen = false,
+  actions,
   children,
 }: {
   title: string;
   icon: typeof TrendingUp;
   count: number;
   defaultOpen?: boolean;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 w-full text-left group"
-      >
-        {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        <Icon className="h-4 w-4 text-ds-yellow" />
-        <span className="font-display font-bold text-base">{title}</span>
-        <span className="font-mono text-[0.7rem] text-muted-foreground">({count})</span>
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 text-left group flex-1"
+        >
+          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <Icon className="h-4 w-4 text-ds-yellow" />
+          <span className="font-display font-bold text-base">{title}</span>
+          <span className="font-mono text-[0.7rem] text-muted-foreground">({count})</span>
+        </button>
+        {open && actions}
+      </div>
       {open && <div className="mt-4">{children}</div>}
     </div>
   );
 }
+
+// ── Reusable keyword table ──────────────────────────────────────────────────
+
+type KwCol = "keyword" | "pos" | "vol" | "kd" | "url" | "add";
+
+function KeywordTable({
+  rows,
+  columns,
+  clientId,
+}: {
+  rows: { keyword: string; position: number; searchVolume: number | null; keywordDifficulty: number | null; url?: string | null }[];
+  columns: KwCol[];
+  clientId: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="font-mono text-xs text-muted-foreground py-4">Sin keywords en esta sección.</p>;
+  }
+
+  const headers: Record<KwCol, string> = {
+    keyword: "Keyword", pos: "Pos", vol: "Vol", kd: "KD", url: "URL", add: "+",
+  };
+
+  return (
+    <div className="rounded-xl border border-border overflow-x-auto">
+      <table className="w-full text-xs min-w-[500px]">
+        <thead>
+          <tr className="border-b border-border bg-muted/40">
+            {columns.map((col) => (
+              <th key={col} className={cn(
+                "px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground",
+                col === "keyword" || col === "url" ? "text-left" : "text-center",
+                col === "vol" || col === "pos" ? "text-right" : "",
+                col === "url" ? "hidden lg:table-cell" : ""
+              )}>
+                {headers[col]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((kw, i) => (
+            <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
+              {columns.map((col) => {
+                if (col === "keyword") return <td key={col} className="px-4 py-2.5 font-mono text-[0.8rem]">{kw.keyword}</td>;
+                if (col === "pos") return <td key={col} className="px-4 py-2.5 text-right font-mono text-[0.75rem]">#{kw.position}</td>;
+                if (col === "vol") return <td key={col} className="px-4 py-2.5 text-right font-mono text-[0.75rem]">{fmtVol(kw.searchVolume)}</td>;
+                if (col === "kd") return (
+                  <td key={col} className="px-4 py-2.5 text-center">
+                    <span className={cn("font-mono text-[0.7rem] px-1.5 py-0.5 rounded border", kdBadge(kw.keywordDifficulty))}>
+                      {kw.keywordDifficulty ?? "—"}
+                    </span>
+                  </td>
+                );
+                if (col === "url") return <td key={col} className="px-4 py-2.5 font-mono text-[0.7rem] text-muted-foreground truncate max-w-[200px] hidden lg:table-cell">{kw.url ?? "—"}</td>;
+                if (col === "add") return <td key={col} className="px-4 py-2.5 text-center"><AddKeywordButton clientId={clientId} keyword={kw.keyword} /></td>;
+                return null;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── CSV export button ───────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CsvButton({ data, filename, columns }: { data: any[]; filename: string; columns: string[] }) {
+  function handleExport() {
+    const header = columns.join(",");
+    const rows = data.map((row) =>
+      columns.map((col) => {
+        const val = row[col];
+        if (val == null) return "";
+        const str = String(val);
+        return str.includes(",") ? `"${str}"` : str;
+      }).join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <button
+      onClick={handleExport}
+      className="inline-flex items-center gap-1 font-mono text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border hover:border-foreground/30"
+    >
+      <Download className="h-3 w-3" />
+      CSV
+    </button>
+  );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtVol(v: number | null): string {
   if (v == null) return "—";

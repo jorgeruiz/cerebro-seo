@@ -2,19 +2,28 @@ import type {
   OrganicCompetitor,
   CompetitorPage,
   StrikingDistanceKeyword,
-  TopKeywordResult,
 } from "@/server/providers/dataforseo";
 
 export interface CompetitorWithPages extends OrganicCompetitor {
   topPages: CompetitorPage[];
 }
 
+export interface KeywordGap {
+  keyword: string;
+  competitorDomain: string;
+  competitorPosition: number;
+  searchVolume: number | null;
+  keywordDifficulty: number | null;
+  intent: string | null;
+}
+
 export interface ResearchData {
   domain: string;
   strikingDistance: StrikingDistanceKeyword[];
-  lowDifficulty: TopKeywordResult[];
+  lowDifficulty: StrikingDistanceKeyword[];
+  keywordGaps: KeywordGap[];
   competitors: CompetitorWithPages[];
-  suggestions: ResearchSuggestion[] | null; // null if Claude not called
+  suggestions: ResearchSuggestion[] | null;
   costBreakdown: CostBreakdown;
 }
 
@@ -32,6 +41,7 @@ export interface CostBreakdown {
   strikingDistance: number;
   competitors: number;
   competitorPages: number;
+  keywordGaps: number;
   suggestions: number;
   total: number;
 }
@@ -44,6 +54,7 @@ export interface ResearchEstimate {
     strikingDistance: string;
     competitors: string;
     competitorPages: string;
+    keywordGaps: string;
     suggestions: string;
   };
 }

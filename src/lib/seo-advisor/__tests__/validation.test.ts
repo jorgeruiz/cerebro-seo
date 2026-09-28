@@ -89,7 +89,7 @@ describe("validateNextSteps", () => {
         titulo: "Bad prio",
         descripcion: "desc",
         categoria: "mejora",
-        prioridad: 10,
+        prioridad: 11,
         evidencia: "data",
       },
     ]);
