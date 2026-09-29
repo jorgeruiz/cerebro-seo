@@ -35,6 +35,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useClipboard } from "@/app/(admin)/clientes/[id]/ClipboardContext";
 
+// ─── Research icon (PNG) ─────────────────────────────────────────────────────
+
+function ResearchIcon({ className }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/research-icon-transparent.png" alt="" className={className} />
+  );
+}
+
 // ─── Nav structure ──────────────────────────────────────────────────────────
 
 interface NavItem {
@@ -73,7 +82,7 @@ const GROUPS: NavGroup[] = [
     title: "Oportunidades",
     items: [
       { label: "SEO Opportunities",    href: "oportunidades",     icon: TrendingUp,  description: "Quick wins detectados", requiresSeo: true },
-      { label: "Research",             href: "research",          icon: Lightbulb,   description: "Oportunidades, keywords, AEO",   requiresSeo: true },
+      { label: "Research",             href: "research",          icon: ResearchIcon, description: "Oportunidades, keywords, AEO",   requiresSeo: true },
       { label: "AI Search Visibility", href: "ai-search",         icon: Zap,         description: "Presencia en LLMs",     requiresSeo: true },
     ],
   },

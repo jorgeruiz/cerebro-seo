@@ -9,7 +9,6 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  FlaskConical,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -34,10 +33,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
 
+function ResearchIcon({ className }: { className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/research-icon-transparent.png" alt="" className={className} />;
+}
+
 const NAV_ITEMS = [
   { href: "/clientes",  label: "Clientes",       icon: Users,           adminOnly: false },
   { href: "/dashboard", label: "Dashboard",       icon: LayoutDashboard, adminOnly: false },
-  { href: "/research",  label: "Research",        icon: FlaskConical,    adminOnly: false },
+  { href: "/research",  label: "Research",        icon: ResearchIcon,    adminOnly: false },
   { href: "/settings",  label: "Configuración",   icon: Settings,        adminOnly: true },
 ];
 

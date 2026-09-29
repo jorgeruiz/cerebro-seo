@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FlaskConical } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { buttonVariants } from "@/components/ui/button";
@@ -79,7 +79,8 @@ export default async function ResearchPage({
             </Link>
           </div>
           <h1 className="font-display font-extrabold text-[clamp(1.6rem,2.5vw,2.4rem)] tracking-tight leading-[1.05] text-foreground flex items-center gap-3">
-            <FlaskConical className="h-6 w-6 text-ds-yellow shrink-0" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/research-icon-transparent.png" alt="" className="h-7 w-7 shrink-0" />
             Research
           </h1>
           <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
