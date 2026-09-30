@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-09-30 (Sesión C — Ejecución directa a Constructor + Plan Mensual)
-**Fase actual:** Post-Fase 4 — integración Constructor directa (Orquestador eliminado como intermediario)
-**Próximo hito:** Sync framework desde Notion + generación de contenido (blog/landing) con Claude antes de enviar a Constructor
+**Última actualización:** 2026-09-30 (Sesión C continuación — Análisis Plan Mensual + clasificación IA/Híbrido/HT)
+**Fase actual:** Post-Fase 4 — integración Constructor directa, flujo Plan Mensual completo
+**Próximo hito:** Integración "Capturar estrategia mensual" con Notion vía Cerebro + pruebas end-to-end con cliente Next.js
 
 ---
 
@@ -122,6 +122,10 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Integración Constructor (directa) | ✅ Activo | Orquestador eliminado como intermediario. Cerebro SEO envía steps del plan mensual directamente a Constructor. Ruteo inteligente: blog/landing/meta → endpoints directos ($0, 3-8s); schema/tecnico/interlinking → agente SSE (~$0.05, 30-90s); setup/otro → HUMAN_TASK con pasos generados por Claude. Env vars en Easypanel: `CONSTRUCTOR_URL`, `CONSTRUCTOR_INTERNAL_SECRET`. |
 | Página Plan Mensual | ✅ Activo | `/clientes/[id]/plan-mensual`. Progress bar con %, filtro por mes, detalle expandible por tarea, badges IA/HT, polling 15s, botones Completar/Ignorar, prompt copiable, resultUrl. Link en sidebar. |
 | Modelo PlanExecution | ✅ Activo | PlanExecution (status, yearMonth) + StepExecution (PENDING/QUEUED/RUNNING/APPLIED/FAILED/HUMAN_TASK/IGNORED). Campos: resultUrl, detailedSteps (Json), prompt. idempotencyKey unique por step. |
+| Análisis Plan Mensual | ✅ Activo | Segundo modo en `/analisis`. Claude genera 5-12 tareas clasificadas IA/Híbrido/HT rankeadas por urgencia/impacto. Selección individual o por tipo. Botón "Enviar al Plan Mensual" crea PlanExecution y redirige. |
+| Clasificación IA/Híbrido/HT | ✅ Activo | 3 tipos de ejecución: IA (Constructor 100%), Híbrido (Constructor + revisión humana), HT (100% manual). Badges azul/púrpura/naranja. Filtros por tipo en Plan Mensual. |
+| Generación de contenido | ✅ Activo | `content-generator.ts`: Claude Sonnet genera artículos (800-1500 palabras) y landings (400-800 palabras) antes de enviar a Constructor. |
+| Sync framework Notion | ✅ Activo | Campo "Plataforma Blog" de Notion → `Site.framework` (nextjs/wordpress/custom). Guard en actionApprovePlan: solo clientes con framework=nextjs. |
 | Advisor v3 | ✅ Activo | System prompt reescrito con anti-patrones, árbol de decisión para kinds, regla de descomposición. 8 kinds (meta, contenido-blog, contenido-landing, contenido-optimizar, interlinking, schema, tecnico, otro). Campo `origin` (data/ai-insight). Señales enriquecidas (score breakdown, top 20 páginas, área más débil). Post-procesado con filtros de steps internos/vagos. |
 | Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` en sub-tareas. Schema cerrado: 8 kinds. Validación runtime con fallback. |
 | Módulo Research | ✅ Activo | `/clientes/[id]/research` con tabs: Oportunidades (nuevo), Keyword Ideas (existente), AEO Research (existente). Servicio `src/server/research/` reutilizable por wizard. DataForSEO: `getOrganicCompetitors` (competitors_domain), `getCompetitorPages` (relevant_pages), `getStrikingDistanceKeywords` (ranked_keywords pos 4-20). Claude Sonnet para sugerencias. Modelo `ResearchReport` con `clientId` + `siteId` (multi-proyecto nativo). Costo ≤ $0.45/ejecución. Cache 7d por dominio. Sesión A-F2. |
@@ -488,10 +492,34 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 **Archivos dead code (no borrados):**
 - `src/app/(admin)/clientes/[id]/orchestrator-actions.ts` — ya no se importa en ningún lado
 
+5. **Sync framework desde Notion** (commit `6bec0e2`):
+   - Lee "Plataforma Blog" (select) de Notion → Site.framework
+   - Mapeo: Next.js→nextjs, WordPress→wordpress, otro→custom, vacío→null
+   - Se aplica en create y update del sync worker
+
+6. **Guard framework + generación de contenido** (commit `39a73ad`):
+   - actionApprovePlan verifica Site.framework=nextjs
+   - content-generator.ts: Claude Sonnet genera blog (800-1500 palabras) y landing (400-800 palabras)
+   - Contenido completo se envía a Constructor endpoints directos
+
+7. **Clasificación IA/Híbrido/HT + filtros** (commit `ed95f6d`):
+   - 3 tipos: IA (azul), Híbrido (púrpura), HT (naranja)
+   - Filtros por tipo en Plan Mensual con conteo
+   - Botón "Anular" en PENDING/FAILED/HUMAN_TASK
+   - Recordatorio no bloqueante para híbridos
+   - Botón "Capturar estrategia mensual" al 100% (placeholder)
+
+8. **Análisis Plan Mensual** (commit `1fef012`):
+   - Segundo modo en /analisis: "Plan Mensual" vs "Análisis General"
+   - Claude genera 5-12 tareas clasificadas IA/Híbrido/HT
+   - Selección individual o por tipo (Todas/IA/Híbrido/HT)
+   - "Enviar N al Plan Mensual" → crea PlanExecution + redirige
+   - claude-plan-mensual.ts con prompt especializado
+
 **Pendientes para próxima sesión:**
-- Sync `framework` desde Notion (campo existe en BD, falta mapper en sync)
-- Generación de contenido (blog/landing) con Claude en Cerebro SEO antes de enviar a Constructor
-- Filtrar clientes por framework=nextjs para mostrar solo los que trabajan con Constructor
+- Integración "Capturar estrategia mensual" con Notion vía Cerebro (botón al 100%)
+- Pruebas end-to-end con cliente Next.js real en producción
+- Verificar que CONSTRUCTOR_URL y CONSTRUCTOR_INTERNAL_SECRET están correctos en Easypanel
 
 ---
 
