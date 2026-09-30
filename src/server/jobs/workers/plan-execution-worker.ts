@@ -1,3 +1,5 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { createWorker } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { planExecutionQueue, type PlanExecutionStepJobData } from "../queues";
@@ -52,11 +54,18 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
       data: { status: "IN_PROGRESS" },
     });
 
-    // Si es HUMAN_TASK, marcar y pasar al siguiente
+    // Si es HUMAN_TASK, generar pasos detallados con Claude y marcar
     if (isHumanTask(step.kind)) {
+      const detailedSteps = await generateHumanTaskSteps(step.title, step.description);
+      const prompt = await generateHumanTaskPrompt(step.title, step.description);
       await prisma.stepExecution.update({
         where: { id: stepExecutionId },
-        data: { status: "HUMAN_TASK", completedAt: new Date() },
+        data: {
+          status: "HUMAN_TASK",
+          detailedSteps,
+          prompt,
+          completedAt: null, // HT no se completa hasta que el usuario lo marque
+        },
       });
       await enqueueNextStep(executionId, step.stepIndex);
       return { humanTask: true, stepIndex: step.stepIndex };
@@ -116,6 +125,9 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
       }
 
       if (success) {
+        // Build resultUrl: prefer commitUrl for agent, or construct from slug for direct
+        const finalResultUrl = reviewUrl ?? (commitSha ? `https://github.com/commit/${commitSha}` : undefined);
+
         await prisma.stepExecution.update({
           where: { id: stepExecutionId },
           data: {
@@ -124,6 +136,7 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
             constructorCode,
             commitSha,
             reviewUrl,
+            resultUrl: finalResultUrl,
             completedAt: new Date(),
           },
         });
@@ -301,16 +314,88 @@ async function checkExecutionComplete(executionId: string): Promise<void> {
     },
   });
 
-  if (remaining === 0) {
-    const failed = await prisma.stepExecution.count({
-      where: { executionId, status: "FAILED" },
+  if (remaining > 0) return;
+
+  // HT pendientes no bloquean la ejecución automática,
+  // pero no marcamos como COMPLETED hasta que todo esté resuelto
+  const pendingHt = await prisma.stepExecution.count({
+    where: { executionId, status: "HUMAN_TASK" },
+  });
+
+  if (pendingHt > 0) return;
+
+  const failed = await prisma.stepExecution.count({
+    where: { executionId, status: "FAILED" },
+  });
+
+  await prisma.planExecution.update({
+    where: { id: executionId },
+    data: {
+      status: failed > 0 ? "FAILED" : "COMPLETED",
+    },
+  });
+}
+
+// ─── Claude: generar pasos detallados para Human Tasks ───────────────────────
+
+const anthropic = new Anthropic();
+
+async function generateHumanTaskSteps(
+  title: string,
+  description: string
+): Promise<string[]> {
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Genera una lista de pasos concretos y accionables para implementar esta tarea SEO manualmente.
+
+Tarea: ${title}
+Descripción: ${description}
+
+Responde SOLO con un JSON array de strings, cada uno un paso claro y breve. Máximo 8 pasos.
+Ejemplo: ["Paso 1...", "Paso 2...", "Paso 3..."]`,
+      }],
     });
 
-    await prisma.planExecution.update({
-      where: { id: executionId },
-      data: {
-        status: failed > 0 ? "FAILED" : "COMPLETED",
-      },
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [description];
+
+    const parsed = JSON.parse(match[0]) as string[];
+    return Array.isArray(parsed) ? parsed : [description];
+  } catch (err) {
+    console.error("[plan-execution] Error generating HT steps:", err);
+    return [description];
+  }
+}
+
+async function generateHumanTaskPrompt(
+  title: string,
+  description: string
+): Promise<string> {
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2048,
+      messages: [{
+        role: "user",
+        content: `Genera un prompt listo para pegar en Claude Code que implemente esta tarea SEO.
+El prompt debe ser específico, incluir qué archivos modificar y qué cambios hacer.
+
+Tarea: ${title}
+Descripción: ${description}
+
+Responde SOLO con el prompt, sin explicaciones adicionales. El prompt debe empezar directamente con las instrucciones.`,
+      }],
     });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+    return text || description;
+  } catch (err) {
+    console.error("[plan-execution] Error generating HT prompt:", err);
+    return description;
   }
 }

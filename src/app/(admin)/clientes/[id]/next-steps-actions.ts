@@ -120,10 +120,14 @@ export async function actionApprovePlan(
   }
 
   // Crear PlanExecution + StepExecutions
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
   const execution = await prisma.planExecution.create({
     data: {
       planId: plan.id,
       clientId,
+      yearMonth,
       triggeredBy: session.user.email ?? null,
       steps: {
         create: steps.map((step, index) => {

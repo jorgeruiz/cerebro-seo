@@ -107,6 +107,7 @@ model Site {
   clientId    String
   client      Client  @relation(fields: [clientId], references: [id])
   url         String
+  framework   String? // "nextjs" | "wordpress" | "custom" — null = desconocido
   gscProperty String?
   ga4Property String?
 
@@ -611,6 +612,7 @@ enum StepExecutionStatus {
   APPLIED
   FAILED
   HUMAN_TASK
+  IGNORED
 }
 
 model PlanExecution {
@@ -620,6 +622,7 @@ model PlanExecution {
   clientId    String
   client      Client              @relation(fields: [clientId], references: [id])
   status      PlanExecutionStatus @default(PENDING)
+  yearMonth   String              // "2026-10" (YYYY-MM)
   triggeredBy String?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
@@ -627,6 +630,7 @@ model PlanExecution {
   steps StepExecution[]
 
   @@index([clientId, createdAt])
+  @@index([clientId, yearMonth])
   @@index([planId])
 }
 
@@ -647,6 +651,8 @@ model StepExecution {
   commitSha       String?
   error           String?             @db.Text
   prompt          String?             @db.Text  // se guarda si Constructor falla, para ejecución manual
+  resultUrl       String?             // URL del contenido publicado o página modificada
+  detailedSteps   Json?               // Pasos detallados generados por Claude para Human Tasks
   startedAt       DateTime?
   completedAt     DateTime?
 

@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ClipboardList,
   Menu,
+  ListChecks,
 } from "lucide-react";
 import {
   Tooltip,
@@ -90,6 +91,7 @@ const GROUPS: NavGroup[] = [
     title: "Estrategia",
     items: [
       { label: "Plan de Contenido",    href: "contenido",         icon: Lightbulb,   description: "Roadmap editorial",     requiresSeo: true },
+      { label: "Plan Mensual",         href: "plan-mensual",      icon: ListChecks,  description: "Ejecución de tareas",   requiresSeo: true },
       { label: "Eventos / Timeline",   href: "timeline",          icon: Calendar,    description: "Hitos y cambios",       requiresSeo: false },
       { label: "Reporte Mensual",      href: "reporte",           icon: FileText,    description: "Resumen ejecutivo",     requiresSeo: true },
       { label: "Keywords objetivo",    href: "keywords",          icon: TrendingUp,  description: "Tracking de posiciones", requiresSeo: true },

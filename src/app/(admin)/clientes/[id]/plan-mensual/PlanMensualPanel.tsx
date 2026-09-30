@@ -1,0 +1,367 @@
+"use client";
+
+import { useState, useTransition, useCallback, useEffect } from "react";
+import {
+  CheckCircle2, XCircle, Clock, Loader2, User, Eye,
+  ChevronDown, ChevronRight, ExternalLink, Copy, Ban,
+  Bot, AlertTriangle,
+} from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import {
+  actionCompleteStep,
+  actionIgnoreStep,
+  getPlanExecutions,
+  type PlanExecutionView,
+  type StepExecutionView,
+} from "./actions";
+
+// ─── Status config ───────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string; terminal: boolean }> = {
+  PENDING:    { icon: Clock,        color: "text-muted-foreground", label: "Pendiente",  terminal: false },
+  QUEUED:     { icon: Clock,        color: "text-yellow-500",       label: "En cola",    terminal: false },
+  RUNNING:    { icon: Loader2,      color: "text-blue-500",         label: "Ejecutando", terminal: false },
+  APPLIED:    { icon: CheckCircle2, color: "text-green-500",        label: "Aplicado",   terminal: true },
+  FAILED:     { icon: XCircle,      color: "text-destructive",      label: "Error",      terminal: true },
+  HUMAN_TASK: { icon: User,         color: "text-orange-500",       label: "Manual",     terminal: false },
+  IGNORED:    { icon: Ban,          color: "text-muted-foreground",  label: "Ignorado",   terminal: true },
+};
+
+const KIND_LABELS: Record<string, { label: string; isAuto: boolean }> = {
+  meta:                 { label: "Meta Tags",      isAuto: true },
+  "contenido-blog":     { label: "Blog",           isAuto: true },
+  "contenido-landing":  { label: "Landing",        isAuto: true },
+  "contenido-optimizar":{ label: "Optimizar",      isAuto: true },
+  schema:               { label: "Schema",         isAuto: true },
+  tecnico:              { label: "Técnico",        isAuto: true },
+  interlinking:         { label: "Links internos", isAuto: true },
+  setup:                { label: "Setup",          isAuto: false },
+  otro:                 { label: "Manual",         isAuto: false },
+};
+
+// ─── Progress bar ────────────────────────────────────────────────────────────
+
+function ProgressBar({ steps }: { steps: StepExecutionView[] }) {
+  const total = steps.length;
+  if (total === 0) return null;
+
+  const completed = steps.filter((s) =>
+    s.status === "APPLIED" || s.status === "IGNORED"
+  ).length;
+  const pct = Math.round((completed / total) * 100);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[0.7rem] text-muted-foreground">
+          {completed}/{total} tareas completadas
+        </span>
+        <span className="font-mono text-sm font-bold text-foreground">{pct}%</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-[#6366f1] via-[#3b82f6] to-[#ec4899] transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Step detail ─────────────────────────────────────────────────────────────
+
+function StepDetail({
+  step,
+  onComplete,
+  onIgnore,
+}: {
+  step: StepExecutionView;
+  onComplete: (id: string) => void;
+  onIgnore: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const cfg = STATUS_CONFIG[step.status] ?? STATUS_CONFIG.PENDING;
+  const Icon = cfg.icon;
+  const kindInfo = KIND_LABELS[step.kind] ?? { label: step.kind, isAuto: false };
+
+  function handleCopyPrompt() {
+    if (step.prompt) {
+      navigator.clipboard.writeText(step.prompt);
+    }
+  }
+
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      {/* Header row */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
+      >
+        <Icon className={cn("h-4 w-4 shrink-0", cfg.color, step.status === "RUNNING" && "animate-spin")} />
+        <span className="font-mono text-[0.7rem] text-muted-foreground w-6 shrink-0">
+          {String(step.stepIndex + 1).padStart(2, "0")}
+        </span>
+        <span className="flex-1 text-sm text-foreground truncate">{step.title}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Kind badge: IA or HT */}
+          <span className={cn(
+            "font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border flex items-center gap-1",
+            kindInfo.isAuto
+              ? "text-ds-blue bg-ds-blue/10 border-ds-blue/30"
+              : "text-orange-500 bg-orange-500/10 border-orange-500/30"
+          )}>
+            {kindInfo.isAuto ? <Bot className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
+            {kindInfo.isAuto ? "IA" : "HT"}
+          </span>
+          <span className={cn("font-mono text-[0.65rem] shrink-0", cfg.color)}>{cfg.label}</span>
+          {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {open && (
+        <div className="border-t border-border px-4 py-3 space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{step.description}</p>
+
+          {/* Result URL */}
+          {step.resultUrl ? (
+            <div className="flex items-center gap-2">
+              <ExternalLink className="h-3 w-3 text-ds-green shrink-0" />
+              <a href={step.resultUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline truncate">
+                {step.resultUrl}
+              </a>
+            </div>
+          ) : null}
+
+          {/* Review URL */}
+          {step.reviewUrl ? (
+            <div className="flex items-center gap-2">
+              <Eye className="h-3 w-3 text-muted-foreground shrink-0" />
+              <a href={step.reviewUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground underline truncate">
+                Ver en Constructor
+              </a>
+            </div>
+          ) : null}
+
+          {/* Error */}
+          {step.error ? (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
+              <p className="text-xs text-destructive">{step.error}</p>
+            </div>
+          ) : null}
+
+          {/* Detailed steps for HT */}
+          {step.detailedSteps && Array.isArray(step.detailedSteps) ? (
+            <div>
+              <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-2">
+                Pasos a seguir
+              </p>
+              <ol className="space-y-1.5">
+                {(step.detailedSteps as string[]).map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-foreground">
+                    <span className="font-mono text-muted-foreground shrink-0">{i + 1}.</span>
+                    {s}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+
+          {/* Prompt (for failed steps or HT) */}
+          {step.prompt ? (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                  Prompt para Code
+                </p>
+                <button
+                  onClick={handleCopyPrompt}
+                  className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1 text-[0.65rem] h-6")}
+                >
+                  <Copy className="h-2.5 w-2.5" />
+                  Copiar
+                </button>
+              </div>
+              <pre className="text-[0.7rem] text-muted-foreground bg-muted/50 rounded-lg p-3 overflow-x-auto max-h-40 whitespace-pre-wrap">
+                {step.prompt.slice(0, 500)}{step.prompt.length > 500 ? "..." : ""}
+              </pre>
+            </div>
+          ) : null}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 pt-1">
+            {step.status === "HUMAN_TASK" && (
+              <button
+                onClick={() => onComplete(step.id)}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Completar
+              </button>
+            )}
+            {step.status === "FAILED" && (
+              <button
+                onClick={() => onIgnore(step.id)}
+                className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+              >
+                <Ban className="h-3 w-3" />
+                Ignorar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Panel ──────────────────────────────────────────────────────────────
+
+interface Props {
+  clientId: string;
+  initialExecutions: PlanExecutionView[];
+  availableMonths: string[];
+  currentMonth: string;
+}
+
+export function PlanMensualPanel({
+  clientId,
+  initialExecutions,
+  availableMonths,
+  currentMonth,
+}: Props) {
+  const [executions, setExecutions] = useState(initialExecutions);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [isPending, startTransition] = useTransition();
+
+  // Polling: refresh every 15s if there are active executions
+  const hasActiveExecution = executions.some((e) =>
+    e.status === "PENDING" || e.status === "IN_PROGRESS"
+  );
+
+  const refreshExecutions = useCallback(() => {
+    startTransition(async () => {
+      const fresh = await getPlanExecutions(clientId, selectedMonth);
+      setExecutions(fresh);
+    });
+  }, [clientId, selectedMonth, startTransition]);
+
+  useEffect(() => {
+    if (!hasActiveExecution) return;
+    const interval = setInterval(refreshExecutions, 15_000);
+    return () => clearInterval(interval);
+  }, [hasActiveExecution, refreshExecutions]);
+
+  function handleMonthChange(month: string) {
+    setSelectedMonth(month);
+    startTransition(async () => {
+      const fresh = await getPlanExecutions(clientId, month);
+      setExecutions(fresh);
+    });
+  }
+
+  function handleComplete(stepId: string) {
+    startTransition(async () => {
+      const result = await actionCompleteStep(stepId);
+      if (result.ok) {
+        const fresh = await getPlanExecutions(clientId, selectedMonth);
+        setExecutions(fresh);
+      }
+    });
+  }
+
+  function handleIgnore(stepId: string) {
+    startTransition(async () => {
+      const result = await actionIgnoreStep(stepId);
+      if (result.ok) {
+        const fresh = await getPlanExecutions(clientId, selectedMonth);
+        setExecutions(fresh);
+      }
+    });
+  }
+
+  const execution = executions[0]; // Most recent for selected month
+  const monthLabel = selectedMonth
+    ? new Date(selectedMonth + "-01").toLocaleDateString("es-MX", { month: "long", year: "numeric" })
+    : "";
+
+  return (
+    <div className="space-y-6">
+      {/* Month filter */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          {availableMonths.length > 0 ? (
+            <select
+              value={selectedMonth}
+              onChange={(e) => handleMonthChange(e.target.value)}
+              className="font-mono text-[0.8rem] bg-card border border-border rounded-lg px-3 py-1.5 text-foreground"
+            >
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>
+                  {new Date(m + "-01").toLocaleDateString("es-MX", { month: "long", year: "numeric" })}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="font-mono text-[0.8rem] text-muted-foreground">{monthLabel || "Sin ejecuciones"}</span>
+          )}
+        </div>
+        {hasActiveExecution && (
+          <span className="flex items-center gap-1.5 font-mono text-[0.7rem] text-ds-blue">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Ejecutando en Constructor...
+          </span>
+        )}
+        {isPending && !hasActiveExecution && (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        )}
+      </div>
+
+      {/* Execution content */}
+      {execution ? (
+        <div className="space-y-5">
+          {/* Progress bar */}
+          <ProgressBar steps={execution.steps} />
+
+          {/* Meta info */}
+          <div className="flex items-center gap-3 font-mono text-[0.7rem] text-muted-foreground">
+            <span>Estado: <strong className="text-foreground">{execution.status}</strong></span>
+            {execution.triggeredBy && <span>· por {execution.triggeredBy}</span>}
+            <span>
+              · {new Date(execution.createdAt).toLocaleDateString("es-MX", {
+                day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+              })}
+            </span>
+          </div>
+
+          {/* Steps list */}
+          <div className="space-y-2">
+            {execution.steps.map((step) => (
+              <StepDetail
+                key={step.id}
+                step={step}
+                onComplete={handleComplete}
+                onIgnore={handleIgnore}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center gap-4 text-center">
+          <Clock className="h-10 w-10 text-muted-foreground/30" />
+          <div>
+            <p className="text-base font-medium text-foreground mb-1">
+              Sin ejecuciones este mes
+            </p>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Genera un plan desde la vista general del cliente y da clic en &ldquo;Ejecutar Plan&rdquo;
+              para enviar las tareas a Constructor.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
