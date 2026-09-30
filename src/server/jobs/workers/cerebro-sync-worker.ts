@@ -67,6 +67,7 @@ const worker = new Worker(
                 url: nc.domain.startsWith("http") ? nc.domain : `https://${nc.domain}`,
                 gscProperty: nc.gscProperty ?? null,
                 ga4Property: nc.ga4PropertyId ?? null,
+                framework: nc.framework,
               },
             },
           },
@@ -83,6 +84,15 @@ const worker = new Worker(
             services: nc.services,
           },
         });
+
+        // Actualizar framework en el site principal si cambió en Notion
+        if (nc.framework && existing.sites[0]) {
+          await prisma.site.update({
+            where: { id: existing.sites[0].id },
+            data: { framework: nc.framework },
+          });
+        }
+
         updated++;
       }
     }

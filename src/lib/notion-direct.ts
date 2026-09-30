@@ -31,6 +31,18 @@ const SERVICE_SLUG_MAP: Record<string, string> = {
   "Contenidos":   "contenidos",
 };
 
+// Mapeo de "Plataforma Blog" de Notion al valor de Site.framework
+const FRAMEWORK_MAP: Record<string, string> = {
+  "Next.js":      "nextjs",
+  "NextJS":       "nextjs",
+  "next.js":      "nextjs",
+  "nextjs":       "nextjs",
+  "WordPress":    "wordpress",
+  "Wordpress":    "wordpress",
+  "wordpress":    "wordpress",
+  "WP":           "wordpress",
+};
+
 function toServiceSlug(notionValue: string): string {
   const mapped = SERVICE_SLUG_MAP[notionValue];
   if (!mapped) {
@@ -54,6 +66,7 @@ export interface SeededClient {
   gscProperty: string | null;    // ej: "sc-domain:ejemplo.mx" o "https://www.ejemplo.mx/"
   ga4PropertyId: string | null;  // ej: "123456789" (solo el número)
   services: string[];            // slugs normalizados: ["seo", "google_ads", ...]
+  framework: string | null;      // "nextjs" | "wordpress" | "custom" | null
 }
 
 type NotionPropertyValue = PageObjectResponse["properties"][string];
@@ -127,6 +140,14 @@ export async function getClientsFromNotion(): Promise<SeededClient[]> {
           ? serviceProp.multi_select.map((s) => toServiceSlug(s.name))
           : [];
 
+      // Plataforma Blog — campo "Plataforma Blog" (select) en Notion
+      const platformProp = props["Plataforma Blog"];
+      const platformRaw =
+        platformProp?.type === "select" ? platformProp.select?.name : undefined;
+      const framework = platformRaw
+        ? (FRAMEWORK_MAP[platformRaw] ?? "custom")
+        : null;
+
       return {
         notionPageId: page.id.replace(/-/g, ""),
         name,
@@ -135,6 +156,7 @@ export async function getClientsFromNotion(): Promise<SeededClient[]> {
         gscProperty: gscProperty || null,
         ga4PropertyId: ga4PropertyId || null,
         services,
+        framework,
       };
     });
 }
