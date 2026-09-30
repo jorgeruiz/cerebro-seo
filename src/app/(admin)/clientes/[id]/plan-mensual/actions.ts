@@ -120,8 +120,11 @@ export async function actionIgnoreStep(
   });
 
   if (!step) return { ok: false, error: "Step no encontrado." };
-  if (step.status !== "FAILED") {
-    return { ok: false, error: "Solo se pueden ignorar tareas fallidas." };
+  if (step.status === "APPLIED" || step.status === "IGNORED") {
+    return { ok: false, error: "Esta tarea ya está finalizada." };
+  }
+  if (step.status === "RUNNING" || step.status === "QUEUED") {
+    return { ok: false, error: "No se puede anular una tarea en ejecución." };
   }
 
   await prisma.stepExecution.update({

@@ -97,8 +97,12 @@ export interface DirectPublishResult {
   needsBootstrap?: boolean;
 }
 
-// ─── Mapeo kind → ruta ──────────────────────────────────────────────────────
+// ─── Clasificación de ejecución ──────────────────────────────────────────────
 
+/** Tipo de ejecución visible al usuario */
+export type ExecutionType = "ia" | "hibrido" | "ht";
+
+/** Ruta interna de ejecución */
 export type ExecutionRoute = "direct-blog" | "direct-landing" | "direct-meta" | "agent" | "human";
 
 const KIND_TO_ROUTE: Record<string, ExecutionRoute> = {
@@ -111,6 +115,18 @@ const KIND_TO_ROUTE: Record<string, ExecutionRoute> = {
   interlinking: "agent",
   setup: "human",
   otro: "human",
+};
+
+const KIND_TO_EXEC_TYPE: Record<string, ExecutionType> = {
+  meta: "ia",
+  schema: "ia",
+  tecnico: "ia",
+  interlinking: "ia",
+  "contenido-optimizar": "ia",
+  "contenido-blog": "hibrido",    // Constructor publica, humano revisa + cover image
+  "contenido-landing": "hibrido", // Constructor publica, humano revisa
+  setup: "ht",
+  otro: "ht",
 };
 
 const KIND_TO_CHANGE_TYPE: Record<string, string | null> = {
@@ -133,6 +149,10 @@ const KIND_TO_SECTION: Record<string, string> = {
 
 export function getExecutionRoute(kind: string): ExecutionRoute {
   return KIND_TO_ROUTE[kind] ?? "human";
+}
+
+export function getExecutionType(kind: string): ExecutionType {
+  return KIND_TO_EXEC_TYPE[kind] ?? "ht";
 }
 
 export function mapKindToChangeType(kind: string): string | null {

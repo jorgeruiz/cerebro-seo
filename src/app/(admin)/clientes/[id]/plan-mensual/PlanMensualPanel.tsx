@@ -28,17 +28,31 @@ const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; la
   IGNORED:    { icon: Ban,          color: "text-muted-foreground",  label: "Ignorado",   terminal: true },
 };
 
-const KIND_LABELS: Record<string, { label: string; isAuto: boolean }> = {
-  meta:                 { label: "Meta Tags",      isAuto: true },
-  "contenido-blog":     { label: "Blog",           isAuto: true },
-  "contenido-landing":  { label: "Landing",        isAuto: true },
-  "contenido-optimizar":{ label: "Optimizar",      isAuto: true },
-  schema:               { label: "Schema",         isAuto: true },
-  tecnico:              { label: "Técnico",        isAuto: true },
-  interlinking:         { label: "Links internos", isAuto: true },
-  setup:                { label: "Setup",          isAuto: false },
-  otro:                 { label: "Manual",         isAuto: false },
+type ExecType = "ia" | "hibrido" | "ht";
+
+const KIND_CONFIG: Record<string, { label: string; execType: ExecType }> = {
+  meta:                 { label: "Meta Tags",      execType: "ia" },
+  "contenido-blog":     { label: "Blog",           execType: "hibrido" },
+  "contenido-landing":  { label: "Landing",        execType: "hibrido" },
+  "contenido-optimizar":{ label: "Optimizar",      execType: "ia" },
+  schema:               { label: "Schema",         execType: "ia" },
+  tecnico:              { label: "Técnico",        execType: "ia" },
+  interlinking:         { label: "Links internos", execType: "ia" },
+  setup:                { label: "Setup",          execType: "ht" },
+  otro:                 { label: "Manual",         execType: "ht" },
 };
+
+const EXEC_TYPE_BADGE: Record<ExecType, { label: string; icon: React.ElementType; color: string }> = {
+  ia:      { label: "IA",      icon: Bot,  color: "text-ds-blue bg-ds-blue/10 border-ds-blue/30" },
+  hibrido: { label: "Híbrido", icon: User, color: "text-purple-500 bg-purple-500/10 border-purple-500/30" },
+  ht:      { label: "HT",      icon: User, color: "text-orange-500 bg-orange-500/10 border-orange-500/30" },
+};
+
+function getExecType(kind: string): ExecType {
+  return KIND_CONFIG[kind]?.execType ?? "ht";
+}
+
+type FilterType = "all" | "ia" | "hibrido" | "ht";
 
 // ─── Progress bar ────────────────────────────────────────────────────────────
 
@@ -83,7 +97,10 @@ function StepDetail({
   const [open, setOpen] = useState(false);
   const cfg = STATUS_CONFIG[step.status] ?? STATUS_CONFIG.PENDING;
   const Icon = cfg.icon;
-  const kindInfo = KIND_LABELS[step.kind] ?? { label: step.kind, isAuto: false };
+  const execType = getExecType(step.kind);
+  const execBadge = EXEC_TYPE_BADGE[execType];
+  const ExecIcon = execBadge.icon;
+  const _kindLabel = KIND_CONFIG[step.kind]?.label ?? step.kind;
 
   function handleCopyPrompt() {
     if (step.prompt) {
@@ -104,15 +121,13 @@ function StepDetail({
         </span>
         <span className="flex-1 text-sm text-foreground truncate">{step.title}</span>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Kind badge: IA or HT */}
+          {/* Exec type badge */}
           <span className={cn(
             "font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border flex items-center gap-1",
-            kindInfo.isAuto
-              ? "text-ds-blue bg-ds-blue/10 border-ds-blue/30"
-              : "text-orange-500 bg-orange-500/10 border-orange-500/30"
+            execBadge.color
           )}>
-            {kindInfo.isAuto ? <Bot className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
-            {kindInfo.isAuto ? "IA" : "HT"}
+            <ExecIcon className="h-2.5 w-2.5" />
+            {execBadge.label}
           </span>
           <span className={cn("font-mono text-[0.65rem] shrink-0", cfg.color)}>{cfg.label}</span>
           {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
@@ -201,16 +216,27 @@ function StepDetail({
                 Completar
               </button>
             )}
-            {step.status === "FAILED" && (
+            {/* Anular: disponible para FAILED, HUMAN_TASK y PENDING */}
+            {(step.status === "FAILED" || step.status === "HUMAN_TASK" || step.status === "PENDING") && (
               <button
                 onClick={() => onIgnore(step.id)}
                 className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
               >
                 <Ban className="h-3 w-3" />
-                Ignorar
+                Anular
               </button>
             )}
           </div>
+
+          {/* Hybrid reminder */}
+          {step.status === "APPLIED" && execType === "hibrido" && (
+            <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 flex items-start gap-2">
+              <Eye className="h-3.5 w-3.5 text-purple-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-purple-400">
+                Revisar en producción: verificar contenido publicado y agregar imagen de portada si aplica.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -234,6 +260,7 @@ export function PlanMensualPanel({
 }: Props) {
   const [executions, setExecutions] = useState(initialExecutions);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [filter, setFilter] = useState<FilterType>("all");
   const [isPending, startTransition] = useTransition();
 
   // Polling: refresh every 15s if there are active executions
@@ -336,17 +363,74 @@ export function PlanMensualPanel({
             </span>
           </div>
 
-          {/* Steps list */}
-          <div className="space-y-2">
-            {execution.steps.map((step) => (
-              <StepDetail
-                key={step.id}
-                step={step}
-                onComplete={handleComplete}
-                onIgnore={handleIgnore}
-              />
-            ))}
+          {/* Type filters */}
+          <div className="flex items-center gap-2">
+            {(["all", "ia", "hibrido", "ht"] as const).map((f) => {
+              const labels: Record<FilterType, string> = { all: "Todos", ia: "IA", hibrido: "Híbrido", ht: "HT" };
+              const count = f === "all"
+                ? execution.steps.length
+                : execution.steps.filter((s) => getExecType(s.kind) === f).length;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    "font-mono text-[0.7rem] px-2.5 py-1 rounded-lg border transition-colors",
+                    filter === f
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-card text-muted-foreground border-border hover:border-muted-foreground"
+                  )}
+                >
+                  {labels[f]} ({count})
+                </button>
+              );
+            })}
           </div>
+
+          {/* Steps list (filtered) */}
+          <div className="space-y-2">
+            {execution.steps
+              .filter((s) => filter === "all" || getExecType(s.kind) === filter)
+              .map((step) => (
+                <StepDetail
+                  key={step.id}
+                  step={step}
+                  onComplete={handleComplete}
+                  onIgnore={handleIgnore}
+                />
+              ))}
+          </div>
+
+          {/* 100% — Capturar estrategia mensual */}
+          {(() => {
+            const total = execution.steps.length;
+            const done = execution.steps.filter((s) =>
+              s.status === "APPLIED" || s.status === "IGNORED"
+            ).length;
+            if (total > 0 && done === total) {
+              return (
+                <div className="bg-gradient-to-r from-[#6366f1]/10 via-[#3b82f6]/10 to-[#ec4899]/10 border border-primary/30 rounded-xl p-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Plan mensual completado al 100%</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Captura la estrategia ejecutada en Notion para el registro del mes.
+                    </p>
+                  </div>
+                  <button
+                    className={cn(buttonVariants({ variant: "default" }), "gap-2")}
+                    onClick={() => {
+                      // TODO: llamar a Cerebro para capturar estrategia mensual en Notion
+                      alert("Captura de estrategia mensual — pendiente integración con Cerebro/Notion");
+                    }}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Capturar estrategia mensual
+                  </button>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center gap-4 text-center">
