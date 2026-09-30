@@ -3,24 +3,31 @@ import { prisma } from "@/lib/db";
 import { planExecutionQueue, type PlanExecutionStepJobData } from "../queues";
 import {
   executeChangeRequest,
+  publishBlogPost,
+  publishLanding,
+  getExecutionRoute,
   mapKindToChangeType,
   mapKindToSection,
   isHumanTask,
   type ConstructorItem,
+  type ConstructorResult,
+  type DirectPublishResult,
 } from "@/server/constructor/constructor-client";
 
 /**
  * Worker de ejecución de planes en Constructor.
  *
  * Procesa 1 step a la vez (concurrency: 1).
- * Al completar un step, encola el siguiente con un delay escalonado.
+ * Rutea automáticamente al endpoint correcto:
+ * - meta, blog, landing → endpoints directos ($0, 3-8s)
+ * - schema, tecnico, etc. → agente SSE (~$0.05, 30-90s)
+ * - setup, otro → HUMAN_TASK (skip)
  */
 export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
   "plan-execution",
   async (job) => {
     const { stepExecutionId, executionId, clientId } = job.data;
 
-    // Cargar step + execution
     const step = await prisma.stepExecution.findUniqueOrThrow({
       where: { id: stepExecutionId },
       include: {
@@ -55,97 +62,198 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
       return { humanTask: true, stepIndex: step.stepIndex };
     }
 
-    // Construir request a Constructor
+    // Verificar cerebroClientId
     const cerebroClientId = step.execution.client.cerebroClientId;
     if (!cerebroClientId) {
-      await prisma.stepExecution.update({
-        where: { id: stepExecutionId },
-        data: {
-          status: "FAILED",
-          error: "Cliente no tiene cerebroClientId mapeado.",
-          completedAt: new Date(),
-        },
-      });
+      await markStepFailed(stepExecutionId, "Cliente no tiene cerebroClientId mapeado.");
       await checkExecutionComplete(executionId);
       return { error: "no cerebroClientId" };
     }
 
-    const changeType = mapKindToChangeType(step.kind);
-    if (!changeType) {
-      // Shouldn't happen — isHumanTask should have caught this
-      await prisma.stepExecution.update({
-        where: { id: stepExecutionId },
-        data: { status: "HUMAN_TASK", completedAt: new Date() },
-      });
-      await enqueueNextStep(executionId, step.stepIndex);
-      return { humanTask: true, stepIndex: step.stepIndex };
-    }
-
-    const item: ConstructorItem = {
-      section: mapKindToSection(step.kind),
-      change_type: changeType,
-      description: step.description,
-      priority: "normal",
-    };
+    // Rutear al endpoint correcto
+    const route = getExecutionRoute(step.kind);
 
     try {
-      const result = await executeChangeRequest({
-        notion_client_id: cerebroClientId,
-        items: [item],
-        idempotency_key: step.idempotencyKey,
-      });
+      let success = false;
+      let commitSha: string | undefined;
+      let reviewUrl: string | undefined;
+      let constructorId: string | undefined;
+      let constructorCode: string | undefined;
+      let errorMsg: string | undefined;
+      let prompt: string | undefined;
 
-      if (result.success) {
+      if (route === "direct-blog") {
+        const result = await executeBlogPublish(cerebroClientId, step.description);
+        success = result.success;
+        commitSha = result.sha;
+        errorMsg = result.error;
+        if (result.needsBootstrap) {
+          errorMsg = "Blog no bootstrapped — requiere configuración manual en Constructor.";
+        }
+      } else if (route === "direct-landing") {
+        const result = await executeLandingPublish(cerebroClientId, step.description);
+        success = result.success;
+        commitSha = result.sha;
+        errorMsg = result.error;
+        if (result.needsBootstrap) {
+          errorMsg = "Landing pages no bootstrapped — requiere configuración manual en Constructor.";
+        }
+      } else if (route === "direct-meta") {
+        const result = await executeMetaTagsPublish(cerebroClientId, step.description, step.idempotencyKey);
+        success = result.success;
+        commitSha = result.sha;
+        errorMsg = result.error;
+      } else {
+        // Agente SSE
+        const result = await executeAgentChangeRequest(cerebroClientId, step);
+        success = result.success;
+        commitSha = result.commitSha;
+        reviewUrl = result.reviewUrl;
+        constructorId = result.id;
+        constructorCode = result.requestCode;
+        errorMsg = result.error;
+        prompt = result.prompt;
+      }
+
+      if (success) {
         await prisma.stepExecution.update({
           where: { id: stepExecutionId },
           data: {
             status: "APPLIED",
-            constructorId: result.id,
-            constructorCode: result.requestCode,
-            commitSha: result.commitSha,
-            reviewUrl: result.reviewUrl,
+            constructorId,
+            constructorCode,
+            commitSha,
+            reviewUrl,
             completedAt: new Date(),
           },
         });
       } else {
-        // Constructor falló — guardar el prompt/descripción para ejecución manual
         await prisma.stepExecution.update({
           where: { id: stepExecutionId },
           data: {
             status: "FAILED",
-            constructorId: result.id,
-            reviewUrl: result.reviewUrl,
-            error: result.error ?? "Constructor devolvió success:false",
-            prompt: step.description,
+            constructorId,
+            reviewUrl,
+            error: errorMsg ?? "Constructor devolvió success:false",
+            prompt: prompt ?? step.description,
             completedAt: new Date(),
           },
         });
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await prisma.stepExecution.update({
-        where: { id: stepExecutionId },
-        data: {
-          status: "FAILED",
-          error: errMsg,
-          prompt: step.description,
-          completedAt: new Date(),
-        },
-      });
+      await markStepFailed(stepExecutionId, errMsg, step.description);
     }
 
-    // Encolar siguiente step
     await enqueueNextStep(executionId, step.stepIndex);
-
     return { stepIndex: step.stepIndex, clientId };
   },
   { concurrency: 1 }
 );
 
+// ─── Ejecución por ruta ─────────────────────────────────────────────────────
+
 /**
- * Encola el siguiente step pendiente de la ejecución, con delay escalonado.
- * Si no hay más steps, marca la ejecución como completada.
+ * Extrae título y cuerpo del campo description del step.
+ * El description tiene formato: "Descripción\n\nEvidencia: ...\nURL objetivo: ..."
+ * Para publicación directa, usamos la primera línea como título y el resto como cuerpo.
  */
+function parseStepContent(description: string): { titulo: string; cuerpo: string; extracto: string } {
+  const lines = description.split("\n");
+  const titulo = lines[0] ?? "Sin título";
+  const cuerpo = lines.slice(1).join("\n").trim();
+  const extracto = titulo.slice(0, 160);
+  return { titulo, cuerpo: cuerpo || titulo, extracto };
+}
+
+async function executeBlogPublish(
+  notionClientId: string,
+  description: string
+): Promise<DirectPublishResult> {
+  const { titulo, cuerpo, extracto } = parseStepContent(description);
+  return publishBlogPost({
+    notionClientId,
+    titulo,
+    cuerpo,
+    extracto,
+  });
+}
+
+async function executeLandingPublish(
+  notionClientId: string,
+  description: string
+): Promise<DirectPublishResult> {
+  const { titulo, cuerpo } = parseStepContent(description);
+  return publishLanding({
+    notionClientId,
+    titulo,
+    descripcion: titulo,
+    cuerpo,
+  });
+}
+
+async function executeMetaTagsPublish(
+  notionClientId: string,
+  description: string,
+  idempotencyKey: string
+): Promise<DirectPublishResult> {
+  // Meta tags requieren page_paths estructurados que no tenemos en el description.
+  // Fallback al agente SSE que interpreta las instrucciones del description.
+  const agentResult = await executeChangeRequest({
+    notion_client_id: notionClientId,
+    items: [{
+      section: "Meta tags",
+      change_type: "text_update",
+      description,
+      priority: "normal",
+    }],
+    idempotency_key: idempotencyKey,
+  });
+
+  return {
+    success: agentResult.success,
+    sha: agentResult.commitSha,
+    error: agentResult.error,
+  };
+}
+
+async function executeAgentChangeRequest(
+  cerebroClientId: string,
+  step: { kind: string; description: string; idempotencyKey: string }
+): Promise<ConstructorResult> {
+  const changeType = mapKindToChangeType(step.kind);
+  const item: ConstructorItem = {
+    section: mapKindToSection(step.kind),
+    change_type: changeType ?? "code_change",
+    description: step.description,
+    priority: "normal",
+  };
+
+  return executeChangeRequest({
+    notion_client_id: cerebroClientId,
+    items: [item],
+    idempotency_key: step.idempotencyKey,
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function markStepFailed(
+  stepExecutionId: string,
+  error: string,
+  prompt?: string
+): Promise<void> {
+  await prisma.stepExecution.update({
+    where: { id: stepExecutionId },
+    data: {
+      status: "FAILED",
+      error,
+      prompt: prompt ?? null,
+      completedAt: new Date(),
+    },
+  });
+}
+
 async function enqueueNextStep(
   executionId: string,
   currentIndex: number
@@ -165,13 +273,15 @@ async function enqueueNextStep(
     return;
   }
 
-  // Marcar como QUEUED
   await prisma.stepExecution.update({
     where: { id: nextStep.id },
     data: { status: "QUEUED" },
   });
 
-  // Delay escalonado: 10s entre steps
+  // Delay: 5s para directos, 10s para agente
+  const route = getExecutionRoute(nextStep.kind);
+  const delay = route.startsWith("direct") ? 5_000 : 10_000;
+
   await planExecutionQueue.add(
     "plan-execution:step",
     {
@@ -179,13 +289,10 @@ async function enqueueNextStep(
       stepExecutionId: nextStep.id,
       clientId: nextStep.execution.clientId,
     },
-    { delay: 10_000 }
+    { delay }
   );
 }
 
-/**
- * Verifica si todos los steps están terminados y actualiza el status de la ejecución.
- */
 async function checkExecutionComplete(executionId: string): Promise<void> {
   const remaining = await prisma.stepExecution.count({
     where: {

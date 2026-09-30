@@ -3,9 +3,53 @@ import {
   mapKindToChangeType,
   mapKindToSection,
   isHumanTask,
+  isDirectPublish,
+  getExecutionRoute,
 } from "./constructor-client";
 
 describe("constructor-client mappers", () => {
+  describe("getExecutionRoute", () => {
+    it("routes meta → direct-meta", () => {
+      expect(getExecutionRoute("meta")).toBe("direct-meta");
+    });
+
+    it("routes contenido-blog → direct-blog", () => {
+      expect(getExecutionRoute("contenido-blog")).toBe("direct-blog");
+    });
+
+    it("routes contenido-landing → direct-landing", () => {
+      expect(getExecutionRoute("contenido-landing")).toBe("direct-landing");
+    });
+
+    it("routes contenido-optimizar → agent", () => {
+      expect(getExecutionRoute("contenido-optimizar")).toBe("agent");
+    });
+
+    it("routes schema → agent", () => {
+      expect(getExecutionRoute("schema")).toBe("agent");
+    });
+
+    it("routes tecnico → agent", () => {
+      expect(getExecutionRoute("tecnico")).toBe("agent");
+    });
+
+    it("routes interlinking → agent", () => {
+      expect(getExecutionRoute("interlinking")).toBe("agent");
+    });
+
+    it("routes setup → human", () => {
+      expect(getExecutionRoute("setup")).toBe("human");
+    });
+
+    it("routes otro → human", () => {
+      expect(getExecutionRoute("otro")).toBe("human");
+    });
+
+    it("routes unknown → human", () => {
+      expect(getExecutionRoute("unknown")).toBe("human");
+    });
+  });
+
   describe("mapKindToChangeType", () => {
     it("maps meta → text_update", () => {
       expect(mapKindToChangeType("meta")).toBe("text_update");
@@ -85,6 +129,36 @@ describe("constructor-client mappers", () => {
 
     it("returns true for unknown kind", () => {
       expect(isHumanTask("unknown")).toBe(true);
+    });
+  });
+
+  describe("isDirectPublish", () => {
+    it("returns true for meta", () => {
+      expect(isDirectPublish("meta")).toBe(true);
+    });
+
+    it("returns true for contenido-blog", () => {
+      expect(isDirectPublish("contenido-blog")).toBe(true);
+    });
+
+    it("returns true for contenido-landing", () => {
+      expect(isDirectPublish("contenido-landing")).toBe(true);
+    });
+
+    it("returns false for schema (agent)", () => {
+      expect(isDirectPublish("schema")).toBe(false);
+    });
+
+    it("returns false for tecnico (agent)", () => {
+      expect(isDirectPublish("tecnico")).toBe(false);
+    });
+
+    it("returns false for setup (human)", () => {
+      expect(isDirectPublish("setup")).toBe(false);
+    });
+
+    it("returns false for unknown", () => {
+      expect(isDirectPublish("unknown")).toBe(false);
     });
   });
 });

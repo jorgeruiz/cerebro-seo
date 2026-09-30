@@ -1,7 +1,10 @@
 /**
- * Cliente HTTP para Constructor (SSE).
- * Llama a POST /api/internal/change-requests/create-and-execute
- * y parsea el stream de eventos SSE.
+ * Cliente HTTP para Constructor.
+ *
+ * Rutea automáticamente al endpoint correcto según el kind del step:
+ * - meta, contenido-blog, contenido-landing → endpoints directos ($0, 3-8s)
+ * - schema, tecnico, interlinking, contenido-optimizar → agente SSE (~$0.05, 30-90s)
+ * - setup, otro → HUMAN_TASK (no llama a Constructor)
  */
 
 import { env } from "@/env";
@@ -25,12 +28,14 @@ export interface ConstructorRequest {
   idempotency_key: string;
 }
 
-// ─── Tipos de respuesta ──────────────────────────────────────────────────────
+// ─── Tipos de respuesta (SSE) ────────────────────────────────────────────────
 
 export interface ConstructorStepEvent {
   type: "step";
   step: string;
   message: string;
+  id?: string;
+  request_code?: string;
 }
 
 export interface ConstructorResultEvent {
@@ -39,8 +44,12 @@ export interface ConstructorResultEvent {
   id: string;
   request_code: string;
   commitSha?: string;
-  filesChanged?: number;
+  commitUrl?: string;
+  filesChanged?: string[];
+  toolCalls?: number;
+  tokensUsed?: { input: number; output: number };
   review_url?: string;
+  prompt?: string; // incluido si success:false, para ejecución manual
 }
 
 export interface ConstructorErrorEvent {
@@ -49,6 +58,10 @@ export interface ConstructorErrorEvent {
   error: string;
   id?: string;
   review_url?: string;
+  prompt?: string;
+  filesChanged?: string[];
+  toolCalls?: number;
+  tokensUsed?: { input: number; output: number };
 }
 
 export type ConstructorSSEEvent =
@@ -61,13 +74,44 @@ export interface ConstructorResult {
   id?: string;
   requestCode?: string;
   commitSha?: string;
-  filesChanged?: number;
+  commitUrl?: string;
+  filesChanged?: string[];
   reviewUrl?: string;
   error?: string;
+  prompt?: string; // si falla, prompt para ejecución manual
   events: ConstructorSSEEvent[];
+  /** true si se usó un endpoint directo ($0) en vez del agente */
+  directPublish: boolean;
 }
 
-// ─── Mapeo kind → change_type ────────────────────────────────────────────────
+// ─── Tipos para endpoints directos ──────────────────────────────────────────
+
+export interface DirectPublishResult {
+  success: boolean;
+  sha?: string;
+  url?: string;
+  slug?: string;
+  filesCreated?: string[];
+  filesUpdated?: string[];
+  error?: string;
+  needsBootstrap?: boolean;
+}
+
+// ─── Mapeo kind → ruta ──────────────────────────────────────────────────────
+
+export type ExecutionRoute = "direct-blog" | "direct-landing" | "direct-meta" | "agent" | "human";
+
+const KIND_TO_ROUTE: Record<string, ExecutionRoute> = {
+  meta: "direct-meta",
+  "contenido-blog": "direct-blog",
+  "contenido-landing": "direct-landing",
+  "contenido-optimizar": "agent",
+  schema: "agent",
+  tecnico: "agent",
+  interlinking: "agent",
+  setup: "human",
+  otro: "human",
+};
 
 const KIND_TO_CHANGE_TYPE: Record<string, string | null> = {
   meta: "text_update",
@@ -77,8 +121,8 @@ const KIND_TO_CHANGE_TYPE: Record<string, string | null> = {
   schema: "code_change",
   tecnico: "code_change",
   interlinking: "code_change",
-  setup: null, // HUMAN_TASK
-  otro: null,  // HUMAN_TASK
+  setup: null,
+  otro: null,
 };
 
 const KIND_TO_SECTION: Record<string, string> = {
@@ -86,6 +130,10 @@ const KIND_TO_SECTION: Record<string, string> = {
   schema: "Structured Data",
   interlinking: "Internal Links",
 };
+
+export function getExecutionRoute(kind: string): ExecutionRoute {
+  return KIND_TO_ROUTE[kind] ?? "human";
+}
 
 export function mapKindToChangeType(kind: string): string | null {
   return KIND_TO_CHANGE_TYPE[kind] ?? null;
@@ -96,10 +144,15 @@ export function mapKindToSection(kind: string): string {
 }
 
 export function isHumanTask(kind: string): boolean {
-  return mapKindToChangeType(kind) === null;
+  return getExecutionRoute(kind) === "human";
 }
 
-// ─── Cliente SSE ─────────────────────────────────────────────────────────────
+export function isDirectPublish(kind: string): boolean {
+  const route = getExecutionRoute(kind);
+  return route === "direct-blog" || route === "direct-landing" || route === "direct-meta";
+}
+
+// ─── Config ──────────────────────────────────────────────────────────────────
 
 function getConstructorConfig(): { url: string; secret: string } {
   const url = env.CONSTRUCTOR_BASE_URL;
@@ -112,9 +165,154 @@ function getConstructorConfig(): { url: string; secret: string } {
   return { url, secret };
 }
 
+// ─── Endpoints directos ─────────────────────────────────────────────────────
+
 /**
- * Parsea un stream SSE text/event-stream en eventos tipados.
+ * Publica un artículo de blog directamente ($0, 3-8s).
  */
+export async function publishBlogPost(params: {
+  notionClientId: string;
+  titulo: string;
+  cuerpo: string;
+  categoria?: string;
+  tags?: string;
+  extracto?: string;
+  autor?: string;
+}): Promise<DirectPublishResult> {
+  const { url, secret } = getConstructorConfig();
+
+  const response = await fetch(`${url}/api/internal/blog/publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({
+      notion_client_id: params.notionClientId,
+      titulo: params.titulo,
+      cuerpo: params.cuerpo,
+      categoria: params.categoria ?? "General",
+      tags: params.tags ?? "",
+      extracto: params.extracto ?? "",
+      autor: params.autor ?? "Click Society",
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (response.status === 409) {
+    return { success: false, needsBootstrap: true, error: "Blog no bootstrapped en este sitio." };
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    return { success: false, error: `Constructor respondió ${response.status}: ${text.slice(0, 500)}` };
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  return {
+    success: true,
+    sha: data.sha as string | undefined,
+    url: data.url as string | undefined,
+    slug: data.slug as string | undefined,
+    filesCreated: data.filesCreated as string[] | undefined,
+  };
+}
+
+/**
+ * Publica una landing page directamente ($0, 3-8s).
+ */
+export async function publishLanding(params: {
+  notionClientId: string;
+  titulo: string;
+  descripcion: string;
+  cuerpo: string;
+  ctaPrincipal?: string;
+  noindex?: boolean;
+}): Promise<DirectPublishResult> {
+  const { url, secret } = getConstructorConfig();
+
+  const response = await fetch(`${url}/api/internal/content/publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({
+      type: "landing",
+      notion_client_id: params.notionClientId,
+      titulo: params.titulo,
+      descripcion: params.descripcion,
+      cuerpo: params.cuerpo,
+      cta_principal: params.ctaPrincipal ?? "Contactar",
+      noindex: params.noindex ?? false,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (response.status === 409) {
+    return { success: false, needsBootstrap: true, error: "Landing pages no bootstrapped en este sitio." };
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    return { success: false, error: `Constructor respondió ${response.status}: ${text.slice(0, 500)}` };
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  return {
+    success: true,
+    sha: data.sha as string | undefined,
+    slug: data.slug as string | undefined,
+    filesCreated: data.filesCreated as string[] | undefined,
+  };
+}
+
+/**
+ * Actualiza meta tags directamente ($0, 3-8s).
+ */
+export async function publishMetaTags(params: {
+  notionClientId: string;
+  pages: Array<{
+    page_path: string;
+    meta_title?: string;
+    meta_description?: string;
+    og_title?: string;
+    og_description?: string;
+    noindex?: boolean;
+  }>;
+}): Promise<DirectPublishResult> {
+  const { url, secret } = getConstructorConfig();
+
+  const response = await fetch(`${url}/api/internal/content/publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({
+      type: "meta_tags",
+      notion_client_id: params.notionClientId,
+      pages: params.pages,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    return { success: false, error: `Constructor respondió ${response.status}: ${text.slice(0, 500)}` };
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  return {
+    success: true,
+    sha: data.sha as string | undefined,
+    url: data.url as string | undefined,
+    filesUpdated: data.filesUpdated as string[] | undefined,
+  };
+}
+
+// ─── SSE Parser ──────────────────────────────────────────────────────────────
+
 async function parseSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): Promise<ConstructorSSEEvent[]> {
@@ -131,7 +329,6 @@ async function parseSSEStream(
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
-    // Keep the last incomplete line in the buffer
     buffer = lines.pop() ?? "";
 
     for (const line of lines) {
@@ -155,8 +352,11 @@ async function parseSSEStream(
   return events;
 }
 
+// ─── Agente SSE ──────────────────────────────────────────────────────────────
+
 /**
  * Llama a Constructor create-and-execute (SSE) y retorna el resultado.
+ * Usar para cambios de código que requieren el agente IA.
  */
 export async function executeChangeRequest(
   request: ConstructorRequest
@@ -171,7 +371,7 @@ export async function executeChangeRequest(
       Authorization: `Bearer ${secret}`,
     },
     body: JSON.stringify(request),
-    signal: AbortSignal.timeout(300_000), // 300s matching Constructor timeout
+    signal: AbortSignal.timeout(300_000),
   });
 
   if (!response.ok) {
@@ -180,6 +380,7 @@ export async function executeChangeRequest(
       success: false,
       error: `Constructor respondió ${response.status}: ${text.slice(0, 500)}`,
       events: [],
+      directPublish: false,
     };
   }
 
@@ -188,13 +389,13 @@ export async function executeChangeRequest(
       success: false,
       error: "Constructor no devolvió body (esperaba SSE stream).",
       events: [],
+      directPublish: false,
     };
   }
 
   const reader = response.body.getReader();
   const events = await parseSSEStream(reader);
 
-  // Find the result or error event
   const resultEvent = events.find(
     (e): e is ConstructorResultEvent => e.type === "result"
   );
@@ -208,9 +409,12 @@ export async function executeChangeRequest(
       id: resultEvent.id,
       requestCode: resultEvent.request_code,
       commitSha: resultEvent.commitSha,
+      commitUrl: resultEvent.commitUrl,
       filesChanged: resultEvent.filesChanged,
       reviewUrl: resultEvent.review_url,
+      prompt: resultEvent.prompt,
       events,
+      directPublish: false,
     };
   }
 
@@ -220,7 +424,9 @@ export async function executeChangeRequest(
       id: errorEvent.id,
       reviewUrl: errorEvent.review_url,
       error: errorEvent.error,
+      prompt: errorEvent.prompt,
       events,
+      directPublish: false,
     };
   }
 
@@ -228,8 +434,11 @@ export async function executeChangeRequest(
     success: false,
     error: "Constructor no devolvió evento result ni error.",
     events,
+    directPublish: false,
   };
 }
+
+// ─── Consulta ────────────────────────────────────────────────────────────────
 
 /**
  * Consulta el status de un change-request existente por idempotency_key.
@@ -249,8 +458,9 @@ export async function getChangeRequestByIdempotencyKey(
 
   if (!response.ok) return null;
 
-  const data = (await response.json()) as { id?: string; status?: string };
-  if (!data.id) return null;
+  const data = (await response.json()) as { request?: { id?: string; status?: string } };
+  const req = data.request;
+  if (!req?.id) return null;
 
-  return { id: data.id, status: data.status ?? "unknown" };
+  return { id: req.id, status: req.status ?? "unknown" };
 }
