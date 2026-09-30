@@ -4,6 +4,10 @@ import { createWorker } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { planExecutionQueue, type PlanExecutionStepJobData } from "../queues";
 import {
+  generateBlogPost,
+  generateLandingPage,
+} from "@/server/constructor/content-generator";
+import {
   executeChangeRequest,
   publishBlogPost,
   publishLanding,
@@ -91,8 +95,11 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
       let errorMsg: string | undefined;
       let prompt: string | undefined;
 
+      const clientName = step.execution.client.name;
+      const clientDomain = step.execution.client.domain;
+
       if (route === "direct-blog") {
-        const result = await executeBlogPublish(cerebroClientId, step.description);
+        const result = await executeBlogPublish(cerebroClientId, step.title, step.description, clientName, clientDomain);
         success = result.success;
         commitSha = result.sha;
         errorMsg = result.error;
@@ -100,7 +107,7 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
           errorMsg = "Blog no bootstrapped — requiere configuración manual en Constructor.";
         }
       } else if (route === "direct-landing") {
-        const result = await executeLandingPublish(cerebroClientId, step.description);
+        const result = await executeLandingPublish(cerebroClientId, step.title, step.description, clientName, clientDomain);
         success = result.success;
         commitSha = result.sha;
         errorMsg = result.error;
@@ -166,42 +173,52 @@ export const planExecutionWorker = createWorker<PlanExecutionStepJobData>(
 
 // ─── Ejecución por ruta ─────────────────────────────────────────────────────
 
-/**
- * Extrae título y cuerpo del campo description del step.
- * El description tiene formato: "Descripción\n\nEvidencia: ...\nURL objetivo: ..."
- * Para publicación directa, usamos la primera línea como título y el resto como cuerpo.
- */
-function parseStepContent(description: string): { titulo: string; cuerpo: string; extracto: string } {
-  const lines = description.split("\n");
-  const titulo = lines[0] ?? "Sin título";
-  const cuerpo = lines.slice(1).join("\n").trim();
-  const extracto = titulo.slice(0, 160);
-  return { titulo, cuerpo: cuerpo || titulo, extracto };
-}
-
 async function executeBlogPublish(
   notionClientId: string,
-  description: string
+  title: string,
+  description: string,
+  clientName: string,
+  clientDomain: string
 ): Promise<DirectPublishResult> {
-  const { titulo, cuerpo, extracto } = parseStepContent(description);
+  // Generar artículo completo con Claude
+  const blog = await generateBlogPost({
+    stepTitle: title,
+    stepDescription: description,
+    clientName,
+    clientDomain,
+  });
+
   return publishBlogPost({
     notionClientId,
-    titulo,
-    cuerpo,
-    extracto,
+    titulo: blog.titulo,
+    cuerpo: blog.cuerpo,
+    extracto: blog.extracto,
+    categoria: blog.categoria,
+    tags: blog.tags,
   });
 }
 
 async function executeLandingPublish(
   notionClientId: string,
-  description: string
+  title: string,
+  description: string,
+  clientName: string,
+  clientDomain: string
 ): Promise<DirectPublishResult> {
-  const { titulo, cuerpo } = parseStepContent(description);
+  // Generar landing completa con Claude
+  const landing = await generateLandingPage({
+    stepTitle: title,
+    stepDescription: description,
+    clientName,
+    clientDomain,
+  });
+
   return publishLanding({
     notionClientId,
-    titulo,
-    descripcion: titulo,
-    cuerpo,
+    titulo: landing.titulo,
+    descripcion: landing.descripcion,
+    cuerpo: landing.cuerpo,
+    ctaPrincipal: landing.ctaPrincipal,
   });
 }
 

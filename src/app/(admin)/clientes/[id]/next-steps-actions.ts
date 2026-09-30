@@ -92,6 +92,19 @@ export async function actionApprovePlan(
     return { ok: false, error: "Solo administradores pueden ejecutar planes." };
   }
 
+  // Verificar que el cliente tiene al menos un site con framework nextjs
+  const nextjsSite = await prisma.site.findFirst({
+    where: { clientId, framework: "nextjs" },
+    select: { id: true },
+  });
+
+  if (!nextjsSite) {
+    return {
+      ok: false,
+      error: "Este cliente no tiene un sitio Next.js configurado. Constructor solo funciona con proyectos Next.js.",
+    };
+  }
+
   // Obtener plan más reciente válido
   const plan = await prisma.nextStepPlan.findFirst({
     where: { clientId, status: "valid" },
