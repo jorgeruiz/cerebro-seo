@@ -62,7 +62,7 @@ const envSchema = z.object({
   ORQUESTADOR_URL: z.string().url().optional(),
 
   // Constructor — ejecución directa de cambios en sitios de clientes.
-  CONSTRUCTOR_BASE_URL: z.string().url().optional(),
+  CONSTRUCTOR_URL: z.string().url().optional(),
   CONSTRUCTOR_INTERNAL_SECRET: z.string().min(1).optional(),
 
   // Node env

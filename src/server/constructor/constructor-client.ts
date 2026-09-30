@@ -155,11 +155,11 @@ export function isDirectPublish(kind: string): boolean {
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 function getConstructorConfig(): { url: string; secret: string } {
-  const url = env.CONSTRUCTOR_BASE_URL;
+  const url = env.CONSTRUCTOR_URL;
   const secret = env.CONSTRUCTOR_INTERNAL_SECRET;
   if (!url || !secret) {
     throw new Error(
-      "CONSTRUCTOR_BASE_URL y CONSTRUCTOR_INTERNAL_SECRET son requeridos para ejecutar planes."
+      "CONSTRUCTOR_URL y CONSTRUCTOR_INTERNAL_SECRET son requeridos para ejecutar planes."
     );
   }
   return { url, secret };
