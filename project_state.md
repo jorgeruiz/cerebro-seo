@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-09-26 (Sesión B — Advisor v3 + plan mensual estable)
-**Fase actual:** Post-Fase 4 — preparación multi-proyecto + integración Orquestador
-**Próximo hito:** Implementar spec Orquestador (SPEC-orquestador-plan-mensual.md) + wizard nuevo proyecto
+**Última actualización:** 2026-09-30 (Sesión C — Ejecución directa a Constructor + Plan Mensual)
+**Fase actual:** Post-Fase 4 — integración Constructor directa (Orquestador eliminado como intermediario)
+**Próximo hito:** Sync framework desde Notion + generación de contenido (blog/landing) con Claude antes de enviar a Constructor
 
 ---
 
@@ -119,7 +119,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo Plan de Contenido | ✅ Activo | `/clientes/[id]/contenido`. Plan de contenido on-demand con Claude Sonnet 4.6. 4 tipos (blog/landing/pilar/soporte), 3 prioridades, historial de planes. ADMIN-only. Migración `add_content_plan`. Sesión 34 commit `c82b0d6`. |
 | Módulo AEO Research | ✅ Activo | `/clientes/[id]/aeo-research`. Recopila preguntas de búsqueda (DataForSEO Labs + SERP PAA), clasifica con Claude Sonnet 4.6 en clusters AEO (featured snippets) y GEO (citación por LLMs). KPI strip, cluster cards expandibles, historial. ADMIN-only. Migración `20260614120000_add_aeo_research`. Sesión 36 commit `1294d7b`. |
 | AEO Readiness (Site Audit) | ✅ Activo | 10 checks algorítmicos de legibilidad para IA dentro de Site Audit (modo complete). Prober: robots.txt AI bots, llms.txt, content negotiation, .md routes, SSR content, sitemap. Score 0-100 persistido en `Audit.aeoScore`. Costo $0. Migración `20260902120000_add_aeo_readiness`. Sesión 35 commit `4877e92`. |
-| Integración Orquestador | ✅ Activo | Botón "Enviar al Orquestador" en 5 módulos (ad-hoc). Plan mensual estable vía `GET /recommendations/{id}?type=monthly` (max 6 steps, lazy, idempotente por mes). Contrato v2 en `CONTRACT_SEO_ORQUESTADOR.md`. Spec para Orquestador en `SPEC-orquestador-plan-mensual.md`. |
+| Integración Constructor (directa) | ✅ Activo | Orquestador eliminado como intermediario. Cerebro SEO envía steps del plan mensual directamente a Constructor. Ruteo inteligente: blog/landing/meta → endpoints directos ($0, 3-8s); schema/tecnico/interlinking → agente SSE (~$0.05, 30-90s); setup/otro → HUMAN_TASK con pasos generados por Claude. Env vars en Easypanel: `CONSTRUCTOR_URL`, `CONSTRUCTOR_INTERNAL_SECRET`. |
+| Página Plan Mensual | ✅ Activo | `/clientes/[id]/plan-mensual`. Progress bar con %, filtro por mes, detalle expandible por tarea, badges IA/HT, polling 15s, botones Completar/Ignorar, prompt copiable, resultUrl. Link en sidebar. |
+| Modelo PlanExecution | ✅ Activo | PlanExecution (status, yearMonth) + StepExecution (PENDING/QUEUED/RUNNING/APPLIED/FAILED/HUMAN_TASK/IGNORED). Campos: resultUrl, detailedSteps (Json), prompt. idempotencyKey unique por step. |
 | Advisor v3 | ✅ Activo | System prompt reescrito con anti-patrones, árbol de decisión para kinds, regla de descomposición. 8 kinds (meta, contenido-blog, contenido-landing, contenido-optimizar, interlinking, schema, tecnico, otro). Campo `origin` (data/ai-insight). Señales enriquecidas (score breakdown, top 20 páginas, área más débil). Post-procesado con filtros de steps internos/vagos. |
 | Desglose de acciones Análisis | ✅ Activo | `decomposeAction()` en `claude-analysis.ts`: Claude Sonnet descompone `accion` en sub-tareas. Schema cerrado: 8 kinds. Validación runtime con fallback. |
 | Módulo Research | ✅ Activo | `/clientes/[id]/research` con tabs: Oportunidades (nuevo), Keyword Ideas (existente), AEO Research (existente). Servicio `src/server/research/` reutilizable por wizard. DataForSEO: `getOrganicCompetitors` (competitors_domain), `getCompetitorPages` (relevant_pages), `getStrikingDistanceKeywords` (ranked_keywords pos 4-20). Claude Sonnet para sugerencias. Modelo `ResearchReport` con `clientId` + `siteId` (multi-proyecto nativo). Costo ≤ $0.45/ejecución. Cache 7d por dominio. Sesión A-F2. |
@@ -226,6 +228,16 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | 2026-09-26 | **Campo `origin` en NextStep (v3).** `"data"` = métrica lo dicta, `"ai-insight"` = recomendación estratégica. Informativo para el equipo, no afecta ejecución. |
 | 2026-09-26 | **Responsabilidades Cerebro SEO vs Orquestador.** SEO detecta y analiza. Orquestador decide, descompone y ejecuta. `decomposeAction` debería migrar al Orquestador (refactor futuro). |
 | 2026-09-26 | **Steps internos no se generan.** El advisor no genera steps de configuración de la plataforma (benchmark, tracking, keywords). Esos los genera `preconditions.ts` como categoria "setup". |
+| 2026-09-30 | **Orquestador eliminado como intermediario.** Cerebro SEO envía steps directamente a Constructor. `orchestrator-actions.ts` es dead code (no se borra por ahora). Todos los botones "Enviar al Orquestador" eliminados de 5 componentes (Oportunidades, Audit, Contenido, Análisis, AEO). Reemplazados por botones clipboard "Agregar al Plan del Mes". |
+| 2026-09-30 | **Ruteo inteligente a Constructor.** 3 rutas: `direct-blog` ($0, 3-8s, /blog/publish), `direct-landing` ($0, 3-8s, /content/publish), `direct-meta` (fallback a agente SSE por falta de page_paths estructurados), `agent` (~$0.05, 30-90s, /change-requests/create-and-execute), `human` (no llama a Constructor). Meta tags usará endpoint directo cuando el Advisor incluya page_paths. |
+| 2026-09-30 | **Constructor identifica proyectos por `notion_client_id`** que es el `cerebroClientId` de nuestro modelo Client. No usamos `project_id` UUID de Constructor. |
+| 2026-09-30 | **Env vars Constructor:** `CONSTRUCTOR_URL` (no `CONSTRUCTOR_BASE_URL`) y `CONSTRUCTOR_INTERNAL_SECRET`. Ambas opcionales en env.ts pero requeridas en runtime para ejecutar planes. Ya configuradas en Easypanel. |
+| 2026-09-30 | **Plan Mensual como página dedicada** (`/clientes/[id]/plan-mensual`). Sustituye la visión ad-hoc de envíos individuales al Orquestador. Filtrable por mes, progress bar, polling 15s. |
+| 2026-09-30 | **IGNORED en StepExecutionStatus.** Permite ignorar tareas fallidas para alcanzar 100% de progreso. Solo aplicable a steps con status FAILED. |
+| 2026-09-30 | **Human Tasks generan pasos detallados + prompt con Claude.** Al procesar un step HT, el worker llama a Claude Haiku/Sonnet para generar: (1) lista de pasos accionables (máx 8), (2) prompt listo para pegar en Code. Ambos se guardan en BD (detailedSteps Json, prompt Text). |
+| 2026-09-30 | **Campo `framework` en Site.** Valores: "nextjs", "wordpress", "custom", null. Solo clientes con framework "nextjs" pueden ejecutar tareas en Constructor. Dato viene de Notion (sync pendiente). |
+| 2026-09-30 | **Contenido (blog/landing) lo redacta Cerebro SEO con Claude** y lo envía a Constructor vía endpoints directos. Si Constructor falla, el contenido se puede copiar y pegar en la sección de Blog de Constructor manualmente. |
+| 2026-09-30 | **"Revisar en producción" (HT) no bloquea la ejecución.** HTs pendientes no impiden que el worker siga con los siguientes steps. El usuario los completa manualmente cuando quiera. |
 
 ---
 
@@ -428,6 +440,60 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión C — 2026-09-30 ✅ COMPLETA (Ejecución directa a Constructor + Plan Mensual)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Orquestador eliminado, ejecución directa a Constructor, página Plan Mensual con progreso. 4 commits pushed.
+
+**Trabajo realizado:**
+
+1. **Ejecución directa a Constructor** (commit `9559f91`):
+   - Modelo `PlanExecution` + `StepExecution` en schema.prisma con status por step
+   - `constructor-client.ts` — cliente HTTP SSE con parser de eventos
+   - Cola `plan-execution` + worker secuencial (concurrency 1, delay 10s)
+   - Server action `actionApprovePlan` crea ejecución desde NextStepPlan válido
+   - Botón "Ejecutar Plan" en NextStepsPanel con barra de estado
+   - Eliminados TODOS los botones "Enviar al Orquestador" de 5 componentes
+   - 19 tests para constructor-client mappers
+
+2. **Ruteo inteligente a endpoints directos** (commit `00b0212`):
+   - Blog/landing → endpoints directos ($0, 3-8s)
+   - Schema/técnico/interlinking → agente SSE (~$0.05, 30-90s)
+   - Setup/otro → HUMAN_TASK (skip Constructor)
+   - Manejo de 409 needs_bootstrap
+   - Delay escalonado: 5s directos, 10s agente
+   - 36 tests
+
+3. **Rename env var** (commit `3f703b9`):
+   - `CONSTRUCTOR_BASE_URL` → `CONSTRUCTOR_URL` para alinear con Easypanel
+
+4. **Página Plan Mensual** (commit `fd1ad06`):
+   - `/clientes/[id]/plan-mensual` con progress bar (gradiente Click Society)
+   - Filtro por mes para historial de ejecuciones
+   - Detalle expandible por tarea: badges IA/HT, pasos, prompt, URLs
+   - Botones "Completar" (HT) e "Ignorar" (failed) recalculan progreso
+   - Polling cada 15s para ejecuciones activas
+   - Worker genera pasos detallados + prompt para HT con Claude
+   - Worker guarda resultUrl de Constructor
+   - Schema: IGNORED status, resultUrl, detailedSteps, yearMonth, framework
+   - Link "Plan Mensual" en sidebar grupo Estrategia
+
+**Archivos nuevos:**
+- `src/server/constructor/constructor-client.ts` (+ test)
+- `src/server/jobs/workers/plan-execution-worker.ts`
+- `src/app/(admin)/clientes/[id]/plan-mensual/` (page, panel, actions)
+- `prisma/migrations/20260930000730_add_plan_execution/`
+- `prisma/migrations/20260930064000_step_details_framework_ignored/`
+
+**Archivos dead code (no borrados):**
+- `src/app/(admin)/clientes/[id]/orchestrator-actions.ts` — ya no se importa en ningún lado
+
+**Pendientes para próxima sesión:**
+- Sync `framework` desde Notion (campo existe en BD, falta mapper en sync)
+- Generación de contenido (blog/landing) con Claude en Cerebro SEO antes de enviar a Constructor
+- Filtrar clientes por framework=nextjs para mostrar solo los que trabajan con Constructor
+
+---
 
 ### Sesión B — 2026-09-26 ✅ COMPLETA (Advisor v3 + plan mensual estable)
 **Participantes:** Jorge + Claude Code
