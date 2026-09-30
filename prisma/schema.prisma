@@ -99,6 +99,7 @@ model Client {
   aeoResearches          AeoResearch[]
   nextStepPlans          NextStepPlan[]
   researchReports        ResearchReport[]
+  planExecutions         PlanExecution[]
 }
 
 model Site {
@@ -506,6 +507,8 @@ model NextStepPlan {
   cost         Decimal  @default(0) @db.Decimal(10, 6)
   triggeredBy  String?
 
+  executions   PlanExecution[]
+
   @@index([clientId, generatedAt])
 }
 
@@ -592,4 +595,60 @@ enum EventType {
   CLIENT_LAUNCH
   SEO_ACTION
   EXTERNAL
+}
+
+enum PlanExecutionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum StepExecutionStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  APPLIED
+  FAILED
+  HUMAN_TASK
+}
+
+model PlanExecution {
+  id          String              @id @default(cuid())
+  planId      String
+  plan        NextStepPlan        @relation(fields: [planId], references: [id])
+  clientId    String
+  client      Client              @relation(fields: [clientId], references: [id])
+  status      PlanExecutionStatus @default(PENDING)
+  triggeredBy String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  steps StepExecution[]
+
+  @@index([clientId, createdAt])
+  @@index([planId])
+}
+
+model StepExecution {
+  id              String              @id @default(cuid())
+  executionId     String
+  execution       PlanExecution       @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stepIndex       Int
+  kind            String              // NextStepKind original
+  changeType      String?             // Constructor change_type (null si human_task)
+  title           String
+  description     String              @db.Text
+  status          StepExecutionStatus @default(PENDING)
+  idempotencyKey  String              @unique
+  constructorId   String?             // ID del change-request en Constructor
+  constructorCode String?             // request_code
+  reviewUrl       String?
+  commitSha       String?
+  error           String?             @db.Text
+  prompt          String?             @db.Text  // se guarda si Constructor falla, para ejecución manual
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  @@index([executionId, stepIndex])
 }

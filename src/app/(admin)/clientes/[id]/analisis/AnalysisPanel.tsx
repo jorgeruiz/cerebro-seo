@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Sparkles, Loader2, AlertTriangle, TrendingUp, ChevronDown, ChevronRight, Send, Check, Merge, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2, AlertTriangle, TrendingUp, ChevronDown, ChevronRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { actionGenerateAnalysis, type AnalysisRecord } from "./actions";
-import { actionDecomposeAndSendToOrchestrator } from "../orchestrator-actions";
 import type { AnalysisOpportunity, AnalysisRisk } from "@/lib/claude-analysis";
 
 interface Props {
@@ -38,42 +36,12 @@ function formatDate(d: Date) {
 
 function OpportunityCard({
   opp,
-  clientId,
-  analysisId,
-  oppIndex,
 }: {
   opp: AnalysisOpportunity;
   clientId: string;
   analysisId: string;
   oppIndex: number;
 }) {
-  const [orchState, setOrchState] = useState<"idle" | "sending" | "sent" | "merged" | "error">("idle");
-  const [orchError, setOrchError] = useState<string | null>(null);
-  const [subtareasCount, setSubtareasCount] = useState(0);
-
-  async function handleSendToOrchestrator(e: React.MouseEvent) {
-    e.stopPropagation();
-    setOrchState("sending");
-    const result = await actionDecomposeAndSendToOrchestrator({
-      clientId,
-      analysisId,
-      oppIndex,
-      titulo: opp.titulo,
-      descripcion: opp.descripcion,
-      accion: opp.accion,
-      impacto: opp.impacto,
-    });
-    if (result.ok) {
-      setSubtareasCount(result.subtareasCount);
-      setOrchState(result.merged ? "merged" : "sent");
-    } else {
-      console.error("[orchestrator]", result.error);
-      setOrchError(result.error);
-      setOrchState("error");
-      setTimeout(() => { setOrchState("idle"); setOrchError(null); }, 6000);
-    }
-  }
-
   return (
     <div className="bg-card rounded-xl border border-border p-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -81,56 +49,18 @@ function OpportunityCard({
           <TrendingUp className="h-4 w-4 text-ds-green shrink-0 mt-0.5" />
           <p className="text-sm font-semibold text-foreground">{opp.titulo}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span
-            className={`font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoColor(opp.impacto)}`}
-          >
-            {opp.impacto}
-          </span>
-          <button
-            onClick={handleSendToOrchestrator}
-            disabled={orchState === "sending" || orchState === "sent" || orchState === "merged"}
-            title={
-              orchState === "sent" ? `Enviada (${subtareasCount} sub-tarea${subtareasCount !== 1 ? "s" : ""})`
-              : orchState === "merged" ? `Enviada — merged (${subtareasCount} sub-tarea${subtareasCount !== 1 ? "s" : ""})`
-              : orchState === "sending" ? "Descomponiendo y enviando..."
-              : orchState === "error" ? (orchError ?? "Error — reintentar")
-              : "Enviar al Orquestador"
-            }
-            className={cn(
-              "h-6 w-6 rounded border flex items-center justify-center transition-colors",
-              orchState === "merged"
-                ? "bg-ds-blue/10 border-ds-blue/30 text-ds-blue"
-                : orchState === "sent"
-                  ? "bg-ds-green/10 border-ds-green/30 text-ds-green"
-                  : orchState === "error"
-                    ? "bg-destructive/10 border-destructive/30 text-destructive"
-                    : orchState === "sending"
-                      ? "bg-muted border-border text-muted-foreground cursor-wait"
-                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
-            )}
-          >
-            {orchState === "sending" ? <Loader2 className="h-3 w-3 animate-spin" />
-              : orchState === "merged" ? <Merge className="h-3 w-3" />
-              : orchState === "sent" ? <Check className="h-3 w-3" />
-              : orchState === "error" ? <AlertCircle className="h-3 w-3" />
-              : <Send className="h-3 w-3" />}
-          </button>
-        </div>
+        <span
+          className={`shrink-0 font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${impactoColor(opp.impacto)}`}
+        >
+          {opp.impacto}
+        </span>
       </div>
       <p className="text-xs text-muted-foreground leading-relaxed">{opp.descripcion}</p>
       {opp.accion && (
         <div className="border-t border-border pt-3">
-          <div className="flex items-center justify-between mb-1">
-            <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
-              Acción concreta
-            </p>
-            {(orchState === "sent" || orchState === "merged") && (
-              <span className="font-mono text-[0.65rem] text-ds-green">
-                {subtareasCount} sub-tarea{subtareasCount !== 1 ? "s" : ""} enviada{subtareasCount !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
+          <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-1">
+            Acción concreta
+          </p>
           <p className="text-xs text-foreground leading-relaxed">{opp.accion}</p>
         </div>
       )}

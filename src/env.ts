@@ -61,6 +61,10 @@ const envSchema = z.object({
   // Orquestador — URL base para enviar ítems al intake. Auth usa CEREBRO_INTERNAL_SECRET.
   ORQUESTADOR_URL: z.string().url().optional(),
 
+  // Constructor — ejecución directa de cambios en sitios de clientes.
+  CONSTRUCTOR_BASE_URL: z.string().url().optional(),
+  CONSTRUCTOR_INTERNAL_SECRET: z.string().min(1).optional(),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])
