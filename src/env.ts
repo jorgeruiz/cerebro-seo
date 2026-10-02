@@ -58,9 +58,6 @@ const envSchema = z.object({
   // Internal secret — guard Bearer para endpoints internos (Constructor, Cerebro bridge).
   SEO_INTERNAL_SECRET: z.string().min(1),
 
-  // Orquestador — URL base para enviar ítems al intake. Auth usa CEREBRO_INTERNAL_SECRET.
-  ORQUESTADOR_URL: z.string().url().optional(),
-
   // Constructor — ejecución directa de cambios en sitios de clientes.
   CONSTRUCTOR_URL: z.string().url().optional(),
   CONSTRUCTOR_INTERNAL_SECRET: z.string().min(1).optional(),
