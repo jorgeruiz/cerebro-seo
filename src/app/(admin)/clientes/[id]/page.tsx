@@ -23,7 +23,7 @@ import { NextStepsPanel } from "./NextStepsPanel";
 import { SectionHeader, SectionIntro } from "@/components/ui-darkui";
 import { buttonVariants } from "@/components/ui/button";
 import { getGscSnapshot, getGa4Snapshot } from "./actions";
-import { getLatestNextStepPlan, getLatestPlanExecution } from "./next-steps-actions";
+import { getLatestNextStepPlan } from "./next-steps-actions";
 import type { DailyGscMetric } from "@/server/providers/google-search-console";
 import type { GscSnapshot, Ga4Snapshot } from "./actions";
 import { env } from "@/env";
@@ -154,9 +154,7 @@ export default async function ClienteDetallePage({
   const isAdmin = session?.user?.role === "ADMIN";
 
   // Próximos pasos sugeridos — solo para clientes con servicio SEO
-  const [nextStepPlan, latestExecution] = hasSeo
-    ? await Promise.all([getLatestNextStepPlan(client.id), getLatestPlanExecution(client.id)])
-    : [null, null];
+  const nextStepPlan = hasSeo ? await getLatestNextStepPlan(client.id) : null;
 
   const cycle = client.cycles[0];
   const cycleStatus = cycle ? CYCLE_STATUS_LABEL[cycle.status] : null;
@@ -230,7 +228,6 @@ export default async function ClienteDetallePage({
             <NextStepsPanel
               clientId={client.id}
               initialRecord={nextStepPlan}
-              initialExecution={latestExecution}
               isAdmin={isAdmin}
             />
           </section>

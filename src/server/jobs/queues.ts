@@ -38,17 +38,6 @@ export const syncQueue = new Queue("sync", {
   },
 });
 
-// Jobs de ejecución de planes en Constructor (secuencial, 1 step a la vez)
-export const planExecutionQueue = new Queue("plan-execution", {
-  ...connection,
-  defaultJobOptions: {
-    attempts: 2,
-    backoff: { type: "fixed", delay: 30_000 },
-    removeOnComplete: { count: 50 },
-    removeOnFail: { count: 100 },
-  },
-});
-
 // Tipos de jobs — sirven como documentación y para type-safety en los workers
 
 export type DataCollectionJobName =
@@ -65,8 +54,6 @@ export type AiAnalysisJobName =
   | "advisor:generate"
   | "cycle:close"
   | "report:monthly";
-
-export type PlanExecutionJobName = "plan-execution:step";
 
 export type SyncJobName = "sync:cerebro";
 
@@ -108,8 +95,3 @@ export interface ReportJobData {
   cycleId: string;
 }
 
-export interface PlanExecutionStepJobData {
-  executionId: string;
-  stepExecutionId: string;
-  clientId: string;
-}

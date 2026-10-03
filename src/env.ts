@@ -58,10 +58,6 @@ const envSchema = z.object({
   // Internal secret — guard Bearer para endpoints internos (Constructor, Cerebro bridge).
   SEO_INTERNAL_SECRET: z.string().min(1),
 
-  // Constructor — ejecución directa de cambios en sitios de clientes.
-  CONSTRUCTOR_URL: z.string().url().optional(),
-  CONSTRUCTOR_INTERNAL_SECRET: z.string().min(1).optional(),
-
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])
