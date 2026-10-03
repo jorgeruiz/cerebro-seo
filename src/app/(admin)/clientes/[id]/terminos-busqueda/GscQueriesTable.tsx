@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { ChevronUp, ChevronDown, Loader2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui-darkui";
-import { QueryClipboardButton } from "./QueryClipboardButton";
+
 import {
   Table,
   TableBody,
@@ -166,7 +166,6 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="w-10 py-3 pl-3" />
               <TableHead className="text-xs font-mono text-muted-foreground py-3 pl-2">Query</TableHead>
               {COLUMNS.map((col) => (
                 <TableHead
@@ -193,7 +192,6 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
             {isPending ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i} className="border-border/50">
-                  <TableCell className="pl-3 py-2.5 w-10" />
                   <TableCell className="pl-2 py-2.5">
                     <div className="h-3.5 bg-muted rounded animate-pulse w-48" />
                   </TableCell>
@@ -213,15 +211,6 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
             ) : (
               queries.map((row, i) => (
                 <TableRow key={i} className="border-border/50 hover:bg-muted/30">
-                  <TableCell className="pl-3 py-2.5 w-10">
-                    <QueryClipboardButton
-                      query={row.query}
-                      clicks={row.clicks}
-                      impressions={row.impressions}
-                      ctr={row.ctr}
-                      position={row.position}
-                    />
-                  </TableCell>
                   <TableCell className="pl-2 py-2.5 text-sm text-foreground font-medium max-w-xs truncate">
                     {row.query}
                   </TableCell>

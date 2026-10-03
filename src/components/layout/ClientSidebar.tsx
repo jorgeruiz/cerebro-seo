@@ -18,9 +18,7 @@ import {
   Settings,
   Lock,
   ChevronDown,
-  ClipboardList,
   Menu,
-  ListChecks,
 } from "lucide-react";
 import {
   Tooltip,
@@ -34,7 +32,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useClipboard } from "@/app/(admin)/clientes/[id]/ClipboardContext";
 
 // ─── Research icon (PNG) ─────────────────────────────────────────────────────
 
@@ -91,7 +88,6 @@ const GROUPS: NavGroup[] = [
     title: "Estrategia",
     items: [
       { label: "Plan de Contenido",    href: "contenido",         icon: Lightbulb,   description: "Roadmap editorial",     requiresSeo: true },
-      { label: "Plan Mensual",         href: "plan-mensual",      icon: ListChecks,  description: "Ejecución de tareas",   requiresSeo: true },
       { label: "Eventos / Timeline",   href: "timeline",          icon: Calendar,    description: "Hitos y cambios",       requiresSeo: false },
       { label: "Reporte Mensual",      href: "reporte",           icon: FileText,    description: "Resumen ejecutivo",     requiresSeo: true },
       { label: "Keywords objetivo",    href: "keywords",          icon: TrendingUp,  description: "Tracking de posiciones", requiresSeo: true },
@@ -234,7 +230,6 @@ function ClientSidebarContent({
   hasSeo: boolean;
 }) {
   const pathname = usePathname();
-  const { count: clipboardCount } = useClipboard();
 
   return (
     <div className="flex flex-col h-full">
@@ -287,18 +282,6 @@ function ClientSidebarContent({
         >
           <Settings className="h-3 w-3 opacity-50" />
           Configuración
-        </Link>
-        <Link
-          href={`/clientes/${clientId}/portapapeles`}
-          className="flex items-center gap-2 px-2 py-1 rounded-md font-mono text-[0.7rem] text-muted-foreground hover:text-foreground hover:bg-white/[0.03] transition-colors"
-        >
-          <ClipboardList className="h-3 w-3 opacity-50" />
-          Portapapeles
-          {clipboardCount > 0 && (
-            <span className="ml-auto text-[0.6rem] font-mono bg-primary/20 text-primary rounded-full px-1.5 py-0.5 leading-none">
-              {clipboardCount}
-            </span>
-          )}
         </Link>
       </div>
     </div>

@@ -22,7 +22,7 @@ import {
   type SeoOpportunity,
   type OpportunityType,
 } from "@/lib/seo-opportunities";
-import { OpportunityClipboardButton } from "./OpportunityClipboardButton";
+
 
 // ─── Helpers visuales ─────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ function priorityBadge(p: string) {
   return "text-muted-foreground bg-muted border-border";
 }
 
-function OpportunityCard({ opp, clientId }: { opp: SeoOpportunity; clientId: string }) {
+function OpportunityCard({ opp, clientId: _clientId }: { opp: SeoOpportunity; clientId: string }) {
   const meta = TYPE_META[opp.type];
   const Icon = meta.icon;
 
@@ -63,19 +63,6 @@ function OpportunityCard({ opp, clientId }: { opp: SeoOpportunity; clientId: str
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <OpportunityClipboardButton
-            clientId={clientId}
-            oppType={opp.type}
-            label={opp.label}
-            action={opp.action}
-            priority={opp.priority}
-            keyword={opp.keyword}
-            url={opp.url}
-            position={opp.position}
-            impressions={opp.impressions}
-            clicks={opp.clicks}
-            ctr={opp.ctr}
-          />
           <span
             className={`font-mono text-[0.65rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${priorityBadge(opp.priority)}`}
           >

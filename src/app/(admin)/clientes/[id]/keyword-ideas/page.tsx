@@ -15,7 +15,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AddKeywordButton } from "./AddKeywordButton";
-import { KeywordClipboardButton } from "./KeywordClipboardButton";
+
 import type { KeywordIdea } from "@/server/providers/dataforseo";
 
 // ─── Helpers visuales ─────────────────────────────────────────────────────────
@@ -230,7 +230,6 @@ export default async function KeywordIdeasPage({
                     </th>
                     <th className="text-right px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">CPC</th>
                     <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Intención</th>
-                    <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Copiar</th>
                     {isAdmin && (
                       <th className="text-center px-4 py-2.5 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">Agregar</th>
                     )}
@@ -276,14 +275,6 @@ export default async function KeywordIdeasPage({
                               {idea.intent.slice(0, 4)}
                             </span>
                           )}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <KeywordClipboardButton
-                            keyword={idea.keyword}
-                            volume={idea.searchVolume}
-                            kd={idea.keywordDifficulty}
-                            intent={idea.intent}
-                          />
                         </td>
                         {isAdmin && (
                           <td className="px-4 py-2.5 text-center">

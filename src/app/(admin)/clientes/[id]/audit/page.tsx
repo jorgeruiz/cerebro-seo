@@ -24,7 +24,7 @@ import {
 import { SectionHeader, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AuditScoreChart } from "./AuditScoreChart";
 import type { AuditHistoryPoint } from "./AuditScoreChart";
-import { AuditIssueClipboardButton } from "./AuditIssueClipboardButton";
+
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
@@ -541,16 +541,6 @@ export default async function AuditPage({
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <AuditIssueClipboardButton
-                                    clientId={params.id}
-                                    title={issue.title}
-                                    description={issue.description}
-                                    severity={issue.severity}
-                                    category={issue.category}
-                                    affectedUrl={issue.affectedUrl}
-                                    count={issue.count}
-                                    data={issue.data as Record<string, unknown> | null}
-                                  />
                                   {issue.count > 1 && (
                                     <span className="text-xs font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border">
                                       ×{issue.count}
