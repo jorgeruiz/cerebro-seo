@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-09-30 (Sesión C continuación — Análisis Plan Mensual + clasificación IA/Híbrido/HT)
-**Fase actual:** Post-Fase 4 — integración Constructor directa, flujo Plan Mensual completo
-**Próximo hito:** Integración "Capturar estrategia mensual" con Notion vía Cerebro + pruebas end-to-end con cliente Next.js
+**Última actualización:** 2026-10-03 (Sesión D — Limpieza: portapapeles + orquestador + constructor directo)
+**Fase actual:** Post-limpieza — preparando nuevo módulo Plan Mensual con Claude Agent SDK
+**Próximo hito:** Implementar nuevo módulo Plan Mensual con worker Agent SDK + terminal en Cerebro SEO
 
 ---
 
@@ -444,6 +444,42 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión D — 2026-10-03 ✅ COMPLETA (Limpieza: portapapeles + orquestador + constructor)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ 3 iniciativas eliminadas (portapapeles, orquestador, constructor directo). Codebase limpio para nuevo módulo Plan Mensual con Agent SDK.
+
+**Trabajo realizado (3 commits):**
+
+1. **Fase 1** (commit `8b6c928`) — Orquestador dead code:
+   - Borrado: `orchestrator-actions.ts`, `CONTRACT_SEO_ORQUESTADOR.md`, `SPEC-orquestador-plan-mensual.md`, `/api/internal/debug-plans`
+   - Limpiado: `decomposeAction()` + `Subtarea` de `claude-analysis.ts`, `ORQUESTADOR_URL` de `env.ts`
+
+2. **Fase 2** (commit `3aef718`) — Portapapeles completo:
+   - Borrado: `ClipboardContext.tsx`, `portapapeles/` (panel + page), 7 `*ClipboardButton.tsx`
+   - Limpiado: imports clipboard de `ContentPlanPanel`, `AeoResearchPanel`, `ClientSidebar` (badge + link), `layout.tsx` (provider wrapper)
+   - 10 borrados + 11 modificados = 999 líneas eliminadas
+
+3. **Fase 3** (commit `952fc45`) — Constructor directo:
+   - Borrado: `src/server/constructor/` (3 archivos), `claude-plan-mensual.ts`, `plan-execution-worker.ts`, `plan-mensual/` (3 archivos)
+   - Limpiado: `queues.ts` (planExecutionQueue), `init.ts` (import worker), `next-steps-actions.ts` (actionApprovePlan, getLatestPlanExecution), `NextStepsPanel.tsx` (ExecutionStatusBar, botón Ejecutar), `page.tsx` (prop initialExecution), `analisis/actions.ts` (actionGeneratePlanMensual, actionSendTasksToPlan), `AnalysisPanel.tsx` (PlanMensualView, PlanTaskCard, tab), `CONSTRUCTOR_URL` + `CONSTRUCTOR_INTERNAL_SECRET` de `env.ts`
+   - 8 borrados + 8 modificados = 2917 líneas eliminadas
+
+**Archivos eliminados totales:** 26
+**Líneas eliminadas totales:** ~4676
+
+**NO tocado (pendiente decisión de Jorge):**
+- `/api/internal/recommendations/[clientId]` — endpoint pull para consumidores externos
+- `/api/internal/constructor/metrics` — Constructor lo consume para métricas GA4
+- `/api/internal/constructor/clients/[notionId]/reports` — Constructor lo consume para reportes
+- `PlanExecution`, `StepExecution` en schema.prisma — tablas vivas en BD, sin migración destructiva
+
+**Env vars a retirar de Easypanel DESPUÉS del deploy:**
+- `CONSTRUCTOR_URL`
+- `CONSTRUCTOR_INTERNAL_SECRET`
+- `ORQUESTADOR_URL` (si estaba configurada)
+
+---
 
 ### Sesión C — 2026-09-30 ✅ COMPLETA (Ejecución directa a Constructor + Plan Mensual)
 **Participantes:** Jorge + Claude Code

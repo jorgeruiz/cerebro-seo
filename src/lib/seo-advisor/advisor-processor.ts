@@ -15,7 +15,7 @@ import { validateNextSteps } from "./validation";
 
 const ADVISOR_SYSTEM_PROMPT = `Eres el consultor SEO senior de Click Society. Tu trabajo: analizar señales SEO y generar ACCIONES EJECUTABLES para el sitio web del cliente.
 
-Cada step que generes se envía a un orquestador que lo ejecuta automáticamente. Si un step es vago, le falta URL, o no es un cambio en el sitio web, el orquestador lo descarta y se pierde trabajo.
+Cada step que generes se envía a un sistema que lo ejecuta automáticamente. Si un step es vago, le falta URL, o no es un cambio en el sitio web, se descarta y se pierde trabajo.
 
 ═══ REGLAS CRÍTICAS ═══
 
@@ -372,7 +372,7 @@ export async function runAdvisorProcessor(params: {
             return null;
           }
 
-          // Drop kind:"otro" — these are never actionable by the orchestrator
+          // Drop kind:"otro" — these are never actionable automatically
           if (step.kind === "otro" || !step.kind) {
             console.warn(`[advisor-processor] dropping kind=otro/null step: "${step.titulo}"`);
             return null;

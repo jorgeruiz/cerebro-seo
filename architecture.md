@@ -125,28 +125,18 @@ src/app/(admin)/clientes/[id]/
 ├── backlinks/page.tsx          # BacklinksAgent: perfil, evolución, cambios semana
 ├── competencia/page.tsx        # CompetitorAgent: SoV, keyword gaps
 ├── ai-search/page.tsx          # AI Search Visibility semanal por LLM
-├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6 + botón Orquestador
-├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC) + botón Orquestador
+├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6
+├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC)
 ├── reporte/page.tsx            # Reporte mensual Claude + PDF exportable
 ├── research/page.tsx           # Research hub (tabs: Oportunidades, Keyword Ideas, AEO)
 ├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs (accesible via tab Research)
 ├── timeline/page.tsx           # Eventos/Timeline 7 fuentes 90 días
-├── audit/page.tsx              # Site Audit + AEO Readiness (10 checks) + botón Orquestador
-├── contenido/page.tsx          # Plan de Contenido on-demand Claude + botón Orquestador
+├── audit/page.tsx              # Site Audit + AEO Readiness (10 checks)
+├── contenido/page.tsx          # Plan de Contenido on-demand Claude
 ├── aeo-research/page.tsx       # AEO/GEO Research (clusters + Claude) (accesible via tab Research)
 ├── configuracion/page.tsx      # CRUD keywords/competidores/GSC/GA4
-├── portapapeles/page.tsx       # Portapapeles de estrategia (markdown, en memoria)
 ├── insights/page.tsx           # Historial insights (tabs: activos/resueltos/ignorados)
 └── insights/[insightId]/page.tsx # Detalle de insight
-```
-
-**Integración con Orquestador de Cerebro:**
-```
-src/app/(admin)/clientes/[id]/
-├── orchestrator-actions.ts     # Server actions: actionSendToOrchestrator (genérica)
-│                               #   + actionDecomposeAndSendToOrchestrator (análisis → sub-tareas)
-├── ClipboardContext.tsx        # React Context portapapeles por cliente
-└── layout.tsx                  # ClientSidebar contextual + ClipboardContext
 ```
 
 **Lógica AEO/GEO y análisis:**
@@ -154,7 +144,7 @@ src/app/(admin)/clientes/[id]/
 src/lib/
 ├── aeo-readiness.ts            # Scoring AEO (puro, sin Prisma): buildAeoReport()
 ├── aeo-classify.ts             # Clasificación clusters AEO/GEO con Claude
-├── claude-analysis.ts          # Análisis on-demand + decomposeAction() para Orquestador
+├── claude-analysis.ts          # Análisis on-demand Claude Sonnet 4.6
 ├── claude-content-plan.ts      # Plan de contenido on-demand
 └── seo-advisor/                # Asesor SEO (NextStepPlan)
     ├── advisor-processor.ts    # Prompt + Claude + post-procesado + plan mensual
@@ -596,8 +586,8 @@ insights:ran:{clientId}:{dateISO}:{trigger}  Idempotencia, TTL 25h
 - Workers BullMQ: `sync:cerebro` (6h) + `sync:cerebro-tasks` (15min por cliente SEO)
 - Upsert por `cerebroClientId`, lista blanca de estados Notion
 
-### Orquestador (operativo)
-- `src/app/(admin)/clientes/[id]/orchestrator-actions.ts` — envía tareas a `POST /api/orchestrator/intake` de Cerebro
+### Endpoints internos (legacy, pendientes de decisión)
+- `/api/internal/recommendations` — plan mensual para consumidores externos
 - 5 callers: Oportunidades, Audit Issues, Plan de Contenido, AEO Research, Análisis Claude
 - Análisis Claude usa `decomposeAction()` (Claude Sonnet) para descomponer acciones compuestas en sub-tareas antes de enviar
 - Fire-and-forget (no persiste envíos en BD de Cerebro SEO)
