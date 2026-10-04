@@ -15,6 +15,7 @@
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
+import { createCanUseTool } from "./agent-permissions";
 import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
@@ -256,30 +257,27 @@ async function runAgent(
   try {
     const prompt = composePrompt(task);
 
+    const canUseTool = createCanUseTool(dir);
+
     const stream = query({
       prompt,
       options: {
         cwd: dir,
         tools: { type: "preset", preset: "claude_code" },
-        allowedTools: [
-          "Read", "Edit", "Write", "Glob", "Grep",
-          "Bash(npm run build)", "Bash(npm run lint)",
-          "Bash(git status)", "Bash(git diff)",
-        ],
         disallowedTools: [
           "WebFetch", "WebSearch", "Agent",
         ],
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        canUseTool: canUseTool as never, // SDK expects its own CanUseTool type
+        permissionMode: "default",
         maxTurns: workerEnv.AGENT_MAX_TURNS,
         maxBudgetUsd: workerEnv.AGENT_MAX_BUDGET_USD,
         abortController: ac,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: "Estás ejecutando una tarea SEO automatizada para Click Society. No hagas preguntas — ejecuta directamente. No hagas git commit ni git push.",
+          append: "Estás ejecutando una tarea SEO automatizada para Click Society. No hagas preguntas — ejecuta directamente. No hagas git commit ni git push. Solo puedes usar Bash para: npm run build, npm run lint, git status, git diff.",
         },
-        settingSources: ["project"], // carga CLAUDE.md del repo
+        settingSources: ["project"],
         persistSession: false,
         model: "claude-sonnet-4-6",
       },

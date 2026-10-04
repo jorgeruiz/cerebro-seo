@@ -665,7 +665,7 @@ model PlanTask {
   title              String
   objective          String         @db.Text
   prompt             String         @db.Text
-  acceptanceCriteria String[]
+  acceptanceCriteria String[]       @default([])
   lane               TaskLane
   category           String         // "meta" | "blog" | "schema" | "tecnico" | etc.
   status             PlanTaskStatus @default(PENDING)
