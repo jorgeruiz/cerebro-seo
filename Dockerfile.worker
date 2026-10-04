@@ -1,0 +1,30 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# git requerido para clonar y operar repos de clientes.
+# OpenSSL requerido por Prisma en Alpine.
+RUN apk add --no-cache libc6-compat openssl git
+
+# Dependencias
+COPY package.json package-lock.json ./
+# npm ci sin --omit=optional para que se instale el binario de Agent SDK
+# correspondiente a linux-x64-musl (Alpine).
+RUN npm ci
+
+# Prisma
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Código fuente
+COPY . .
+
+# tsconfig path aliases requieren tsx para resolver @ paths
+# El worker NO necesita next build — corre directamente con tsx.
+
+ENV NODE_ENV=production
+
+# Crear directorio de workspaces (será montado como volumen)
+RUN mkdir -p /workspaces
+
+# El servicio arranca con el entrypoint del worker
+CMD ["npx", "tsx", "src/worker/plan-runner.ts"]

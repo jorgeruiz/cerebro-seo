@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-03 (Sesión D — Limpieza: portapapeles + orquestador + constructor directo)
-**Fase actual:** Post-limpieza — preparando nuevo módulo Plan Mensual con Claude Agent SDK
-**Próximo hito:** Implementar nuevo módulo Plan Mensual con worker Agent SDK + terminal en Cerebro SEO
+**Última actualización:** 2026-10-03 (Sesión E — Motor Plan Mensual con Agent SDK)
+**Fase actual:** Plan Mensual v1 — motor de ejecución listo, sin UI
+**Próximo hito:** UI de Plan Mensual + terminal web ASSISTED + import de repos de Constructor
 
 ---
 
@@ -444,6 +444,64 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión E — 2026-10-03 ✅ COMPLETA (Motor Plan Mensual con Agent SDK)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Motor de ejecución completo. Schema, worker, scripts, tests, Dockerfile. Sin UI.
+
+**Trabajo realizado:**
+
+1. **Schema** (migración `20261003231100_plan_mensual_agent_sdk`):
+   - Eliminado: PlanExecution, StepExecution, PlanExecutionStatus, StepExecutionStatus
+   - Agregado a Site: githubRepo, vercelProjectId, defaultBranch
+   - Nuevos modelos: MonthlyPlan, PlanTask (con lane AUTO/ASSISTED/MANUAL), TaskRun
+   - 5 enums nuevos: MonthlyPlanStatus, TaskLane, PlanTaskStatus, TaskRunStatus, TaskRunKind
+
+2. **Worker como servicio separado**:
+   - `src/worker/plan-runner.ts` — entrypoint BullMQ, concurrency 1
+   - `src/worker/task-processor.ts` — flujo completo: repo → memoria → agent → build → PR
+   - `src/worker/repo-manager.ts` — clone/fetch, branch, commit, push, PR via GitHub API
+   - `src/worker/memory-classifier.ts` — clasifica FULL/TEMPLATE/ABSENT
+   - `src/worker/env.ts` — validación Zod separada para vars del worker
+   - Cola `plan-task-execution` en queues.ts (NO consumida por init.ts)
+   - Dockerfile.worker con git + Agent SDK binario musl
+
+3. **Agent SDK** (`@anthropic-ai/claude-agent-sdk`):
+   - `query()` con preset `claude_code`, append de system prompt
+   - `settingSources: ["project"]` para cargar CLAUDE.md del repo del cliente
+   - `permissionMode: "bypassPermissions"` para ejecución no interactiva
+   - maxTurns, maxBudgetUsd, abortController (timeout configurable)
+   - session_id y total_cost_usd del SDKResultSuccess
+
+4. **Scripts**:
+   - `scripts/import-site-repos.ts` — importa githubRepo desde JSON de Constructor (--dry-run)
+   - `scripts/run-task.ts` — crea tarea, encola, polling hasta resultado
+
+5. **Tests** (15 nuevos, todos pasando):
+   - memory-classifier: isTemplatePlaceholder (real vs plantilla)
+   - repo-manager: branchName, sanitizePat
+   - task-processor: composePrompt, reglas de seguridad
+
+**Archivos nuevos:** 10
+**Dockerfile.worker:** imagen Alpine con git + Agent SDK musl binary
+
+**Env vars nuevas para el servicio worker en Easypanel:**
+- `GITHUB_PAT_CLIENT_REPOS` (requerido)
+- `WORKSPACES_DIR` (requerido, volumen persistente)
+- `AGENT_MAX_TURNS` (default: 30)
+- `AGENT_TIMEOUT_MIN` (default: 10)
+- `AGENT_MAX_BUDGET_USD` (default: 2.0)
+- `ANTHROPIC_API_KEY` (requerido)
+- `DATABASE_URL`, `REDIS_URL` (compartidos con web)
+
+**Pasos para crear el servicio worker en Easypanel:**
+1. Crear servicio "cerebro-seo-worker" en el mismo proyecto
+2. Dockerfile: `Dockerfile.worker`
+3. Crear volumen persistente → montar en `/workspaces`
+4. Env vars: las listadas arriba
+5. Comando de inicio: ya definido en Dockerfile (`npx tsx src/worker/plan-runner.ts`)
+
+---
 
 ### Sesión D — 2026-10-03 ✅ COMPLETA (Limpieza: portapapeles + orquestador + constructor)
 **Participantes:** Jorge + Claude Code

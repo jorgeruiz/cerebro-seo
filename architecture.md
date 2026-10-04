@@ -602,6 +602,68 @@ Ver `integration_cerebro.md` para detalle de contratos de datos.
 
 ---
 
+## Plan Mensual — Motor de ejecución con Agent SDK
+
+### Arquitectura
+
+El plan mensual ejecuta tareas SEO directamente sobre repos Next.js de clientes
+usando Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` → `query()`).
+
+```
+Proceso web (Next.js)              Worker separado (plan-runner.ts)
+┌─────────────────────┐            ┌──────────────────────────────┐
+│ Encola PlanTaskJob   │ ──Redis──▶│ Consume cola plan-task       │
+│ en plan-task-exec    │           │ concurrency: 1               │
+│                      │           │                              │
+│ NO ejecuta agentes   │           │ 1. Clone/fetch repo          │
+│ NO importa Agent SDK │           │ 2. Clasificar memoria        │
+└─────────────────────┘           │ 3. npm ci (si lockfile)      │
+                                   │ 4. Agent SDK query()         │
+                                   │ 5. Verificar build           │
+                                   │ 6. Commit + Push + PR        │
+                                   │ 7. Task → PREVIEW            │
+                                   └──────────────────────────────┘
+```
+
+### Modelos
+
+- **MonthlyPlan**: plan mensual por cliente (@@unique clientId+month)
+- **PlanTask**: tarea individual con prompt, lane (AUTO/ASSISTED/MANUAL), status
+- **TaskRun**: cada ejecución de una tarea (sesión de agente, costo, tokens)
+
+### Carriles de ejecución
+
+| Lane | Quién ejecuta | Status flow |
+|------|--------------|-------------|
+| AUTO | Worker en background | PENDING → QUEUED → RUNNING → PREVIEW → MERGED |
+| ASSISTED | Terminal web (futuro) | Sesión interactiva |
+| MANUAL | Humano | Solo pasos documentados |
+
+### Variables de entorno (solo worker)
+
+| Variable | Descripción |
+|---|---|
+| `GITHUB_PAT_CLIENT_REPOS` | Token GitHub con acceso a repos de clientes |
+| `WORKSPACES_DIR` | Ruta al volumen persistente para repos clonados |
+| `AGENT_MAX_TURNS` | Máx turnos del agente (default: 30) |
+| `AGENT_TIMEOUT_MIN` | Timeout en minutos (default: 10) |
+| `AGENT_MAX_BUDGET_USD` | Presupuesto máximo por tarea (default: $2.00) |
+| `ANTHROPIC_API_KEY` | API key para Claude (billing directo) |
+
+### Volumen
+
+`WORKSPACES_DIR` debe ser un volumen persistente en Easypanel montado en el
+servicio worker. Los repos clonados persisten entre jobs (solo se hace fetch+reset,
+no clone completo cada vez).
+
+### Seguridad del PAT
+
+- Nunca en .git/config: se pasa via `GIT_CONFIG_KEY_0=http.extraheader`
+- Nunca en logs: `sanitizePat()` reemplaza antes de escribir
+- Nunca en URLs guardadas en BD
+
+---
+
 ## 8. Caching strategy
 
 | Tipo de dato | TTL | Justificación |

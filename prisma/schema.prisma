@@ -99,22 +99,26 @@ model Client {
   aeoResearches          AeoResearch[]
   nextStepPlans          NextStepPlan[]
   researchReports        ResearchReport[]
-  planExecutions         PlanExecution[]
+  monthlyPlans           MonthlyPlan[]
 }
 
 model Site {
-  id          String  @id @default(cuid())
-  clientId    String
-  client      Client  @relation(fields: [clientId], references: [id])
-  url         String
-  framework   String? // "nextjs" | "wordpress" | "custom" — null = desconocido
-  gscProperty String?
-  ga4Property String?
+  id              String  @id @default(cuid())
+  clientId        String
+  client          Client  @relation(fields: [clientId], references: [id])
+  url             String
+  framework       String? // "nextjs" | "wordpress" | "custom" — null = desconocido
+  githubRepo      String? // "owner/name" — null si no está en GitHub
+  vercelProjectId String? // ID del proyecto en Vercel (opcional)
+  defaultBranch   String  @default("main")
+  gscProperty     String?
+  ga4Property     String?
 
   audits          Audit[]
   pageMetrics     PageMetric[]
   backlinks       Backlink[]
   researchReports ResearchReport[]
+  planTasks       PlanTask[]
 }
 
 model MonthlyCycle {
@@ -508,8 +512,6 @@ model NextStepPlan {
   cost         Decimal  @default(0) @db.Decimal(10, 6)
   triggeredBy  String?
 
-  executions   PlanExecution[]
-
   @@index([clientId, generatedAt])
 }
 
@@ -598,63 +600,107 @@ enum EventType {
   EXTERNAL
 }
 
-enum PlanExecutionStatus {
-  PENDING
-  IN_PROGRESS
+// ---------------------------------------------------------------------------
+// Plan mensual — ejecución de tareas SEO con Agent SDK
+// ---------------------------------------------------------------------------
+
+enum MonthlyPlanStatus {
+  DRAFT
+  REVIEW
+  RUNNING
   COMPLETED
-  FAILED
 }
 
-enum StepExecutionStatus {
+enum TaskLane {
+  AUTO
+  ASSISTED
+  MANUAL
+}
+
+enum PlanTaskStatus {
   PENDING
   QUEUED
   RUNNING
-  APPLIED
+  PREVIEW
+  MERGED
   FAILED
-  HUMAN_TASK
-  IGNORED
+  DISCARDED
 }
 
-model PlanExecution {
-  id          String              @id @default(cuid())
-  planId      String
-  plan        NextStepPlan        @relation(fields: [planId], references: [id])
+enum TaskRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum TaskRunKind {
+  AUTO
+  TERMINAL
+}
+
+model MonthlyPlan {
+  id          String            @id @default(cuid())
   clientId    String
-  client      Client              @relation(fields: [clientId], references: [id])
-  status      PlanExecutionStatus @default(PENDING)
-  yearMonth   String              // "2026-10" (YYYY-MM)
-  triggeredBy String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  client      Client            @relation(fields: [clientId], references: [id])
+  month       String            // "YYYY-MM"
+  status      MonthlyPlanStatus @default(DRAFT)
+  createdById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  steps StepExecution[]
+  tasks PlanTask[]
 
-  @@index([clientId, createdAt])
-  @@index([clientId, yearMonth])
-  @@index([planId])
+  @@unique([clientId, month])
+  @@index([clientId, month])
 }
 
-model StepExecution {
-  id              String              @id @default(cuid())
-  executionId     String
-  execution       PlanExecution       @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  stepIndex       Int
-  kind            String              // NextStepKind original
-  changeType      String?             // Constructor change_type (null si human_task)
-  title           String
-  description     String              @db.Text
-  status          StepExecutionStatus @default(PENDING)
-  idempotencyKey  String              @unique
-  constructorId   String?             // ID del change-request en Constructor
-  constructorCode String?             // request_code
-  reviewUrl       String?
-  commitSha       String?
-  error           String?             @db.Text
-  prompt          String?             @db.Text  // se guarda si Constructor falla, para ejecución manual
-  resultUrl       String?             // URL del contenido publicado o página modificada
-  detailedSteps   Json?               // Pasos detallados generados por Claude para Human Tasks
-  startedAt       DateTime?
-  completedAt     DateTime?
+model PlanTask {
+  id                 String         @id @default(cuid())
+  planId             String
+  plan               MonthlyPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  siteId             String
+  site               Site           @relation(fields: [siteId], references: [id])
+  order              Int
+  title              String
+  objective          String         @db.Text
+  prompt             String         @db.Text
+  acceptanceCriteria String[]
+  lane               TaskLane
+  category           String         // "meta" | "blog" | "schema" | "tecnico" | etc.
+  status             PlanTaskStatus @default(PENDING)
+  branchName         String?
+  prNumber           Int?
+  prUrl              String?
+  previewUrl         String?
+  failureReason      String?        @db.Text
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  @@index([executionId, stepIndex])
+  runs TaskRun[]
+
+  @@index([planId, order])
+  @@index([siteId])
+}
+
+model TaskRun {
+  id             String        @id @default(cuid())
+  taskId         String
+  task           PlanTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kind           TaskRunKind
+  status         TaskRunStatus @default(RUNNING)
+  agentSessionId String?
+  commitSha      String?
+  buildPassed    Boolean?
+  memoryStatus   Json?         // { "site-spec": "FULL"|"TEMPLATE"|"ABSENT", ... }
+  costUsd        Decimal?      @db.Decimal(10, 6)
+  inputTokens    Int?
+  outputTokens   Int?
+  error          String?       @db.Text
+  logTail        String?       @db.Text
+  triggeredById  String?
+  startedAt      DateTime      @default(now())
+  finishedAt     DateTime?
+
+  @@index([taskId, startedAt])
 }

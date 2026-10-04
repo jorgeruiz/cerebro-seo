@@ -38,6 +38,18 @@ export const syncQueue = new Queue("sync", {
   },
 });
 
+// Jobs de ejecución de tareas del plan mensual (Agent SDK).
+// Este queue se consume SOLO por el worker separado (src/worker/plan-runner.ts).
+// El proceso web solo encola; init.ts NO arranca este worker.
+export const planTaskQueue = new Queue("plan-task-execution", {
+  ...connection,
+  defaultJobOptions: {
+    attempts: 1, // sin reintentos — cada run es costoso y tiene side effects (branches, PRs)
+    removeOnComplete: { count: 20 },
+    removeOnFail: { count: 50 },
+  },
+});
+
 // Tipos de jobs — sirven como documentación y para type-safety en los workers
 
 export type DataCollectionJobName =
@@ -93,5 +105,10 @@ export interface CycleCloseJobData {
 export interface ReportJobData {
   clientId: string;
   cycleId: string;
+}
+
+export interface PlanTaskJobData {
+  taskId: string;
+  triggeredById?: string;
 }
 

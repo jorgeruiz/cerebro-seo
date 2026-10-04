@@ -28,6 +28,7 @@ Cerebro SEO es una aplicación SEO **100% interna** para Click Society, agencia 
 - **Recharts para gráficas.** Mismo que Cerebro.
 - **NextAuth v4 con Google OAuth.** Solo equipo interno (ADMIN/EDITOR). Sin magic link, sin acceso de usuarios externos.
 - **BullMQ + Redis para jobs en background.** Crawls y trackings van por aquí, nunca en el request HTTP.
+- **Worker de Plan Mensual es un servicio separado.** El proceso web SOLO encola jobs en `plan-task-execution`. El worker (`src/worker/plan-runner.ts`) corre como otro servicio en Easypanel (Dockerfile.worker). Ningún código del proceso web importa ni ejecuta agentes de Claude Agent SDK.
 
 ### Convenciones de código
 - Componentes React: PascalCase, un componente por archivo.
