@@ -81,6 +81,8 @@ export function createCanUseTool(repoCwd: string) {
     }
 
     if (tool_name === "Glob") {
+      const path = String(toolInput.path ?? "");
+      if (path && !isInsideRepo(path, repoCwd)) return deny(`Fuera del repo: ${path}`);
       return allow();
     }
 

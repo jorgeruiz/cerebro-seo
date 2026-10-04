@@ -41,6 +41,14 @@ describe("agent-permissions canUseTool", () => {
       expect(result.behavior).toBe("allow");
     });
 
+    it("allows Glob with path inside repo", async () => {
+      const result = await canUseTool({
+        tool_name: "Glob",
+        input: { pattern: "**/*.tsx", path: `${REPO}/src` },
+      });
+      expect(result.behavior).toBe("allow");
+    });
+
     it("allows Grep inside repo", async () => {
       const result = await canUseTool({
         tool_name: "Grep",
@@ -209,6 +217,22 @@ describe("agent-permissions canUseTool", () => {
       const result = await canUseTool({
         tool_name: "Agent",
         input: { prompt: "do something" },
+      });
+      expect(result.behavior).toBe("deny");
+    });
+
+    it("denies Glob with absolute path outside repo", async () => {
+      const result = await canUseTool({
+        tool_name: "Glob",
+        input: { pattern: "**/*.ts", path: "/workspaces" },
+      });
+      expect(result.behavior).toBe("deny");
+    });
+
+    it("denies Glob with path traversal", async () => {
+      const result = await canUseTool({
+        tool_name: "Glob",
+        input: { pattern: "**/*.ts", path: `${REPO}/../otro-repo` },
       });
       expect(result.behavior).toBe("deny");
     });
