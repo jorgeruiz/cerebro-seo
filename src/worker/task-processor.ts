@@ -136,9 +136,35 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       return;
     }
 
-    // Sin cambios → FAILED
+    // ── 6b. Parse structured result from agent ────────────────────────
+    const structured = parseAgentResult(agentResult.resultText);
+    console.log(`[plan-task] Agent summary: ${structured.summary.slice(0, 200)}`);
+
+    // Sin cambios → check if justified
     if (!hasDiff(dir)) {
-      await failRun(run.id, "NO_CHANGES");
+      if (structured.noChangeReason) {
+        // Agent explained why no changes needed → SUCCEEDED, not FAILED
+        console.log(`[plan-task] No changes needed: ${structured.noChangeReason}`);
+        await prisma.taskRun.update({
+          where: { id: run.id },
+          data: {
+            status: "SUCCEEDED",
+            costUsd: new Decimal(agentResult.costUsd.toFixed(6)),
+            inputTokens: agentResult.inputTokens,
+            outputTokens: agentResult.outputTokens,
+            logTail: JSON.stringify(structured),
+            finishedAt: new Date(),
+          },
+        });
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: { status: "MERGED", failureReason: `NO_CHANGES_NEEDED: ${structured.noChangeReason}` },
+        });
+        await logApiUsage({ provider: "anthropic", endpoint: "agent-sdk-plan-task", cost: agentResult.costUsd, clientId: task.plan.clientId });
+        return;
+      }
+      // No changes and no justification → FAILED
+      await failRun(run.id, "NO_CHANGES", JSON.stringify(structured));
       await failTask(taskId, "NO_CHANGES");
       return;
     }
@@ -152,6 +178,11 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       "",
       `**Objetivo:** ${task.objective}`,
       "",
+      "**Resumen del agente:**",
+      structured.summary,
+      "",
+      structured.changedRoutes.length > 0 ? `**Rutas afectadas:** ${structured.changedRoutes.join(", ")}` : "",
+      "",
       "**Criterios de aceptación:**",
       ...task.acceptanceCriteria.map((c) => `- ${c}`),
       "",
@@ -160,7 +191,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       "",
       "---",
       "_Generado por Cerebro SEO Agent_",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     const pr = await createPullRequest({
       githubRepo: site.githubRepo,
@@ -192,6 +223,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         costUsd: new Decimal(agentResult.costUsd.toFixed(6)),
         inputTokens: agentResult.inputTokens,
         outputTokens: agentResult.outputTokens,
+        logTail: JSON.stringify(structured),
         finishedAt: new Date(),
       },
     });
@@ -220,6 +252,30 @@ interface AgentResult {
   costUsd: number;
   inputTokens: number;
   outputTokens: number;
+  resultText: string; // raw text from the agent's final result
+}
+
+export interface AgentStructuredResult {
+  summary: string;
+  changedRoutes: string[];
+  noChangeReason: string | null;
+}
+
+function parseAgentResult(text: string): AgentStructuredResult {
+  // Try to extract JSON block from agent output
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*"summary"[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
+      return {
+        summary: String(parsed.summary ?? ""),
+        changedRoutes: Array.isArray(parsed.changedRoutes) ? parsed.changedRoutes : [],
+        noChangeReason: parsed.noChangeReason ?? null,
+      };
+    } catch { /* fall through */ }
+  }
+  // Fallback: use full text as summary
+  return { summary: text.slice(0, 2000), changedRoutes: [], noChangeReason: null };
 }
 
 function composePrompt(task: {
@@ -248,6 +304,13 @@ function composePrompt(task: {
     "- No instales dependencias nuevas sin justificación clara.",
     "- No hagas git commit ni git push — el worker lo hace después.",
     "- No salgas del directorio del repo.",
+    "",
+    `## Resultado`,
+    "Al terminar, responde con un bloque JSON:",
+    "```json",
+    `{"summary": "resumen de lo que hiciste", "changedRoutes": ["/ruta1", "/ruta2"], "noChangeReason": null}`,
+    "```",
+    "Si no hiciste cambios, explica por qué en noChangeReason y deja changedRoutes vacío.",
   ];
   return sections.join("\n");
 }
@@ -267,6 +330,7 @@ async function runAgent(
   let costUsd = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let resultText = "";
 
   try {
     const prompt = composePrompt(task);
@@ -302,8 +366,8 @@ async function runAgent(
         const result = message as SDKResultSuccess;
         sessionId = result.session_id;
         costUsd = result.total_cost_usd;
+        resultText = result.result ?? "";
 
-        // Aggregate model usage
         for (const usage of Object.values(result.modelUsage ?? {})) {
           inputTokens += usage.inputTokens;
           outputTokens += usage.outputTokens;
@@ -314,7 +378,7 @@ async function runAgent(
     clearTimeout(timeout);
   }
 
-  return { sessionId, costUsd, inputTokens, outputTokens };
+  return { sessionId, costUsd, inputTokens, outputTokens, resultText };
 }
 
 // ─── Preflight ───────────────────────────────────────────────────────────────

@@ -1,7 +1,74 @@
 import { describe, it, expect } from "vitest";
 
-// Test prompt composition logic (extracted pattern, not the function directly
-// since it depends on workerEnv)
+// ─── parseAgentResult (exported for testing) ─────────────────────────────────
+
+interface AgentStructuredResult {
+  summary: string;
+  changedRoutes: string[];
+  noChangeReason: string | null;
+}
+
+function parseAgentResult(text: string): AgentStructuredResult {
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*"summary"[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
+      return {
+        summary: String(parsed.summary ?? ""),
+        changedRoutes: Array.isArray(parsed.changedRoutes) ? parsed.changedRoutes : [],
+        noChangeReason: parsed.noChangeReason ?? null,
+      };
+    } catch { /* fall through */ }
+  }
+  return { summary: text.slice(0, 2000), changedRoutes: [], noChangeReason: null };
+}
+
+describe("parseAgentResult", () => {
+  it("parses JSON code block with changes", () => {
+    const text = `I updated the meta tags.\n\n\`\`\`json\n{"summary":"Updated title and description on /servicios","changedRoutes":["/servicios","/contacto"],"noChangeReason":null}\n\`\`\``;
+    const result = parseAgentResult(text);
+    expect(result.summary).toBe("Updated title and description on /servicios");
+    expect(result.changedRoutes).toEqual(["/servicios", "/contacto"]);
+    expect(result.noChangeReason).toBeNull();
+  });
+
+  it("parses JSON code block with no changes", () => {
+    const text = `\`\`\`json\n{"summary":"All meta tags are within limits","changedRoutes":[],"noChangeReason":"Title is 52 chars and description is 148 chars, both within limits."}\n\`\`\``;
+    const result = parseAgentResult(text);
+    expect(result.summary).toBe("All meta tags are within limits");
+    expect(result.changedRoutes).toEqual([]);
+    expect(result.noChangeReason).toBe("Title is 52 chars and description is 148 chars, both within limits.");
+  });
+
+  it("parses inline JSON without code fence", () => {
+    const text = `{"summary":"Fixed title","changedRoutes":["/"],"noChangeReason":null}`;
+    const result = parseAgentResult(text);
+    expect(result.summary).toBe("Fixed title");
+    expect(result.changedRoutes).toEqual(["/"]);
+  });
+
+  it("falls back to raw text when no JSON", () => {
+    const text = "I reviewed the meta tags and everything looks good. No changes needed.";
+    const result = parseAgentResult(text);
+    expect(result.summary).toBe(text);
+    expect(result.changedRoutes).toEqual([]);
+    expect(result.noChangeReason).toBeNull();
+  });
+
+  it("handles malformed JSON gracefully", () => {
+    const text = `\`\`\`json\n{broken json\n\`\`\``;
+    const result = parseAgentResult(text);
+    expect(result.summary).toBe(text.slice(0, 2000));
+  });
+
+  it("truncates very long text", () => {
+    const text = "x".repeat(5000);
+    const result = parseAgentResult(text);
+    expect(result.summary.length).toBe(2000);
+  });
+});
+
+// ─── composePrompt ───────────────────────────────────────────────────────────
 
 describe("task-processor prompt composition", () => {
   function composePrompt(task: {

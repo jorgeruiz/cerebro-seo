@@ -97,16 +97,28 @@ export function checkoutBranch(dir: string, branch: string): void {
 }
 
 /**
+ * Hash del lockfile se guarda fuera del repo del cliente
+ * en WORKSPACES_DIR/.meta/<owner>__<repo>.hash para no contaminar el workspace.
+ */
+function metaHashPath(dir: string): string {
+  const repoName = dir.split("/").pop() ?? "unknown";
+  const metaDir = join(WORKSPACES, ".meta");
+  if (!existsSync(metaDir)) {
+    execSync(`mkdir -p "${metaDir}"`);
+  }
+  return join(metaDir, `${repoName}.hash`);
+}
+
+/**
  * Verifica si npm ci es necesario (lockfile cambió).
  */
 export function needsInstall(dir: string): boolean {
   const lockPath = join(dir, "package-lock.json");
-  const hashPath = join(dir, ".lockfile-hash");
-
   if (!existsSync(lockPath)) return false;
 
   const lockContent = readFileSync(lockPath, "utf-8");
   const currentHash = createHash("sha256").update(lockContent).digest("hex");
+  const hashPath = metaHashPath(dir);
 
   if (existsSync(hashPath)) {
     const savedHash = readFileSync(hashPath, "utf-8").trim();
@@ -118,12 +130,10 @@ export function needsInstall(dir: string): boolean {
 
 export function saveInstallHash(dir: string): void {
   const lockPath = join(dir, "package-lock.json");
-  const hashPath = join(dir, ".lockfile-hash");
-
   if (!existsSync(lockPath)) return;
   const lockContent = readFileSync(lockPath, "utf-8");
   const hash = createHash("sha256").update(lockContent).digest("hex");
-  writeFileSync(hashPath, hash);
+  writeFileSync(metaHashPath(dir), hash);
 }
 
 /**
