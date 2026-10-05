@@ -110,5 +110,6 @@ export interface ReportJobData {
 export interface PlanTaskJobData {
   taskId: string;
   triggeredById?: string;
+  preflight?: boolean; // clone → memoria → npm ci → build, sin agente/commit/PR
 }
 

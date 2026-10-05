@@ -36,6 +36,10 @@ import {
 import type { PlanTaskJobData } from "@/server/jobs/queues";
 
 export async function processTask(jobData: PlanTaskJobData): Promise<void> {
+  if (jobData.preflight) {
+    return processPreflight(jobData);
+  }
+
   const { taskId, triggeredById } = jobData;
 
   // ── 1. Cargar task + site ──────────────────────────────────────────────
@@ -311,6 +315,110 @@ async function runAgent(
   }
 
   return { sessionId, costUsd, inputTokens, outputTokens };
+}
+
+// ─── Preflight ───────────────────────────────────────────────────────────────
+
+/**
+ * Preflight: clone → memoria → npm ci --include=dev → build.
+ * Sin agente, sin commit, sin PR. Solo verifica que el sitio puede compilar.
+ */
+async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
+  const { taskId } = jobData;
+
+  const task = await prisma.planTask.findUniqueOrThrow({
+    where: { id: taskId },
+    include: { site: true, plan: { select: { clientId: true } } },
+  });
+
+  const site = task.site;
+  if (!site.githubRepo) {
+    await failTask(taskId, "NO_GITHUB_REPO");
+    return;
+  }
+
+  await prisma.planTask.update({ where: { id: taskId }, data: { status: "RUNNING" } });
+
+  const run = await prisma.taskRun.create({
+    data: { taskId, kind: "AUTO", status: "RUNNING" },
+  });
+
+  const phases: string[] = [];
+  const startTotal = Date.now();
+
+  try {
+    // Clone/fetch
+    let phaseStart = Date.now();
+    console.log(`[preflight] ${task.title} — cloning ${site.githubRepo}...`);
+    const dir = await ensureRepo(site.githubRepo, site.defaultBranch);
+    phases.push(`clone: ${Date.now() - phaseStart}ms`);
+
+    // Memory
+    phaseStart = Date.now();
+    const memoryStatus = await classifyMemory(dir);
+    phases.push(`memory: ${Date.now() - phaseStart}ms`);
+    await prisma.taskRun.update({
+      where: { id: run.id },
+      data: { memoryStatus: memoryStatus as unknown as InputJsonValue },
+    });
+    console.log(`[preflight] ${task.title} — memory: ${JSON.stringify(memoryStatus)}`);
+
+    // npm ci
+    phaseStart = Date.now();
+    if (needsInstall(dir)) {
+      console.log(`[preflight] ${task.title} — npm ci --include=dev...`);
+      try {
+        runInstall(dir);
+      } catch (installErr) {
+        const msg = installErr instanceof Error ? installErr.message : String(installErr);
+        if (msg === "LOCKFILE_OUT_OF_SYNC") {
+          phases.push(`install: LOCKFILE_OUT_OF_SYNC (${Date.now() - phaseStart}ms)`);
+          await failRun(run.id, "LOCKFILE_OUT_OF_SYNC", phases.join(" | "));
+          await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
+          console.log(`[preflight] ${task.title} — ❌ LOCKFILE_OUT_OF_SYNC`);
+          return;
+        }
+        throw installErr;
+      }
+      phases.push(`install: ${Date.now() - phaseStart}ms`);
+    } else {
+      phases.push("install: skipped (lockfile unchanged)");
+    }
+
+    // Build
+    phaseStart = Date.now();
+    console.log(`[preflight] ${task.title} — building...`);
+    const buildResult = verifyBuild(dir);
+    phases.push(`build: ${Date.now() - phaseStart}ms`);
+
+    const totalMs = Date.now() - startTotal;
+
+    if (buildResult.passed) {
+      await prisma.taskRun.update({
+        where: { id: run.id },
+        data: {
+          status: "SUCCEEDED",
+          buildPassed: true,
+          logTail: phases.join(" | "),
+          finishedAt: new Date(),
+        },
+      });
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: { status: "MERGED", failureReason: null }, // MERGED = preflight passed
+      });
+      console.log(`[preflight] ${task.title} — ✅ OK (${totalMs}ms) | ${phases.join(" | ")}`);
+    } else {
+      await failRun(run.id, "BUILD_FAILED", buildResult.logTail);
+      await failTask(taskId, `BUILD_FAILED`);
+      console.log(`[preflight] ${task.title} — ❌ BUILD_FAILED (${totalMs}ms)`);
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? sanitizePat(err.message) : String(err);
+    console.error(`[preflight] ${task.title} — ❌ ${errMsg}`);
+    await failRun(run.id, errMsg);
+    await failTask(taskId, errMsg);
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
