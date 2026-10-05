@@ -123,7 +123,14 @@ export function saveInstallHash(dir: string): void {
 }
 
 export function runInstall(dir: string): void {
-  exec("npm ci", { cwd: dir });
+  try {
+    exec("npm ci", { cwd: dir });
+  } catch {
+    // npm ci falla si package-lock.json está desincronizado con package.json.
+    // Fallback a npm install que actualiza el lockfile automáticamente.
+    console.warn("[repo-manager] npm ci failed (lockfile desync), falling back to npm install");
+    exec("npm install --no-audit --no-fund", { cwd: dir });
+  }
   saveInstallHash(dir);
 }
 
