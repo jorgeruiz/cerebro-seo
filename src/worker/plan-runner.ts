@@ -27,6 +27,8 @@ const worker = new Worker<PlanTaskJobData>(
   {
     connection: redisBullMQ,
     concurrency: 1,
+    lockDuration: 600_000,    // 10 min — agent tasks can take several minutes
+    lockRenewTime: 300_000,   // renew lock every 5 min
   }
 );
 
