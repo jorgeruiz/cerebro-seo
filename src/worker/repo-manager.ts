@@ -76,6 +76,10 @@ export async function ensureRepo(
     exec(`git clean -fd`, { cwd: dir });
   }
 
+  // Configurar autor para que Vercel no bloquee los deploys
+  exec(`git config user.name "${workerEnv.GIT_AUTHOR_NAME}"`, { cwd: dir, silent: true });
+  exec(`git config user.email "${workerEnv.GIT_AUTHOR_EMAIL}"`, { cwd: dir, silent: true });
+
   return dir;
 }
 
@@ -175,8 +179,11 @@ export function commitAndPush(
   branch: string,
   message: string
 ): string {
+  const authorName = workerEnv.GIT_AUTHOR_NAME;
+  const authorEmail = workerEnv.GIT_AUTHOR_EMAIL;
+
   exec("git add -A", { cwd: dir });
-  exec(`git commit -m "${message.replace(/"/g, '\\"')}" --author="Cerebro SEO Agent <agent@clicksociety.com.mx>"`, { cwd: dir });
+  exec(`git commit -m "${message.replace(/"/g, '\\"')}" --author="${authorName} <${authorEmail}>"`, { cwd: dir });
   exec(`git push origin ${branch} --force`, { cwd: dir });
 
   const sha = exec("git rev-parse HEAD", { cwd: dir, silent: true }).trim();
