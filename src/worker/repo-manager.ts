@@ -122,14 +122,23 @@ export function saveInstallHash(dir: string): void {
   writeFileSync(hashPath, hash);
 }
 
+/**
+ * Instala dependencias con npm ci --include=dev.
+ * --include=dev es necesario porque NODE_ENV=production omite devDeps
+ * y los repos de clientes necesitan tailwindcss, postcss, etc. para el build.
+ *
+ * Si npm ci falla por lockfile desincronizado, la tarea falla con
+ * LOCKFILE_OUT_OF_SYNC — no se "arregla" en silencio.
+ */
 export function runInstall(dir: string): void {
   try {
-    exec("npm ci", { cwd: dir });
-  } catch {
-    // npm ci falla si package-lock.json está desincronizado con package.json.
-    // Fallback a npm install que actualiza el lockfile automáticamente.
-    console.warn("[repo-manager] npm ci failed (lockfile desync), falling back to npm install");
-    exec("npm install --no-audit --no-fund", { cwd: dir });
+    exec("npm ci --include=dev", { cwd: dir });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("npm ci") && (msg.includes("in sync") || msg.includes("Missing:"))) {
+      throw new Error("LOCKFILE_OUT_OF_SYNC");
+    }
+    throw err;
   }
   saveInstallHash(dir);
 }

@@ -94,8 +94,18 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
 
     // ── 4. npm ci si lockfile cambió ───────────────────────────────────
     if (needsInstall(dir)) {
-      console.log(`[plan-task] Running npm ci...`);
-      runInstall(dir);
+      console.log(`[plan-task] Running npm ci --include=dev...`);
+      try {
+        runInstall(dir);
+      } catch (installErr) {
+        const installMsg = installErr instanceof Error ? installErr.message : String(installErr);
+        if (installMsg === "LOCKFILE_OUT_OF_SYNC") {
+          await failRun(run.id, "LOCKFILE_OUT_OF_SYNC");
+          await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
+          return;
+        }
+        throw installErr;
+      }
     }
 
     // ── 5. Agent SDK query() ───────────────────────────────────────────

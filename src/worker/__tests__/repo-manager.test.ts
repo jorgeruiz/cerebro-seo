@@ -21,6 +21,26 @@ describe("repo-manager helpers", () => {
     });
   });
 
+  describe("LOCKFILE_OUT_OF_SYNC detection", () => {
+    it("detects npm ci sync error message", () => {
+      const errorMsg = "npm ci can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync";
+      const isLockfileSync = errorMsg.includes("in sync") || errorMsg.includes("Missing:");
+      expect(isLockfileSync).toBe(true);
+    });
+
+    it("detects Missing: package from lock file", () => {
+      const errorMsg = "Missing: critters@0.0.25 from lock file";
+      const isLockfileSync = errorMsg.includes("in sync") || errorMsg.includes("Missing:");
+      expect(isLockfileSync).toBe(true);
+    });
+
+    it("does not flag other npm ci errors", () => {
+      const errorMsg = "npm error code ENOENT\nnpm error syscall open";
+      const isLockfileSync = errorMsg.includes("in sync") || errorMsg.includes("Missing:");
+      expect(isLockfileSync).toBe(false);
+    });
+  });
+
   describe("sanitizePat", () => {
     it("replaces PAT in text", () => {
       const pat = "ghp_test1234567890";
