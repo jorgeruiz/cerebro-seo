@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-06 (Sesión S2a — Schema plan mensual + platform detection)
-**Fase actual:** Plan Mensual S2 — schema actualizado, platform detection implementada
-**Próximo hito:** S2b Análisis unificado con candidatas + S2c retiro Advisor
+**Última actualización:** 2026-10-06 (Sesión S2b — Análisis unificado con candidatas, EN PROGRESO)
+**Fase actual:** Plan Mensual S2 — S2a completa, S2b en progreso
+**Próximo hito:** S2b completar Análisis unificado → S2c retiro Advisor → S2d "Mandar al plan"
 
 ---
 
@@ -444,6 +444,25 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión S2b — 2026-10-06 🔄 EN PROGRESO (Análisis unificado con candidatas)
+**Participantes:** Jorge + Claude Code
+
+**Objetivo:** Análisis Claude pasa a ser la única fuente de recomendaciones: diagnóstico + tareas candidatas (4-8 CONTENT + 4-8 CODE) con kind, mode, priority, effort, justificación.
+
+**Trabajo pendiente:**
+1. Ampliar gatherClientContext con: collectSignals() del Advisor, ContentPlan vigente, tareas VOIDED/FAILED del plan anterior, precondiciones, elegibilidad
+2. Nuevo output: candidatas[] en AnalysisResult con id estable, modo (AI/HYBRID/HUMAN), fuente
+3. Validación Zod con 2 intentos y caché de bloques (perfil + señales)
+4. Compatibilidad con análisis viejos (sin candidatas)
+5. Prueba con Quicsa: diagnóstico + candidatas, costo y tiempo
+
+**Decisiones tomadas:**
+- ContentPlan será input del Análisis (opción a del diagnóstico S2)
+- Site.framework conservado; Site.platform agregado para gate
+- MonthlyPlan.cycleId opcional
+
+---
 
 ### Sesión S2a — 2026-10-06 ✅ COMPLETA (Schema plan mensual + platform detection)
 **Participantes:** Jorge + Claude Code
