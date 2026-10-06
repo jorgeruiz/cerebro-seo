@@ -1,7 +1,9 @@
 /**
  * Lista blanca de permisos para el agente.
  *
- * canUseTool: callback que decide si una invocación de herramienta es permitida.
+ * canUseTool: callback con firma del Agent SDK:
+ *   (toolName: string, input: Record<string, unknown>, options: { signal }) => PermissionResult
+ *
  * Solo permite operaciones dentro del repo y un subset de comandos Bash.
  */
 
@@ -18,11 +20,6 @@ const ALLOWED_BASH_PREFIXES = [
 /** Patrones prohibidos en rutas */
 const FORBIDDEN_PATH_PATTERNS = [".env", ".env.local", ".env.production"];
 
-export interface ToolUseInput {
-  tool_name: string;
-  input: Record<string, unknown>;
-}
-
 export interface CanUseToolResult {
   behavior: "allow" | "deny";
   message?: string;
@@ -35,7 +32,6 @@ function isInsideRepo(filePath: string, repoCwd: string): boolean {
   const resolved = resolve(repoCwd, filePath);
   const normalized = normalize(resolved);
   const rel = relative(repoCwd, normalized);
-  // Fuera del repo si la ruta relativa sube con ..
   return !rel.startsWith("..");
 }
 
@@ -48,15 +44,18 @@ function isEnvFile(filePath: string): boolean {
 }
 
 /**
- * Crea el callback canUseTool para una sesión del agente.
+ * Crea el callback canUseTool con la firma real del Agent SDK:
+ *   (toolName: string, input: Record<string, unknown>, options: { signal }) => Promise<PermissionResult>
  */
 export function createCanUseTool(repoCwd: string) {
-  return async (input: ToolUseInput): Promise<CanUseToolResult> => {
-    const { tool_name } = input;
-    const toolInput = input.input;
+  return async (
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    _options: { signal: AbortSignal }
+  ): Promise<CanUseToolResult> => {
 
-    // ── File tools: Read, Edit, Write, Glob, Grep ──────────────────────
-    if (["Read", "FileRead"].includes(tool_name)) {
+    // ── File tools: Read, Edit, Write ──────────────────────────────────
+    if (["Read", "FileRead"].includes(toolName)) {
       const filePath = String(toolInput.file_path ?? toolInput.path ?? "");
       if (!filePath) return deny("Ruta de archivo vacía.");
       if (isEnvFile(filePath)) return deny(`Prohibido leer archivos .env: ${filePath}`);
@@ -64,15 +63,15 @@ export function createCanUseTool(repoCwd: string) {
       return allow();
     }
 
-    if (["Edit", "FileEdit"].includes(tool_name)) {
-      const filePath = String(toolInput.file_path ?? "");
-      if (!filePath) return deny("Ruta de archivo vacía.");
-      if (isEnvFile(filePath)) return deny(`Prohibido editar archivos .env: ${filePath}`);
-      if (!isInsideRepo(filePath, repoCwd)) return deny(`Fuera del repo: ${filePath}`);
+    if (["Edit", "FileEdit"].includes(toolName)) {
+      const editPath = String(toolInput.file_path ?? "");
+      if (!editPath) return deny("Ruta de archivo vacía.");
+      if (isEnvFile(editPath)) return deny(`Prohibido editar archivos .env: ${editPath}`);
+      if (!isInsideRepo(editPath, repoCwd)) return deny(`Fuera del repo: ${editPath}`);
       return allow();
     }
 
-    if (["Write", "FileWrite"].includes(tool_name)) {
+    if (["Write", "FileWrite"].includes(toolName)) {
       const filePath = String(toolInput.file_path ?? "");
       if (!filePath) return deny("Ruta de archivo vacía.");
       if (isEnvFile(filePath)) return deny(`Prohibido escribir archivos .env: ${filePath}`);
@@ -80,20 +79,20 @@ export function createCanUseTool(repoCwd: string) {
       return allow();
     }
 
-    if (tool_name === "Glob") {
+    if (toolName === "Glob") {
       const path = String(toolInput.path ?? "");
       if (path && !isInsideRepo(path, repoCwd)) return deny(`Fuera del repo: ${path}`);
       return allow();
     }
 
-    if (tool_name === "Grep") {
+    if (toolName === "Grep") {
       const path = String(toolInput.path ?? "");
       if (path && !isInsideRepo(path, repoCwd)) return deny(`Fuera del repo: ${path}`);
       return allow();
     }
 
     // ── Bash: solo comandos en lista blanca ────────────────────────────
-    if (tool_name === "Bash") {
+    if (toolName === "Bash") {
       const command = String(toolInput.command ?? "").trim();
       if (!command) return deny("Comando vacío.");
 
@@ -110,7 +109,7 @@ export function createCanUseTool(repoCwd: string) {
     }
 
     // ── Todo lo demás: deny ────────────────────────────────────────────
-    return deny(`Herramienta no permitida: ${tool_name}`);
+    return deny(`Herramienta no permitida: ${toolName}`);
   };
 }
 
