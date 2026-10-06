@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-03 (Sesión E — Motor Plan Mensual con Agent SDK)
-**Fase actual:** Plan Mensual v1 — motor de ejecución listo, sin UI
-**Próximo hito:** UI de Plan Mensual + terminal web ASSISTED + import de repos de Constructor
+**Última actualización:** 2026-10-06 (Sesión 1b — Prueba end-to-end del motor Plan Mensual)
+**Fase actual:** Plan Mensual v1 — motor probado de punta a punta con tarea real
+**Próximo hito:** Importar repos de todos los clientes SEO desde Constructor + UI de Plan Mensual
 
 ---
 
@@ -444,6 +444,46 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión 1b — 2026-10-05/06 ✅ COMPLETA (Prueba end-to-end del motor Plan Mensual)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Motor probado de punta a punta. Tarea real generó PR #4 con cambios de meta tags en 5 páginas de Quicsa.
+
+**Prueba real (PR #4):**
+- Tarea: "Auditoría meta tags: title y description"
+- Resultado: 6 campos corregidos en 5 archivos (descriptions > 155 chars, titles > 60 chars)
+- Costo: $0.79 USD | Tokens: 1,253 in / 23,392 out | Duración: 345s
+- Build: ✅ pasó | PR: https://github.com/jorgeruiz/quicsa-web/pull/4
+
+**Timing por fase (preflight Quicsa):**
+- Clone: 668ms | Memory: 12ms | npm ci: 41.7s | Build: 40.5s | Total: 83s
+
+**Fixes aplicados durante la prueba:**
+1. `npm ci --include=dev`: NODE_ENV=production omitía devDeps (tailwindcss). Fix: `--include=dev`
+2. LOCKFILE_OUT_OF_SYNC: detección explícita, sin fallback silencioso a npm install
+3. canUseTool firma correcta: era `(input: {tool_name, input})`, real: `(toolName, input, options)`.
+   El agente no podía escribir archivos con la firma vieja.
+4. lockDuration 600s: BullMQ perdía lock default (30s) con tareas de 83s+
+5. AGENT_TIMEOUT_MIN: subido de 10 a 15 en Easypanel (auditoría tardó 10:50 la primera vez)
+6. .lockfile-hash movido a WORKSPACES_DIR/.meta/ (fuera del repo del cliente)
+7. Resultado estructurado: JSON con summary/changedRoutes/noChangeReason
+8. Git author configurable: GIT_AUTHOR_NAME/EMAIL via env (Vercel bloquea autores desconocidos)
+9. Node 24: imagen actualizada de node:20-alpine a node:24-alpine (match Vercel)
+10. PRs en quicsa-web: #1 lockfile sync (mergeado), #2 ssr client wrapper (mergeado)
+
+**Servicio cerebro-seo-worker en Easypanel:**
+- Imagen: node:24-alpine + git + Agent SDK musl
+- Dockerfile: Dockerfile.worker
+- Volumen: /workspaces (persistente)
+- Env vars: GITHUB_PAT, DATABASE_URL, REDIS_URL, ANTHROPIC_API_KEY, WORKSPACES_DIR, AGENT_*, SKIP_ENV_VALIDATION, GIT_AUTHOR_*
+
+**🟡 Deuda técnica:**
+- SKIP_ENV_VALIDATION=1 en worker: el worker importa redis.ts que importa env.ts (web) con vars obligatorias (NEXTAUTH_SECRET, etc.) que el worker no tiene. Fix correcto: que redis.ts lea REDIS_URL de process.env directo, sin pasar por env.ts. O crear un redis-worker.ts separado.
+- Token propio del worker: actualmente usa el PAT personal de jorgeruiz. Ideal: crear un GitHub App o un PAT dedicado con scope mínimo (solo repos de clientes, solo PRs y contenido).
+- tsx instalado on-the-fly: `npx tsx` descarga tsx cada vez que el contenedor arranca. Fix: agregar tsx como dependencia en package.json o pre-instalar en Dockerfile.
+- Preflight solo tiene 1 sitio (Quicsa): falta importar repos de los demás clientes SEO desde Constructor.
+
+---
 
 ### Sesión E — 2026-10-03 ✅ COMPLETA (Motor Plan Mensual con Agent SDK)
 **Participantes:** Jorge + Claude Code
