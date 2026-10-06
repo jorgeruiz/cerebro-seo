@@ -1,6 +1,6 @@
 import { Worker, Job, WorkerOptions } from "bullmq";
 import { Decimal } from "@prisma/client/runtime/library";
-import { redisBullMQ } from "@/lib/redis";
+import { redisBullMQ } from "@/lib/redis-connection";
 import { prisma } from "@/lib/db";
 
 // Jobs críticos que disparan alerta inmediata al fallar permanentemente

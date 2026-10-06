@@ -12,7 +12,7 @@
 import "./env";
 
 import { Worker } from "bullmq";
-import { redisBullMQ } from "@/lib/redis";
+import { redisBullMQ } from "@/lib/redis-connection";
 import { processTask } from "./task-processor";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
 

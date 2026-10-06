@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Stub REDIS_URL before any import touches redis-connection.ts
+vi.stubEnv("REDIS_URL", "redis://localhost:6379");
+
 // ── Hoisted mocks (deben definirse antes de vi.mock) ─────────────────────────
 
 const mockRedis = vi.hoisted(() => ({

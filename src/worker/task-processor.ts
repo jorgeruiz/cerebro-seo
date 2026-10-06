@@ -9,7 +9,7 @@
  * 5. Ejecutar Agent SDK query() con prompt compuesto.
  * 6. Verificar build (npm run build).
  * 7. Commit, push, crear PR.
- * 8. Actualizar task → PREVIEW, run → SUCCEEDED.
+ * 8. Actualizar task → DONE, run → SUCCEEDED.
  */
 
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
@@ -30,7 +30,6 @@ import {
   hasDiff,
   commitAndPush,
   createPullRequest,
-  getPreviewUrl,
   sanitizePat,
 } from "./repo-manager";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
@@ -78,11 +77,6 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     const branch = branchName(taskId);
     checkoutBranch(dir, branch);
 
-    await prisma.planTask.update({
-      where: { id: taskId },
-      data: { branchName: branch },
-    });
-
     // ── 3. Clasificar memoria ──────────────────────────────────────────
     const memoryStatus = await classifyMemory(dir);
     await prisma.taskRun.update({
@@ -90,7 +84,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       data: { memoryStatus: memoryStatus as unknown as InputJsonValue },
     });
 
-    if (task.lane === "AUTO" && !isMemoryComplete(memoryStatus)) {
+    if (task.mode === "AI" && !isMemoryComplete(memoryStatus)) {
       await failRun(run.id, "MEMORY_INCOMPLETE", JSON.stringify(memoryStatus));
       await failTask(taskId, "MEMORY_INCOMPLETE");
       return;
@@ -158,7 +152,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         });
         await prisma.planTask.update({
           where: { id: taskId },
-          data: { status: "MERGED", failureReason: `NO_CHANGES_NEEDED: ${structured.noChangeReason}` },
+          data: { status: "DONE", failureReason: `NO_CHANGES_NEEDED: ${structured.noChangeReason}` },
         });
         await logApiUsage({ provider: "anthropic", endpoint: "agent-sdk-plan-task", cost: agentResult.costUsd, clientId: task.plan.clientId });
         return;
@@ -193,6 +187,8 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       "_Generado por Cerebro SEO Agent_",
     ].filter(Boolean).join("\n");
 
+    // TODO S2e: PR creation moves to plan level (one PR per plan, not per task)
+    // For now, push branch and create PR per task as temporary behavior
     const pr = await createPullRequest({
       githubRepo: site.githubRepo,
       branch,
@@ -201,17 +197,12 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       body: prBody,
     });
 
-    // Intentar obtener preview URL
-    const previewUrl = await getPreviewUrl(site.githubRepo, sha);
-
     // ── 8. Actualizar task y run ───────────────────────────────────────
     await prisma.planTask.update({
       where: { id: taskId },
       data: {
-        status: "PREVIEW",
-        prNumber: pr.number,
-        prUrl: pr.url,
-        previewUrl,
+        status: "DONE",
+        commitShas: [sha],
       },
     });
 
@@ -224,6 +215,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         inputTokens: agentResult.inputTokens,
         outputTokens: agentResult.outputTokens,
         logTail: JSON.stringify(structured),
+        changedRoutes: structured.changedRoutes,
         finishedAt: new Date(),
       },
     });
@@ -235,7 +227,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       clientId: task.plan.clientId,
     });
 
-    console.log(`[plan-task] ✓ Task "${task.title}" → PREVIEW (PR #${pr.number})`);
+    console.log(`[plan-task] ✓ Task "${task.title}" → DONE (PR #${pr.number})`);
   } catch (err) {
     const errMsg = err instanceof Error ? sanitizePat(err.message) : String(err);
     console.error(`[plan-task] ✗ Task "${task.title}" failed:`, errMsg);
@@ -469,7 +461,7 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
       });
       await prisma.planTask.update({
         where: { id: taskId },
-        data: { status: "MERGED", failureReason: null }, // MERGED = preflight passed
+        data: { status: "DONE", failureReason: null }, // MERGED = preflight passed
       });
       console.log(`[preflight] ${task.title} — ✅ OK (${totalMs}ms) | ${phases.join(" | ")}`);
     } else {

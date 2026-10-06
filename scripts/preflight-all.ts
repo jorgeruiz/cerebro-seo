@@ -51,7 +51,7 @@ async function main() {
   for (const site of sites) {
     const plan = await prisma.monthlyPlan.upsert({
       where: { clientId_month: { clientId: site.client.id, month } },
-      create: { clientId: site.client.id, month, status: "DRAFT" },
+      create: { clientId: site.client.id, month, status: "ACTIVE" },
       update: {},
     });
 
@@ -66,9 +66,10 @@ async function main() {
         objective: "Verificar que el sitio puede compilar y está listo para tareas automatizadas",
         prompt: "PREFLIGHT_ONLY",
         acceptanceCriteria: [],
-        lane: "AUTO",
+        mode: "AI",
+        kind: "CODE",
         category: "preflight",
-        status: "QUEUED",
+        status: "READY",
       },
     });
 

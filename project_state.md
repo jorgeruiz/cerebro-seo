@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-06 (Sesión 1b — Prueba end-to-end del motor Plan Mensual)
-**Fase actual:** Plan Mensual v1 — motor probado de punta a punta con tarea real
-**Próximo hito:** Importar repos de todos los clientes SEO desde Constructor + UI de Plan Mensual
+**Última actualización:** 2026-10-06 (Sesión S2a — Schema plan mensual + platform detection)
+**Fase actual:** Plan Mensual S2 — schema actualizado, platform detection implementada
+**Próximo hito:** S2b Análisis unificado con candidatas + S2c retiro Advisor
 
 ---
 
@@ -444,6 +444,31 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión S2a — 2026-10-06 ✅ COMPLETA (Schema plan mensual + platform detection)
+**Participantes:** Jorge + Claude Code
+
+**Schema (migración `20261006050000_s2a_plan_mensual_platform`):**
+- MonthlyPlan: estados PLANNING→ACTIVE→IN_REVIEW→PUBLISHED, cycleId?, analysisId?, branchName/prNumber/prUrl/previewUrl (plan-level), mergedAt/mergedById, completedAt
+- PlanTask: lane→mode (AI|HYBRID|HUMAN), kind (CONTENT|CODE), priority, effort, sourceCandidateId, commitShas[], resultUrls[], voidReason, completedById/At. Estados PLANNING→READY→RUNNING→WAITING_HUMAN→DONE|FAILED|VOIDED
+- PlanStep (nuevo): pasos por tarea con tipo AI|HUMAN, prompt, status, acceptanceCriteria
+- TaskRun: stepId?, changedRoutes[]
+- Site: platform (NEXTJS|WORDPRESS|MIGRACION|OTRO), platformDetectedAt
+
+**Platform detection (`src/lib/site-platform.ts`):**
+- Señales técnicas: __NEXT_DATA__, /_next/, /wp-content/, meta generator, /wp-json
+- Combina con framework (Notion) para detectar MIGRACION
+- Script `detect-site-platforms.ts` con --dry-run
+- 12 tests: Next.js, WordPress, MIGRACION, texto que menciona WordPress sin ser WP, OTRO, fetch errors
+- Gate de elegibilidad: isEligibleForExecution(), ineligibilityReason()
+
+**Fix SKIP_ENV_VALIDATION:**
+- `src/lib/redis-connection.ts`: lee REDIS_URL de process.env directo, sin importar env.ts
+- Worker y queues.ts usan redis-connection.ts en vez de redis.ts
+- base-worker.ts también migrado a redis-connection.ts
+- Worker ya no necesita SKIP_ENV_VALIDATION
+
+---
 
 ### Sesión 1b — 2026-10-05/06 ✅ COMPLETA (Prueba end-to-end del motor Plan Mensual)
 **Participantes:** Jorge + Claude Code

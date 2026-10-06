@@ -4,7 +4,7 @@
  *
  * Uso:
  *   npx tsx scripts/run-task.ts --siteId cm... --title "Agregar JSON-LD" --prompt "Agregar schema LocalBusiness..."
- *   npx tsx scripts/run-task.ts --siteId cm... --title "..." --prompt "..." --lane AUTO
+ *   npx tsx scripts/run-task.ts --siteId cm... --title "..." --prompt "..." --mode AI
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -17,7 +17,7 @@ function parseArgs(): {
   siteId: string;
   title: string;
   prompt: string;
-  lane: "AUTO" | "ASSISTED" | "MANUAL";
+  mode: "AI" | "HYBRID" | "HUMAN";
 } {
   const args = process.argv.slice(2);
   const get = (flag: string): string | undefined => {
@@ -28,20 +28,24 @@ function parseArgs(): {
   const siteId = get("--siteId");
   const title = get("--title");
   const prompt = get("--prompt");
-  const lane = (get("--lane") ?? "AUTO").toUpperCase() as "AUTO" | "ASSISTED" | "MANUAL";
+  const modeRaw = (get("--mode") ?? get("--lane") ?? "AI").toUpperCase();
+  // Map old lane values to new mode values
+  const MODE_MAP: Record<string, "AI" | "HYBRID" | "HUMAN"> = {
+    AUTO: "AI", AI: "AI", ASSISTED: "HYBRID", HYBRID: "HYBRID", MANUAL: "HUMAN", HUMAN: "HUMAN",
+  };
+  const mode = MODE_MAP[modeRaw] ?? "AI";
 
   if (!siteId || !title || !prompt) {
-    console.error("Uso: npx tsx scripts/run-task.ts --siteId <id> --title <título> --prompt <prompt> [--lane AUTO]");
+    console.error("Uso: npx tsx scripts/run-task.ts --siteId <id> --title <título> --prompt <prompt> [--mode AI]");
     process.exit(1);
   }
 
-  return { siteId, title, prompt, lane };
+  return { siteId, title, prompt, mode };
 }
 
 async function main() {
-  const { siteId, title, prompt, lane } = parseArgs();
+  const { siteId, title, prompt, mode } = parseArgs();
 
-  // Verificar site
   const site = await prisma.site.findUniqueOrThrow({
     where: { id: siteId },
     include: { client: { select: { id: true, name: true } } },
@@ -55,28 +59,19 @@ async function main() {
   console.log(`📋 Cliente: ${site.client.name}`);
   console.log(`🌐 Site: ${site.url} (${site.githubRepo})`);
   console.log(`📝 Tarea: ${title}`);
-  console.log(`🛤  Lane: ${lane}\n`);
+  console.log(`🛤  Mode: ${mode}\n`);
 
-  // Obtener o crear MonthlyPlan del mes
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   const plan = await prisma.monthlyPlan.upsert({
-    where: {
-      clientId_month: { clientId: site.client.id, month },
-    },
-    create: {
-      clientId: site.client.id,
-      month,
-      status: "RUNNING",
-    },
+    where: { clientId_month: { clientId: site.client.id, month } },
+    create: { clientId: site.client.id, month, status: "ACTIVE" },
     update: {},
   });
 
-  // Contar tareas existentes para el order
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
-  // Crear PlanTask
   const task = await prisma.planTask.create({
     data: {
       planId: plan.id,
@@ -86,15 +81,15 @@ async function main() {
       objective: title,
       prompt,
       acceptanceCriteria: ["Build pasa sin errores", "Cambios son coherentes con el prompt"],
-      lane,
+      mode,
+      kind: "CODE",
       category: "manual",
-      status: "QUEUED",
+      status: "READY",
     },
   });
 
   console.log(`✓ Tarea creada: ${task.id}`);
 
-  // Encolar
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
     console.error("✗ REDIS_URL no definido");
@@ -107,9 +102,8 @@ async function main() {
   await queue.add("plan-task", { taskId: task.id });
   console.log(`✓ Job encolado. Esperando resultado...\n`);
 
-  // Polling
   const startTime = Date.now();
-  const maxWait = 15 * 60 * 1000; // 15 minutos
+  const maxWait = 15 * 60 * 1000;
 
   while (Date.now() - startTime < maxWait) {
     await new Promise((r) => setTimeout(r, 5_000));
@@ -122,15 +116,13 @@ async function main() {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     process.stdout.write(`\r⏳ ${elapsed}s — status: ${updated.status}`);
 
-    if (["PREVIEW", "MERGED", "FAILED", "DISCARDED"].includes(updated.status)) {
+    if (["DONE", "FAILED", "VOIDED"].includes(updated.status)) {
       console.log("\n");
 
-      if (updated.status === "PREVIEW" || updated.status === "MERGED") {
+      if (updated.status === "DONE") {
         console.log(`✅ Tarea completada: ${updated.status}`);
-        if (updated.prUrl) console.log(`   PR: ${updated.prUrl}`);
-        if (updated.previewUrl) console.log(`   Preview: ${updated.previewUrl}`);
       } else {
-        console.log(`❌ Tarea falló: ${updated.failureReason ?? "sin detalle"}`);
+        console.log(`❌ Tarea falló: ${updated.failureReason ?? updated.voidReason ?? "sin detalle"}`);
       }
 
       const lastRun = updated.runs[0];
