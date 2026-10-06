@@ -67,11 +67,11 @@
 
     /* ── Secondary ────────────────────────────────────────── */
     --secondary:            oklch(0.112 0.003 106);  /* #121210 — s3 */
-    --secondary-foreground: oklch(0.810 0.017 87);   /* #c9c4b5 — dim */
+    --secondary-foreground: oklch(0.850 0.018 87);   /* dim — más claro */
 
     /* ── Muted ────────────────────────────────────────────── */
     --muted:            oklch(0.190 0.004 106);  /* #242420 — s2 */
-    --muted-foreground: oklch(0.540 0.011 87);   /* #7a766b */
+    --muted-foreground: oklch(0.640 0.012 87);   /* más legible */
 
     /* ── Accent ───────────────────────────────────────────── */
     --accent:            oklch(0.190 0.004 106);  /* #242420 — s2 */
@@ -83,9 +83,9 @@
     --destructive: oklch(0.627 0.172 28);   /* #e05a4a */
 
     /* ── Borders / Inputs ─────────────────────────────────── */
-    --border:        oklch(0.220 0.004 106);  /* #2a2a26 */
-    --input:         oklch(0.220 0.004 106);
-    --sidebar-border: oklch(0.220 0.004 106);
+    --border:        oklch(0.300 0.005 106);  /* más visible */
+    --input:         oklch(0.300 0.005 106);
+    --sidebar-border: oklch(0.300 0.005 106);
 
     /* ── Ring ─────────────────────────────────────────────── */
     --ring:         oklch(0.575 0.110 134);  /* #5e8a4a — verde oscuro */
@@ -106,10 +106,10 @@
     --ds-surface: oklch(0.152 0.004 106);
     --ds-s2:      oklch(0.190 0.004 106);
     --ds-s3:      oklch(0.112 0.003 106);
-    --ds-line:    oklch(0.220 0.004 106);
+    --ds-line:    oklch(0.300 0.005 106);
     --ds-cream:   oklch(0.930 0.022 87);
-    --ds-dim:     oklch(0.810 0.017 87);
-    --ds-muted:   oklch(0.540 0.011 87);
+    --ds-dim:     oklch(0.850 0.018 87);
+    --ds-muted:   oklch(0.640 0.012 87);
     --ds-green:   oklch(0.720 0.152 134);
     --ds-gd:      oklch(0.575 0.110 134);
     --ds-orange:  oklch(0.726 0.136 53);
@@ -126,7 +126,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.6;
     overflow-x: hidden;
   }
