@@ -10,7 +10,11 @@ import type { KeywordRow } from "./page";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function PositionBadge({ pos }: { pos: number | null }) {
-  if (pos === null) return <span className="text-xs text-muted-foreground/40 italic">—</span>;
+  if (pos === null) return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 font-mono italic" title="No detectada en el top 30 de Google. Puede estar indexada en posiciones inferiores.">
+      &gt;30
+    </span>
+  );
   const color =
     pos <= 3  ? "bg-primary/10 text-ds-green border-ds-gd"
     : pos <= 10 ? "bg-ds-blue/10 text-ds-blue border-ds-blue/40"
@@ -177,7 +181,7 @@ export function KeywordsTable({ rows }: Props) {
           <span className="text-xs text-muted-foreground font-mono">Posición:</span>
           {(["all", "top3", "top10", "top30", "out"] as FilterRange[]).map((r) => (
             <button key={r} className={filterBtnClass(filterRange === r)} onClick={() => { setFilterRange(r); setPage(0); }}>
-              {r === "all" ? "Todas" : r === "out" ? "Fuera" : r.toUpperCase()}
+              {r === "all" ? "Todas" : r === "out" ? ">30" : r.toUpperCase()}
             </button>
           ))}
         </div>

@@ -7,7 +7,8 @@ import { ArrowLeft, Settings, ExternalLink } from "lucide-react";
 import { SectionHeader } from "@/components/ui-darkui";
 import { KeywordsManager } from "./KeywordsManager";
 import { CompetitorsManager } from "./CompetitorsManager";
-import { actionUpdateGscProperty, actionUpdateGa4Property } from "./actions";
+import { actionUpdateGa4Property } from "./actions";
+import { GscConnectSection } from "../GscConnectSection";
 
 export default async function ConfiguracionPage({ params }: { params: { id: string } }) {
   const client = await prisma.client.findUnique({
@@ -34,10 +35,6 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
   const site = client.sites[0];
 
   // Form-compatible wrappers (form action must return void)
-  async function updateGsc(formData: FormData) {
-    "use server";
-    await actionUpdateGscProperty(client!.id, formData);
-  }
   async function updateGa4(formData: FormData) {
     "use server";
     await actionUpdateGa4Property(client!.id, formData);
@@ -109,23 +106,14 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
             {/* GSC */}
             <div className="bg-card rounded-xl border border-border p-5 space-y-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Google Search Console</p>
-              <form action={updateGsc} className="space-y-2">
-                <input
-                  name="gscProperty"
-                  defaultValue={site?.gscProperty ?? ""}
-                  placeholder="sc-domain:tudominio.com"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-                <p className="text-[10px] font-mono text-muted-foreground/60">
-                  Formato: sc-domain:dominio.com o https://dominio.com/
-                </p>
-                <button
-                  type="submit"
-                  className="bg-primary text-primary-foreground text-xs font-mono rounded-lg px-3 py-1.5 hover:bg-primary/90 transition-colors"
-                >
-                  Guardar
-                </button>
-              </form>
+              {site?.gscProperty ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-mono text-foreground">{site.gscProperty}</p>
+                  <p className="text-[10px] font-mono text-ds-green">Conectado</p>
+                </div>
+              ) : (
+                <GscConnectSection clientId={client.id} />
+              )}
             </div>
 
             {/* GA4 */}

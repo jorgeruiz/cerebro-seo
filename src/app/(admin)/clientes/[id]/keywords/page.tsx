@@ -219,7 +219,7 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
                   { label: "Top 3",        value: inTop3,    color: "text-ds-green  bg-primary/10  border-ds-gd" },
                   { label: "Top 10",       value: inTop10,   color: "text-ds-blue   bg-ds-blue/10  border-ds-blue/30" },
                   { label: "Top 30",       value: inTop30,   color: "text-primary   bg-primary/10  border-primary/30" },
-                  { label: "Fuera top 30", value: outTop30,  color: outTop30 > 0 ? "text-destructive bg-destructive/10 border-destructive/30" : "text-muted-foreground bg-muted border-border" },
+                  { label: "Sin posición", value: outTop30,  color: outTop30 > 0 ? "text-muted-foreground bg-muted border-border" : "text-muted-foreground bg-muted border-border" },
                 ].map(({ label, value, color }) => (
                   <div key={label} className={`rounded-xl border p-4 flex flex-col items-center gap-1 ${color}`}>
                     <span className="font-display text-3xl font-bold">{value}</span>
