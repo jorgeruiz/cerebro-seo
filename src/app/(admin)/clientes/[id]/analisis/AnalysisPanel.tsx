@@ -7,6 +7,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { actionGenerateAnalysis, type AnalysisRecord } from "./actions";
 import type { AnalysisOpportunity, AnalysisRisk } from "@/lib/claude-analysis";
+import { CandidatasPanel } from "./CandidatasPanel";
 
 interface Props {
   clientId: string;
@@ -73,7 +74,7 @@ function RiskCard({ risk }: { risk: AnalysisRisk }) {
   );
 }
 
-function AnalysisView({ record }: { record: AnalysisRecord }) {
+function AnalysisView({ record, clientId }: { record: AnalysisRecord; clientId: string }) {
   const { analysis } = record;
   return (
     <div className="space-y-6">
@@ -126,6 +127,15 @@ function AnalysisView({ record }: { record: AnalysisRecord }) {
           <p className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground mb-3">Contexto estratégico</p>
           <p className="text-sm text-muted-foreground leading-relaxed">{analysis.conclusionEstrategica}</p>
         </div>
+      )}
+
+      {/* Candidatas para el Plan mensual */}
+      {analysis.candidatas && analysis.candidatas.length > 0 && (
+        <CandidatasPanel
+          clientId={clientId}
+          analysisId={record.id}
+          candidates={analysis.candidatas}
+        />
       )}
     </div>
   );
@@ -186,7 +196,7 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
         </div>
       )}
 
-      {!isPending && current && <AnalysisView record={current} />}
+      {!isPending && current && <AnalysisView record={current} clientId={clientId} />}
 
       {!isPending && !current && !error && (
         <div className="bg-card rounded-xl border border-border p-12 flex flex-col items-center gap-4 text-center">

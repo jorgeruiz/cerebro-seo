@@ -78,6 +78,11 @@ CANDIDATAS — CRITERIO DE MODE:
 - HYBRID: landings con plantilla, performance (Speed Index, TBT, FCP, LCP, CLS, bundle size, lazy loading, code splitting, CSS/JS sin usar), refactors, cambios de layout o de carga de JS. Criterio: "Lighthouse antes/después sin regresiones". NUNCA usar AI para performance.
 - HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), sitios no NEXTJS, configuración de plataformas, verificación de datos sospechosos (0 rankings con sitio publicado, GSC sin datos).
 
+CANDIDATAS — KIND:
+- CONTENT: blog, landing, página nueva, optimización de contenido existente
+- CODE: meta tags, schema, técnico, interlinking, performance
+- SETUP: verificaciones, cuentas externas (GSC, GBP), tracking, configuración de plataformas. Mode siempre HUMAN.
+
 CANDIDATAS — COMPOSICIÓN:
 - Genera tantas como sean justificables con datos reales (idealmente 4+ CONTENT y 4+ CODE)
 - MÁXIMO 8 de cada tipo
@@ -91,7 +96,8 @@ CANDIDATAS — FUENTE:
 - "contentplan": viene del plan de contenido vigente (las ideas que se listan en el contexto)
 - "analisis": diagnóstico cruzado (oportunidad identificada por tu análisis)
 - "setup": configuración faltante o dato sospechoso que requiere verificación
-- "pendiente-anterior": tarea VOIDED o FAILED del MonthlyPlan anterior (no del ciclo)
+- "pendiente-anterior": tarea VOIDED o FAILED del MonthlyPlan anterior
+- "ciclo-anterior": tarea del MonthlyCycle anterior (antecedente histórico, no del plan)
 
 DATOS SOSPECHOSOS → candidatas setup:
 - 0 rankings con sitio publicado → "Verificar configuración de tracking de keywords"
@@ -113,7 +119,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
     {
       "titulo": "máx 120 chars, específico y accionable",
       "descripcion": "qué hacer exactamente, máx 500 chars",
-      "kind": "CONTENT|CODE",
+      "kind": "CONTENT|CODE|SETUP",
       "mode": "AI|HYBRID|HUMAN",
       "modeReason": "por qué este modo, máx 200 chars",
       "priority": 1,
@@ -122,7 +128,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
       "justificacion": "qué dato la respalda, máx 300 chars",
       "keywordObjetivo": "keyword principal o null",
       "urlObjetivo": "URL existente o slug sugerido o null",
-      "fuente": "signal|contentplan|analisis|setup|pendiente-anterior"
+      "fuente": "signal|contentplan|analisis|setup|pendiente-anterior|ciclo-anterior"
     }
   ]
 }

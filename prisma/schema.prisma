@@ -630,6 +630,7 @@ enum TaskMode {
 enum TaskKind {
   CONTENT
   CODE
+  SETUP
 }
 
 enum TaskEffort {

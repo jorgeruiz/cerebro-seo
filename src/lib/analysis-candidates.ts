@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-export type CandidateKind = "CONTENT" | "CODE";
+export type CandidateKind = "CONTENT" | "CODE" | "SETUP";
 export type CandidateMode = "AI" | "HYBRID" | "HUMAN";
 export type CandidateEffort = "LOW" | "MEDIUM" | "HIGH";
 export type CandidateSource =
@@ -18,7 +18,8 @@ export type CandidateSource =
   | "contentplan"
   | "analisis"
   | "setup"
-  | "pendiente-anterior";
+  | "pendiente-anterior"  // VOIDED/FAILED del MonthlyPlan anterior
+  | "ciclo-anterior";     // tareas del MonthlyCycle anterior
 
 export interface AnalysisCandidate {
   id: string; // UUID estable para selección
@@ -41,7 +42,7 @@ export interface AnalysisCandidate {
 const candidateSchema = z.object({
   titulo: z.string().min(5).max(120),
   descripcion: z.string().min(10).max(500),
-  kind: z.enum(["CONTENT", "CODE"]),
+  kind: z.enum(["CONTENT", "CODE", "SETUP"]),
   mode: z.enum(["AI", "HYBRID", "HUMAN"]),
   modeReason: z.string().min(5).max(200),
   priority: z.number().int().min(1).max(5),
@@ -50,7 +51,7 @@ const candidateSchema = z.object({
   justificacion: z.string().min(5).max(300),
   keywordObjetivo: z.string().nullable().optional(),
   urlObjetivo: z.string().nullable().optional(),
-  fuente: z.enum(["signal", "contentplan", "analisis", "setup", "pendiente-anterior"]),
+  fuente: z.enum(["signal", "contentplan", "analisis", "setup", "pendiente-anterior", "ciclo-anterior"]),
 });
 
 export const analysisResultSchema = z.object({
@@ -154,7 +155,7 @@ export function generateSetupCandidates(preconditions: {
       descripcion: preconditions.keywordCount === 0
         ? "No hay keywords configuradas. Sin ellas no funciona el tracking, detección de caídas ni análisis de gaps."
         : `Hay ${preconditions.keywordCount} keywords pero ninguna prioritaria. Marcar al menos 5 para tracking diario.`,
-      kind: "CODE",
+      kind: "SETUP",
       mode: "HUMAN",
       modeReason: "Requiere decisión humana sobre qué keywords priorizar.",
       priority: 1,
@@ -170,7 +171,7 @@ export function generateSetupCandidates(preconditions: {
       id: randomUUID(),
       titulo: `Agregar ${preconditions.competitorCount === 0 ? "al menos 2" : "1 más"} competidores`,
       descripcion: "Sin competidores no se detectan keyword gaps ni share of voice.",
-      kind: "CODE",
+      kind: "SETUP",
       mode: "HUMAN",
       modeReason: "Requiere decisión humana sobre qué competidores monitorear.",
       priority: 2,
@@ -186,7 +187,7 @@ export function generateSetupCandidates(preconditions: {
       id: randomUUID(),
       titulo: "Conectar Google Search Console",
       descripcion: "Sin GSC no hay datos de clics, impresiones ni CTR real.",
-      kind: "CODE",
+      kind: "SETUP",
       mode: "HUMAN",
       modeReason: "Requiere acceso a la cuenta de Google del cliente.",
       priority: 2,
@@ -202,7 +203,7 @@ export function generateSetupCandidates(preconditions: {
       id: randomUUID(),
       titulo: "Ejecutar primer audit técnico del sitio",
       descripcion: "El audit identifica problemas técnicos que limitan el posicionamiento.",
-      kind: "CODE",
+      kind: "SETUP",
       mode: "HUMAN",
       modeReason: "El primer audit se ejecuta desde la UI de Cerebro SEO.",
       priority: 3,

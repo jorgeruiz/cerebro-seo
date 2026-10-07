@@ -1,6 +1,7 @@
 import { createWorker } from "./base-worker";
 import { runInsightsProcessor } from "../processors/insights-processor";
 import { runAdvisorProcessor } from "@/lib/seo-advisor/advisor-processor";
+import { decomposeTask } from "../processors/task-decomposer";
 import { InsightsJobData, SeoAdvisorJobData } from "../queues";
 
 /**
@@ -26,6 +27,11 @@ export const insightsWorker = createWorker<InsightsJobData | SeoAdvisorJobData>(
         scheduled: !data.force,
       });
       return result as never;
+    }
+
+    if (job.name === "task:decompose") {
+      await decomposeTask(job.data as { taskId: string; clientId: string; candidateId: string });
+      return undefined as never;
     }
 
     if (job.name !== "insights:generate") return undefined as never;
