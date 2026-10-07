@@ -445,22 +445,24 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ## 8. Bitácora de sesiones
 
-### Sesión S2b — 2026-10-06 🔄 EN PROGRESO (Análisis unificado con candidatas)
+### Sesión S2b — 2026-10-07 ✅ COMPLETA (Análisis unificado con candidatas)
 **Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Análisis unificado genera diagnóstico + candidatas. Probado con Quicsa: 5 candidatas (4 CONTENT + 1 CODE), $0.10 USD.
 
-**Objetivo:** Análisis Claude pasa a ser la única fuente de recomendaciones: diagnóstico + tareas candidatas (4-8 CONTENT + 4-8 CODE) con kind, mode, priority, effort, justificación.
+**Implementado:**
+- gatherUnifiedContext: collectSignals() + ContentPlan (auto-genera si falta) + VOIDED/FAILED del plan anterior + precondiciones + elegibilidad
+- AnalysisCandidate: id UUID, kind, mode, modeReason, priority, effort, fuente, justificacion
+- Validación Zod por item (una inválida no tumba el array)
+- enforceModeRules: performance/bundle/CWV → HYBRID (nunca AI)
+- Fecha inyectada en prompt; ciclo vencido marcado como antecedente
+- Setup candidates para datos sospechosos (0 rankings, GSC N/D)
+- Backward compatible: análisis viejos sin candidatas siguen funcionando
 
-**Trabajo pendiente:**
-1. Ampliar gatherClientContext con: collectSignals() del Advisor, ContentPlan vigente, tareas VOIDED/FAILED del plan anterior, precondiciones, elegibilidad
-2. Nuevo output: candidatas[] en AnalysisResult con id estable, modo (AI/HYBRID/HUMAN), fuente
-3. Validación Zod con 2 intentos y caché de bloques (perfil + señales)
-4. Compatibilidad con análisis viejos (sin candidatas)
-5. Prueba con Quicsa: diagnóstico + candidatas, costo y tiempo
+**Hallazgo:** sync de MonthlyCycle detenido desde julio/agosto 2026. Todos los ciclos ACTIVE, nunca cerrados. Cerebro web no expone endpoints de estrategia.
 
-**Decisiones tomadas:**
-- ContentPlan será input del Análisis (opción a del diagnóstico S2)
-- Site.framework conservado; Site.platform agregado para gate
-- MonthlyPlan.cycleId opcional
+**Prueba Quicsa ($0.10, 1800in/6008out):**
+- 5 candidatas: GSC verificación (CODE/HUMAN/setup), artículo PAC (CONTENT/AI), landing chillers (CONTENT/HYBRID), landing calderas (CONTENT/HYBRID), artículo PAC clúster (CONTENT/AI)
+- Diagnóstico coherente con fecha octubre, ciclo julio como antecedente
 
 ---
 

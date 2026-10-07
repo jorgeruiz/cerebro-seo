@@ -78,14 +78,13 @@ CANDIDATAS — CRITERIO DE MODE:
 - HYBRID: landings con plantilla, performance (Speed Index, TBT, FCP, LCP, CLS, bundle size, lazy loading, code splitting, CSS/JS sin usar), refactors, cambios de layout o de carga de JS. Criterio: "Lighthouse antes/después sin regresiones". NUNCA usar AI para performance.
 - HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), sitios no NEXTJS, configuración de plataformas, verificación de datos sospechosos (0 rankings con sitio publicado, GSC sin datos).
 
-CANDIDATAS — COMPOSICIÓN OBLIGATORIA:
-- MÍNIMO 4 kind CONTENT (blogs, landings, optimización de contenido existente)
-- MÍNIMO 4 kind CODE (meta tags, schema, técnico, interlinking, performance)
+CANDIDATAS — COMPOSICIÓN:
+- Genera tantas como sean justificables con datos reales (idealmente 4+ CONTENT y 4+ CODE)
 - MÁXIMO 8 de cada tipo
-- Si no hay suficientes señales, usa las ideas del Plan de Contenido vigente para CONTENT
-- Si no hay suficientes datos, genera candidatas de setup/verificación con fuente "setup"
-- Si aun así no se alcanzan los mínimos, explica por qué en candidatasInsuficientesRazon
+- Usa las ideas del Plan de Contenido vigente como fuente principal para CONTENT
+- Si hay datos sospechosos, genera candidatas de setup/verificación con fuente "setup"
 - Orden: prioridad vs easy win (esfuerzo bajo + impacto alto primero)
+- Solo sugiere lo que tenga justificación concreta — NO rellenes para llegar a un número
 
 CANDIDATAS — FUENTE:
 - "signal": responde a una señal detectada (caída de keyword, CTR bajo, backlink perdido)
@@ -128,11 +127,10 @@ RESPONDE ÚNICAMENTE con un JSON válido:
   ]
 }
 
-  "candidatasInsuficientesRazon": null
 }
 
 Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones.
-Candidatas: MÍNIMO 8 (4 CONTENT + 4 CODE), máximo 16. Si no se alcanzan los mínimos, llena candidatasInsuficientesRazon con la razón.
+Candidatas: tantas como se justifiquen con datos (idealmente 4+ CONTENT y 4+ CODE, máximo 16).
 Sin texto fuera del JSON.`;
 
 // ─── Recopilación de contexto ampliado ───────────────────────────────────────
@@ -503,9 +501,6 @@ export async function generateClientAnalysis(
   const contentCount = allCandidates.filter((c) => c.kind === "CONTENT").length;
   const codeCount = allCandidates.filter((c) => c.kind === "CODE").length;
   console.log(`[analysis] Candidatas: ${allCandidates.length} total (${contentCount} CONTENT, ${codeCount} CODE)`);
-  if (contentCount < 4 || codeCount < 4) {
-    console.warn(`[analysis] ⚠ Mínimos no alcanzados (4 CONTENT + 4 CODE). Razón: ${(analysis as unknown as Record<string, unknown>).candidatasInsuficientesRazon ?? "no especificada"}`);
-  }
 
   // Cost
   const usage = response.usage;

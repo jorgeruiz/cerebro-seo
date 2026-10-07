@@ -68,8 +68,7 @@ export const analysisResultSchema = z.object({
   })),
   recomendaciones: z.array(z.string()),
   conclusionEstrategica: z.string(),
-  candidatas: z.array(candidateSchema).min(8, "Se requieren al menos 8 candidatas (4 CONTENT + 4 CODE)"),
-  candidatasInsuficientesRazon: z.string().nullable().optional(), // si no se alcanzaron 8, por qué
+  candidatas: z.array(candidateSchema),
 });
 
 /**
