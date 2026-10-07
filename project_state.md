@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-06 (Sesión S2b — Análisis unificado con candidatas, EN PROGRESO)
-**Fase actual:** Plan Mensual S2 — S2a completa, S2b en progreso
-**Próximo hito:** S2b completar Análisis unificado → S2c retiro Advisor → S2d "Mandar al plan"
+**Última actualización:** 2026-10-07 (Sesión S2d — "Mandar al plan" + descomposición en pasos)
+**Fase actual:** Plan Mensual S2 — S2a/S2b/S2d completas, pendiente S2c retiro Advisor
+**Próximo hito:** Retriggear tarea AEO en PLANNING → S2c retiro Advisor → S3 página Plan Mensual
 
 ---
 
@@ -444,6 +444,39 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión S2d — 2026-10-07 ✅ COMPLETA ("Mandar al plan" + descomposición)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ UI de candidatas con selección + "Mandar al plan" + descomposición en pasos.
+
+**Implementado:**
+- Schema: TaskKind SETUP, fuente "ciclo-anterior" (migración add_setup_kind)
+- plan-actions.ts: checkEligibility, actionSendToPlan (crea MonthlyPlan + PlanTasks + encola)
+- Gate: activo+SEO+NEXTJS+repo (SETUP/HUMAN exentos)
+- task-decomposer.ts: lee docs del repo via GitHub API, Claude genera PlanSteps (AI/HUMAN), Zod validation
+- CandidatasPanel.tsx: checkboxes, mode badge, gate visible, "Mandar al plan", vista post-envío
+- plan-eligibility.ts: canSendCandidate() compartido
+- insights-worker.ts: procesa task:decompose en cola ai-analysis
+
+**Prueba Quicsa:**
+- 3 candidatas enviadas (GSC verificación, AEO auditoría, backlinks auditoría)
+- 2/3 descompuestas: 4 pasos HUMAN cada una, con criterios de aceptación
+- 1/3 (AEO) quedó en PLANNING — job posiblemente perdido, retriggear en próxima sesión
+- Costo descomposición: $0.04 USD total
+
+**Fixes durante la sesión:**
+- useEffect para load inicial (SSR crash con startTransition)
+- canSendCandidate movido a plan-eligibility.ts (no puede ser sync en "use server")
+- Google Fonts error en build (transitorio, reintento exitoso)
+
+**Pendientes:**
+- Retriggear tarea AEO en PLANNING
+- Limpiar tareas de prueba de Sesión 1b (8 tareas viejas en el plan de Quicsa)
+- S2c: retiro del Advisor (NextStepPlan, seo-advisor/)
+- S3: página Plan Mensual completa
+- GSC de Quicsa: propiedad configurada como http://quicsa.com pero necesita https://www.quicsa.com
+
+---
 
 ### Sesión S2b — 2026-10-07 ✅ COMPLETA (Análisis unificado con candidatas)
 **Participantes:** Jorge + Claude Code
