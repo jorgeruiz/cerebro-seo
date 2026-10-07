@@ -25,8 +25,10 @@ import {
   type AnalysisCandidate,
   validateCandidates,
   generateSetupCandidates,
+  enforceModeRules,
   analysisResultSchema,
 } from "@/lib/analysis-candidates";
+import { generateContentPlan } from "@/lib/claude-content-plan";
 
 // ─── Tipos del análisis (backward compatible) ────────────────────────────────
 
@@ -67,26 +69,35 @@ Tu trabajo: analizar todos los datos SEO de un cliente y generar:
 PRINCIPIOS:
 - Cita números concretos (posiciones, deltas, volúmenes, CTR)
 - Cada oportunidad, riesgo y candidata debe estar respaldada por datos del contexto
-- Cruza datos SEO con la estrategia del ciclo actual
+- Presta atención a las FECHAS de medición de cada dato — ignora datos vencidos
 - Prioriza por impacto real en tráfico y negocio
+- Si un MonthlyCycle NO es del mes actual, trátalo como vencido: no uses sus deadlines, solo como antecedente histórico
 
 CANDIDATAS — CRITERIO DE MODE:
-- AI: blog en sitio con bootstrap, meta tags, H1, inserción de keywords, schema JSON-LD, enlazado interno. Todo lo que se puede automatizar con código.
-- HYBRID: landing con plantilla existente, cambios que requieran assets o datos del cliente, o validación humana a mitad del proceso.
-- HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), sitios no NEXTJS, configuración de plataformas.
+- AI: blog en sitio con bootstrap, meta tags, H1, inserción de keywords, schema JSON-LD, enlazado interno. Solo cambios puramente de texto/código que NO requieran verificación visual.
+- HYBRID: landings con plantilla, performance (Speed Index, TBT, FCP, LCP, CLS, bundle size, lazy loading, code splitting, CSS/JS sin usar), refactors, cambios de layout o de carga de JS. Criterio: "Lighthouse antes/después sin regresiones". NUNCA usar AI para performance.
+- HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), sitios no NEXTJS, configuración de plataformas, verificación de datos sospechosos (0 rankings con sitio publicado, GSC sin datos).
 
-CANDIDATAS — COMPOSICIÓN:
-- 4-8 de kind CONTENT (blogs, landings, optimización de contenido existente)
-- 4-8 de kind CODE (meta tags, schema, técnico, interlinking, performance)
+CANDIDATAS — COMPOSICIÓN OBLIGATORIA:
+- MÍNIMO 4 kind CONTENT (blogs, landings, optimización de contenido existente)
+- MÍNIMO 4 kind CODE (meta tags, schema, técnico, interlinking, performance)
+- MÁXIMO 8 de cada tipo
+- Si no hay suficientes señales, usa las ideas del Plan de Contenido vigente para CONTENT
+- Si no hay suficientes datos, genera candidatas de setup/verificación con fuente "setup"
+- Si aun así no se alcanzan los mínimos, explica por qué en candidatasInsuficientesRazon
 - Orden: prioridad vs easy win (esfuerzo bajo + impacto alto primero)
-- Si hay tareas VOIDED/FAILED del plan anterior, considéralas como pendientes
 
 CANDIDATAS — FUENTE:
 - "signal": responde a una señal detectada (caída de keyword, CTR bajo, backlink perdido)
-- "contentplan": viene del plan de contenido vigente
-- "analisis": diagnóstico cruzado (oportunidad identificada en el análisis)
-- "setup": configuración faltante (keywords, competidores, GSC)
-- "pendiente-anterior": tarea que falló o se anuló en el plan anterior
+- "contentplan": viene del plan de contenido vigente (las ideas que se listan en el contexto)
+- "analisis": diagnóstico cruzado (oportunidad identificada por tu análisis)
+- "setup": configuración faltante o dato sospechoso que requiere verificación
+- "pendiente-anterior": tarea VOIDED o FAILED del MonthlyPlan anterior (no del ciclo)
+
+DATOS SOSPECHOSOS → candidatas setup:
+- 0 rankings con sitio publicado → "Verificar configuración de tracking de keywords"
+- GSC sin datos o N/D → "Verificar conexión de Search Console"
+- AI Search 0% con contenido publicado → "Auditar elegibilidad AEO del contenido existente"
 
 RESPONDE ÚNICAMENTE con un JSON válido:
 {
@@ -117,7 +128,11 @@ RESPONDE ÚNICAMENTE con un JSON válido:
   ]
 }
 
-Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones, 8-16 candidatas.
+  "candidatasInsuficientesRazon": null
+}
+
+Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones.
+Candidatas: MÍNIMO 8 (4 CONTENT + 4 CODE), máximo 16. Si no se alcanzan los mínimos, llena candidatasInsuficientesRazon con la razón.
 Sin texto fuera del JSON.`;
 
 // ─── Recopilación de contexto ampliado ───────────────────────────────────────
@@ -222,11 +237,32 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     })(),
   ]);
 
+  // ── Auto-generar ContentPlan si no existe ─────────────────────────────
+  let contentPlanIdeas: Array<{ titulo: string; tipo: string; keywords: string[]; prioridad: string; razon: string; urlSugerida?: string }> = [];
+  if (contentPlan) {
+    contentPlanIdeas = (contentPlan.ideas as unknown as typeof contentPlanIdeas) ?? [];
+  } else {
+    // Generar ContentPlan automáticamente
+    try {
+      const { plan: newPlan } = await generateContentPlan(clientId);
+      contentPlanIdeas = (newPlan.ideas as unknown as typeof contentPlanIdeas) ?? [];
+      console.log(`[analysis] ContentPlan auto-generado: ${contentPlanIdeas.length} ideas`);
+    } catch (err) {
+      console.warn("[analysis] No se pudo auto-generar ContentPlan:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // ── Determinar vigencia del ciclo ──────────────────────────────────────
+  const now = new Date();
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const cycleIsCurrent = cycle?.yearMonth === currentYearMonth;
+
   // ── Formatear contexto ──────────────────────────────────────────────────
 
   const lines: string[] = [];
 
   lines.push(`# Contexto SEO — ${client.name}`);
+  lines.push(`**Fecha actual: ${now.toISOString().slice(0, 10)}** (mes: ${currentYearMonth})`);
   lines.push(`Dominio: ${client.domain} | Plan: ${client.plan} | Servicios: ${client.services.join(", ")} | Estado: ${client.status}`);
 
   // Elegibilidad
@@ -235,13 +271,19 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   }
   lines.push("");
 
-  // Ciclo actual
+  // Ciclo
   if (cycle) {
-    lines.push(`## Ciclo actual: ${cycle.yearMonth} (${cycle.status})`);
-    if (cycle.focus) lines.push(`Foco: ${cycle.focus}`);
-    if (cycle.goals.length > 0) lines.push(`Objetivos: ${cycle.goals.join(" | ")}`);
+    if (cycleIsCurrent) {
+      lines.push(`## Ciclo vigente: ${cycle.yearMonth} (${cycle.status})`);
+      if (cycle.focus) lines.push(`Foco: ${cycle.focus}`);
+      if (cycle.goals.length > 0) lines.push(`Objetivos: ${cycle.goals.join(" | ")}`);
+    } else {
+      lines.push(`## Ciclo anterior: ${cycle.yearMonth} (${cycle.status}) — ⚠ VENCIDO, solo como antecedente`);
+      lines.push("INSTRUCCIÓN: este ciclo NO es del mes actual. NO uses sus deadlines. Sus tareas son solo contexto histórico.");
+      if (cycle.focus) lines.push(`Foco (histórico): ${cycle.focus}`);
+    }
     if (cycle.tasks.length > 0) {
-      lines.push(`Tareas activas: ${cycle.tasks.map((t) => `${t.title} [${t.status}]`).join(", ")}`);
+      lines.push(`Tareas ${cycleIsCurrent ? "activas" : "históricas"}: ${cycle.tasks.map((t) => `${t.title} [${t.status}]`).join(", ")}`);
     }
     if (cycle.hypotheses.length > 0) {
       lines.push(`Hipótesis: ${cycle.hypotheses.map((h) => `"${h.statement.slice(0, 60)}..." → ${h.validation}`).join(" | ")}`);
@@ -308,17 +350,13 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   }
 
   // ContentPlan vigente
-  if (contentPlan) {
-    type ContentIdeaRaw = { titulo: string; tipo: string; keywords: string[]; prioridad: string; razon: string; urlSugerida?: string };
-    const ideas = (contentPlan.ideas as unknown as ContentIdeaRaw[]) ?? [];
-    if (ideas.length > 0) {
-      lines.push(`## Plan de contenido vigente (${ideas.length} ideas)`);
-      for (const idea of ideas.slice(0, 8)) {
-        lines.push(`  - [${idea.tipo}/${idea.prioridad}] "${idea.titulo}" → keywords: ${idea.keywords?.join(", ") ?? "N/D"}`);
-      }
-      lines.push("INSTRUCCIÓN: incorpora las ideas del plan de contenido como candidatas CONTENT si son relevantes.");
-      lines.push("");
+  if (contentPlanIdeas.length > 0) {
+    lines.push(`## Plan de contenido vigente (${contentPlanIdeas.length} ideas)`);
+    for (const idea of contentPlanIdeas.slice(0, 10)) {
+      lines.push(`  - [${idea.tipo}/${idea.prioridad}] "${idea.titulo}" → keywords: ${idea.keywords?.join(", ") ?? "N/D"}`);
     }
+    lines.push("INSTRUCCIÓN: las candidatas CONTENT deben salir de estas ideas. Usa fuente 'contentplan'. Si no hay suficientes, complementa con fuente 'analisis'.");
+    lines.push("");
   }
 
   // Tareas VOIDED/FAILED del plan anterior
@@ -441,19 +479,32 @@ export async function generateClientAnalysis(
     };
   }
 
+  // Enforce mode rules (performance → HYBRID, never AI)
+  if (analysis.candidatas) {
+    analysis.candidatas = analysis.candidatas.map(enforceModeRules);
+  }
+
   // Add setup candidates if preconditions are missing
   const setupCandidates = generateSetupCandidates({
     hasKeywords: preconditions.hasKeywords,
     hasCompetitors: preconditions.hasCompetitors,
     hasGsc,
     hasSiteAudit: preconditions.hasSiteAudit,
-    keywordCount: 0, // simplified — actual count is in preconditions internal
+    keywordCount: 0,
     competitorCount: 0,
   });
 
   if (setupCandidates.length > 0) {
-    // Prepend setup candidates (highest priority)
     analysis.candidatas = [...setupCandidates, ...(analysis.candidatas ?? [])];
+  }
+
+  // Log candidate stats
+  const allCandidates = analysis.candidatas ?? [];
+  const contentCount = allCandidates.filter((c) => c.kind === "CONTENT").length;
+  const codeCount = allCandidates.filter((c) => c.kind === "CODE").length;
+  console.log(`[analysis] Candidatas: ${allCandidates.length} total (${contentCount} CONTENT, ${codeCount} CODE)`);
+  if (contentCount < 4 || codeCount < 4) {
+    console.warn(`[analysis] ⚠ Mínimos no alcanzados (4 CONTENT + 4 CODE). Razón: ${(analysis as unknown as Record<string, unknown>).candidatasInsuficientesRazon ?? "no especificada"}`);
   }
 
   // Cost

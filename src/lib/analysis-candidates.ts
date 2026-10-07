@@ -68,8 +68,35 @@ export const analysisResultSchema = z.object({
   })),
   recomendaciones: z.array(z.string()),
   conclusionEstrategica: z.string(),
-  candidatas: z.array(candidateSchema),
+  candidatas: z.array(candidateSchema).min(8, "Se requieren al menos 8 candidatas (4 CONTENT + 4 CODE)"),
+  candidatasInsuficientesRazon: z.string().nullable().optional(), // si no se alcanzaron 8, por qué
 });
+
+/**
+ * Enforce mode rules post-Claude:
+ * - Performance, refactors, layout, JS loading changes → HYBRID (never AI)
+ */
+const HYBRID_FORCE_PATTERNS = [
+  /performance/i, /speed\s*index/i, /tbt/i, /fcp/i, /lcp/i, /cls/i,
+  /core\s*web\s*vitals/i, /lighthouse/i, /bundle/i, /lazy.?load/i,
+  /code.?split/i, /refactor/i, /layout/i, /js\s*(sin\s*usar|unused)/i,
+  /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
+];
+
+export function enforceModeRules(candidate: AnalysisCandidate): AnalysisCandidate {
+  if (candidate.mode === "AI") {
+    const text = `${candidate.titulo} ${candidate.descripcion}`;
+    const isPerformance = HYBRID_FORCE_PATTERNS.some((p) => p.test(text));
+    if (isPerformance) {
+      return {
+        ...candidate,
+        mode: "HYBRID",
+        modeReason: `${candidate.modeReason} [Forzado a HYBRID: cambios de performance/bundle requieren verificación Lighthouse antes/después]`,
+      };
+    }
+  }
+  return candidate;
+}
 
 export type AnalysisResultUnified = z.infer<typeof analysisResultSchema>;
 

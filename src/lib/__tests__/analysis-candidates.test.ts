@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateCandidates,
   generateSetupCandidates,
+  enforceModeRules,
   analysisResultSchema,
 } from "../analysis-candidates";
 
@@ -157,28 +158,73 @@ describe("analysis-candidates", () => {
     });
   });
 
+  describe("enforceModeRules", () => {
+    it("forces performance tasks to HYBRID", () => {
+      // enforceModeRules imported at top
+      const candidate = {
+        id: "test", titulo: "Reducir TBT de 1,270ms a 200ms", descripcion: "Bundle optimization and lazy loading",
+        kind: "CODE" as const, mode: "AI" as const, modeReason: "Code change", priority: 1, effort: "HIGH" as const,
+        impactoEsperado: "Better CWV", justificacion: "TBT too high", fuente: "signal" as const,
+      };
+      const result = enforceModeRules(candidate);
+      expect(result.mode).toBe("HYBRID");
+      expect(result.modeReason).toContain("Lighthouse");
+    });
+
+    it("does not change AI mode for non-performance tasks", () => {
+      // enforceModeRules imported at top
+      const candidate = {
+        id: "test", titulo: "Agregar meta description a /servicios", descripcion: "Update metadata",
+        kind: "CODE" as const, mode: "AI" as const, modeReason: "Simple text change", priority: 2, effort: "LOW" as const,
+        impactoEsperado: "Better CTR", justificacion: "Missing description", fuente: "signal" as const,
+      };
+      const result = enforceModeRules(candidate);
+      expect(result.mode).toBe("AI");
+    });
+  });
+
   describe("analysisResultSchema", () => {
-    it("validates a complete result with candidatas", () => {
+    function makeCandidate(i: number, kind: "CONTENT" | "CODE") {
+      return {
+        titulo: `Candidata ${kind} ${i}`,
+        descripcion: `Description for ${kind} candidate ${i}`,
+        kind,
+        mode: kind === "CONTENT" ? "HYBRID" : "AI",
+        modeReason: "Test mode reason here",
+        priority: i,
+        effort: "MEDIUM",
+        impactoEsperado: "Expected impact description",
+        justificacion: "Test justification data",
+        fuente: "analisis",
+      };
+    }
+
+    it("validates a complete result with 8+ candidatas", () => {
+      const candidatas = [
+        ...Array.from({ length: 4 }, (_, i) => makeCandidate(i + 1, "CONTENT")),
+        ...Array.from({ length: 4 }, (_, i) => makeCandidate(i + 1, "CODE")),
+      ];
       const result = analysisResultSchema.safeParse({
         resumenEjecutivo: "Resumen del análisis SEO del cliente",
         oportunidades: [{ titulo: "Opp 1", descripcion: "desc", accion: "action", impacto: "alto" }],
         riesgos: [{ titulo: "Risk 1", descripcion: "desc", urgencia: "alta" }],
         recomendaciones: ["Rec 1"],
         conclusionEstrategica: "Conclusión estratégica del análisis",
-        candidatas: [{
-          titulo: "Candidata test",
-          descripcion: "Description test",
-          kind: "CODE",
-          mode: "AI",
-          modeReason: "Automated",
-          priority: 1,
-          effort: "LOW",
-          impactoEsperado: "Test impact",
-          justificacion: "Test justification",
-          fuente: "signal",
-        }],
+        candidatas,
       });
       expect(result.success).toBe(true);
+    });
+
+    it("fails with less than 8 candidatas", () => {
+      const result = analysisResultSchema.safeParse({
+        resumenEjecutivo: "Resumen",
+        oportunidades: [],
+        riesgos: [],
+        recomendaciones: [],
+        conclusionEstrategica: "Conclusion",
+        candidatas: [makeCandidate(1, "CODE")],
+      });
+      expect(result.success).toBe(false);
     });
 
     it("fails when candidatas have invalid mode", () => {
