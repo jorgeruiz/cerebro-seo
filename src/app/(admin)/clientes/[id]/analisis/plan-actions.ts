@@ -214,3 +214,41 @@ export async function getPlanTasks(clientId: string): Promise<PlanTaskView[]> {
     })),
   }));
 }
+
+// ─── Retry stuck task ────────────────────────────────────────────────────────
+
+export async function actionRetryTask(
+  taskId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: { plan: { select: { clientId: true } } },
+  });
+
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+  if (task.status !== "PLANNING" && task.status !== "FAILED") {
+    return { ok: false, error: "Solo se pueden reintentar tareas en PLANNING o FAILED." };
+  }
+
+  // Reset to PLANNING and re-enqueue
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: { status: "PLANNING", failureReason: null },
+  });
+
+  // Delete any existing steps (from a partial previous attempt)
+  await prisma.planStep.deleteMany({ where: { taskId } });
+
+  await aiAnalysisQueue.add("task:decompose", {
+    taskId,
+    clientId: task.plan.clientId,
+    candidateId: task.sourceCandidateId ?? "retry",
+  });
+
+  return { ok: true };
+}
