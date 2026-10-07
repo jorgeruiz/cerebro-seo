@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
   Send, Loader2, CheckCircle2, Bot, User,
   FileText, Code, Settings2, AlertTriangle, ChevronDown, ChevronRight,
@@ -186,12 +186,12 @@ export function CandidatasPanel({ clientId, analysisId, candidates }: Props) {
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [planTasks, setPlanTasks] = useState<PlanTaskView[]>([]);
   const [isSending, startSendTransition] = useTransition();
-  const [isLoading, startLoadTransition] = useTransition();
+  const [, startLoadTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<{ created: number; duplicated: number } | null>(null);
 
   // Load eligibility and existing plan tasks on mount
-  if (eligibility === null && !isLoading) {
+  useEffect(() => {
     startLoadTransition(async () => {
       const [elig, tasks] = await Promise.all([
         checkEligibility(clientId),
@@ -200,7 +200,7 @@ export function CandidatasPanel({ clientId, analysisId, candidates }: Props) {
       setEligibility(elig);
       setPlanTasks(tasks);
     });
-  }
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sentCandidateIds = new Set(
     planTasks.map((t) => t.sourceCandidateId).filter(Boolean)
