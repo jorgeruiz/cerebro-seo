@@ -16,6 +16,7 @@ import {
   actionVoidTask,
   actionRetryFailedTask,
   actionActivatePlan,
+  actionRunWatchdog,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -365,7 +366,7 @@ function TaskCard({
                 </button>
               )}
 
-              {task.status === "FAILED" && (
+              {(task.status === "FAILED" || task.status === "PLANNING") && (
                 <button
                   onClick={() => onRetry(task.id)}
                   disabled={isActing}
@@ -375,7 +376,7 @@ function TaskCard({
                 </button>
               )}
 
-              {task.status !== "RUNNING" && (
+              {task.status !== "RUNNING" && task.status !== "PLANNING" && (
                 <button
                   onClick={() => onVoid(task.id)}
                   disabled={isActing}
@@ -446,34 +447,51 @@ function TaskGroup({
 function PlanStatusBanner({
   plan,
   onActivate,
+  onWatchdog,
   isActing,
 }: {
   plan: PlanFullView;
   onActivate: () => void;
+  onWatchdog: () => void;
   isActing: boolean;
 }) {
   if (plan.status === "PLANNING") {
     const allReady = plan.tasks.every((t) => t.status !== "PLANNING");
+    const hasFailed = plan.tasks.some((t) => t.status === "FAILED");
+    const planningCount = plan.tasks.filter((t) => t.status === "PLANNING").length;
     return (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">Plan en preparacion</p>
           <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-            {allReady
+            {allReady && !hasFailed
               ? "Todas las tareas tienen pasos generados. Activa el plan para comenzar a ejecutar."
-              : "Se estan generando los pasos de las tareas. Espera a que terminen."}
+              : hasFailed
+              ? "Algunas tareas fallaron al generar pasos. Reintenta o anula las fallidas."
+              : `${planningCount} tarea(s) generando pasos. Espera o ejecuta el watchdog si llevan mas de 10 min.`}
           </p>
         </div>
-        {allReady && (
-          <button
-            onClick={onActivate}
-            disabled={isActing}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}
-          >
-            {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            Activar plan
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {planningCount > 0 && (
+            <button
+              onClick={onWatchdog}
+              disabled={isActing}
+              className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+            >
+              <RotateCcw className="h-3 w-3" /> Watchdog
+            </button>
+          )}
+          {allReady && !hasFailed && (
+            <button
+              onClick={onActivate}
+              disabled={isActing}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}
+            >
+              {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+              Activar plan
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -573,6 +591,11 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
     handleAction(() => actionActivatePlan(plan.id));
   }
 
+  function handleWatchdog() {
+    if (!plan) return;
+    handleAction(() => actionRunWatchdog(plan.id));
+  }
+
   // Group tasks by mode
   const grouped = plan
     ? (["AI", "HYBRID", "HUMAN"] as const)
@@ -635,7 +658,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
             </div>
 
             {/* Plan status banner */}
-            <PlanStatusBanner plan={plan} onActivate={handleActivate} isActing={isActing} />
+            <PlanStatusBanner plan={plan} onActivate={handleActivate} onWatchdog={handleWatchdog} isActing={isActing} />
 
             {/* Task groups */}
             <div className="space-y-8">

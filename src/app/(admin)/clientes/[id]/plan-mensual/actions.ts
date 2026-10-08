@@ -2,7 +2,8 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { planTaskQueue } from "@/server/jobs/queues";
+import { planTaskQueue, aiAnalysisQueue } from "@/server/jobs/queues";
+import { runTaskWatchdog } from "@/server/jobs/processors/task-watchdog";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -300,18 +301,56 @@ export async function actionRetryFailedTask(
     return { ok: false, error: "Solo administradores." };
   }
 
-  const task = await prisma.planTask.findUnique({ where: { id: taskId } });
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: {
+      steps: { select: { id: true } },
+      plan: { select: { clientId: true } },
+    },
+  });
   if (!task) return { ok: false, error: "Tarea no encontrada." };
-  if (task.status !== "FAILED") {
-    return { ok: false, error: "Solo se pueden reintentar tareas fallidas." };
+  if (task.status !== "FAILED" && task.status !== "PLANNING") {
+    return { ok: false, error: "Solo se pueden reintentar tareas en FAILED o PLANNING." };
   }
 
-  await prisma.planTask.update({
-    where: { id: taskId },
-    data: { status: "READY", failureReason: null },
-  });
+  if (task.steps.length === 0) {
+    // Failed during decomposition — re-enqueue decompose
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "PLANNING", failureReason: null },
+    });
+    await prisma.planStep.deleteMany({ where: { taskId } });
+    await aiAnalysisQueue.add("task:decompose", {
+      taskId,
+      clientId: task.plan.clientId,
+      candidateId: "retry",
+    });
+  } else {
+    // Failed during execution — reset to READY (steps exist)
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "READY", failureReason: null },
+    });
+  }
 
   return { ok: true };
+}
+
+// ─── Run watchdog for stuck tasks ───────────────────────────────────────────
+
+export async function actionRunWatchdog(
+  planId: string
+): Promise<{ ok: true; retried: number; failed: number } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({ where: { id: planId } });
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+
+  const result = await runTaskWatchdog(planId);
+  return { ok: true, retried: result.retried.length, failed: result.failed.length };
 }
 
 // ─── Activate plan ──────────────────────────────────────────────────────────
