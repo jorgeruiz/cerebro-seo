@@ -15,6 +15,7 @@ import {
   Lightbulb,
   Calendar,
   FileText,
+  ClipboardList,
   Settings,
   Lock,
   ChevronDown,
@@ -87,6 +88,7 @@ const GROUPS: NavGroup[] = [
   {
     title: "Estrategia",
     items: [
+      { label: "Plan Mensual",           href: "plan-mensual",      icon: ClipboardList, description: "Tareas SEO del mes",   requiresSeo: true },
       { label: "Plan de Contenido",    href: "contenido",         icon: Lightbulb,   description: "Roadmap editorial",     requiresSeo: true },
       { label: "Eventos / Timeline",   href: "timeline",          icon: Calendar,    description: "Hitos y cambios",       requiresSeo: false },
       { label: "Reporte Mensual",      href: "reporte",           icon: FileText,    description: "Resumen ejecutivo",     requiresSeo: true },
