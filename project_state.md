@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-07 (Sesión S2d — "Mandar al plan" + descomposición en pasos)
-**Fase actual:** Plan Mensual S2 — S2a/S2b/S2d completas, pendiente S2c retiro Advisor
-**Próximo hito:** Retriggear tarea AEO en PLANNING → S2c retiro Advisor → S3 página Plan Mensual
+**Última actualización:** 2026-10-07 (Sesión S2d aceptada — listo para S3)
+**Fase actual:** Plan Mensual S2 completo (excepto S2c Advisor), listo para S3
+**Próximo hito:** S3 página Plan Mensual (ejecución de tareas AI, progreso, revisión)
 
 ---
 
