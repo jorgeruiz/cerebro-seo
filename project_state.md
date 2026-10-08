@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-07 (Sesión S2d aceptada — listo para S3)
-**Fase actual:** Plan Mensual S2 completo (excepto S2c Advisor), listo para S3
-**Próximo hito:** S3 página Plan Mensual (ejecución de tareas AI, progreso, revisión)
+**Última actualización:** 2026-10-08 (Sesión S3 completa — flujo end-to-end conectado)
+**Fase actual:** Plan Mensual S3 completo, S2c (retiro Advisor) diferido
+**Próximo hito:** S4 terminal en vivo (log streaming del worker) o S2c limpieza Advisor
 
 ---
 
@@ -120,7 +120,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 | Módulo AEO Research | ✅ Activo | `/clientes/[id]/aeo-research`. Recopila preguntas de búsqueda (DataForSEO Labs + SERP PAA), clasifica con Claude Sonnet 4.6 en clusters AEO (featured snippets) y GEO (citación por LLMs). KPI strip, cluster cards expandibles, historial. ADMIN-only. Migración `20260614120000_add_aeo_research`. Sesión 36 commit `1294d7b`. |
 | AEO Readiness (Site Audit) | ✅ Activo | 10 checks algorítmicos de legibilidad para IA dentro de Site Audit (modo complete). Prober: robots.txt AI bots, llms.txt, content negotiation, .md routes, SSR content, sitemap. Score 0-100 persistido en `Audit.aeoScore`. Costo $0. Migración `20260902120000_add_aeo_readiness`. Sesión 35 commit `4877e92`. |
 | Integración Constructor (directa) | ✅ Activo | Orquestador eliminado como intermediario. Cerebro SEO envía steps del plan mensual directamente a Constructor. Ruteo inteligente: blog/landing/meta → endpoints directos ($0, 3-8s); schema/tecnico/interlinking → agente SSE (~$0.05, 30-90s); setup/otro → HUMAN_TASK con pasos generados por Claude. Env vars en Easypanel: `CONSTRUCTOR_URL`, `CONSTRUCTOR_INTERNAL_SECRET`. |
-| Página Plan Mensual | ✅ Activo | `/clientes/[id]/plan-mensual`. Progress bar con %, filtro por mes, detalle expandible por tarea, badges IA/HT, polling 15s, botones Completar/Ignorar, prompt copiable, resultUrl. Link en sidebar. |
+| Página Plan Mensual (S3) | ✅ Activo | `/clientes/[id]/plan-mensual`. Progress bar gradiente Click Society, tareas agrupadas por modo (IA/Hibrido/Manual), pasos expandibles con badges AI/HT, polling 15s, botones Ejecutar/Completar/Reintentar/Anular, watchdog para tareas stuck, auto-activacion del plan, placeholder terminal S4. Link en sidebar (ClipboardList). |
 | Modelo PlanExecution | ✅ Activo | PlanExecution (status, yearMonth) + StepExecution (PENDING/QUEUED/RUNNING/APPLIED/FAILED/HUMAN_TASK/IGNORED). Campos: resultUrl, detailedSteps (Json), prompt. idempotencyKey unique por step. |
 | Análisis Plan Mensual | ✅ Activo | Segundo modo en `/analisis`. Claude genera 5-12 tareas clasificadas IA/Híbrido/HT rankeadas por urgencia/impacto. Selección individual o por tipo. Botón "Enviar al Plan Mensual" crea PlanExecution y redirige. |
 | Clasificación IA/Híbrido/HT | ✅ Activo | 3 tipos de ejecución: IA (Constructor 100%), Híbrido (Constructor + revisión humana), HT (100% manual). Badges azul/púrpura/naranja. Filtros por tipo en Plan Mensual. |
@@ -444,6 +444,37 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 ---
 
 ## 8. Bitácora de sesiones
+
+### Sesión S3 — 2026-10-08 ✅ COMPLETA (Página Plan Mensual + flujo end-to-end)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Página `/clientes/[id]/plan-mensual` completa con flujo de ejecución conectado al worker.
+
+**Implementado:**
+- `plan-mensual/page.tsx`: SSR force-dynamic, header con breadcrumb
+- `plan-mensual/actions.ts`: 8 server actions (getPlanData, executeTask, completeHumanStep, voidTask, retryFailedTask, activatePlan, runWatchdog)
+- `plan-mensual/PlanMensualPanel.tsx`: UI completa con:
+  - Progress bar total con gradiente Click Society
+  - Selector de mes para historial
+  - Tareas agrupadas por modo (IA/Hibrido/Manual) con contadores
+  - Cada tarea expandible: objetivo, pasos con badges AI/HT, criterios de aceptacion
+  - Progress bar por tarea (pasos completados/total)
+  - Acciones: Ejecutar (READY+AI/HYBRID), Completar paso HUMAN, Reintentar (FAILED/PLANNING), Anular
+  - Info del ultimo run (costo, build, rutas cambiadas)
+  - Polling 15s cuando hay trabajo activo
+  - Banner plan PLANNING con boton Activar y Watchdog
+  - Empty state con link a Analisis Claude
+  - Columna derecha: placeholder terminal para S4
+- `ClientSidebar.tsx`: link "Plan Mensual" (ClipboardList) en grupo Estrategia
+- Flujo verificado: actionExecuteTask encola correctamente en planTaskQueue, worker consume y actualiza status
+- actionRetryFailedTask distingue fallo en decomposicion (re-enqueue) vs ejecucion (reset READY)
+- actionRunWatchdog expone watchdog para tareas stuck >10min
+- Decomposer auto-activa plan a ACTIVE cuando todas las tareas tienen pasos
+
+**Archivos nuevos:** 3 (page.tsx, actions.ts, PlanMensualPanel.tsx)
+**Archivos modificados:** 1 (ClientSidebar.tsx)
+**Commits:** 2 (feat S3 + fix flujo)
+
+---
 
 ### Sesión S2d — 2026-10-07 ✅ COMPLETA ("Mandar al plan" + descomposición)
 **Participantes:** Jorge + Claude Code
