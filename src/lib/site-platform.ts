@@ -28,12 +28,14 @@ interface DetectionSignals {
  */
 export async function detectPlatform(
   siteUrl: string,
-  framework?: string | null
+  framework?: string | null,
+  githubRepo?: string | null
 ): Promise<PlatformDetectionResult> {
   const signals = await gatherSignals(siteUrl);
 
   const hasNext = signals.nextjs.length > 0;
   const hasWp = signals.wordpress.length > 0;
+  const hasRepo = !!githubRepo;
 
   let platform: SitePlatform;
   let confidence: "high" | "medium" | "low";
@@ -50,8 +52,8 @@ export async function detectPlatform(
     }
   } else if (hasWp && !hasNext) {
     // Producción es WordPress
-    if (framework === "nextjs") {
-      // framework=nextjs pero producción=WordPress → MIGRACION
+    if (framework === "nextjs" || hasRepo) {
+      // framework=nextjs O tiene githubRepo (Next.js en desarrollo) pero producción=WordPress → MIGRACION
       platform = "MIGRACION";
       confidence = "high";
     } else {

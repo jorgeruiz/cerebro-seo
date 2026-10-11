@@ -88,6 +88,12 @@ REGLAS:
 6. Entre 1 y 5 pasos por tarea. Un paso = una acción atómica.
 7. Los prompts de pasos AI deben mencionar el CLAUDE.md y DESIGN.md del repo si existen.
 
+REGLA ANTI-INVENCIÓN (CRÍTICA):
+- PROHIBIDO inventar datos del cliente: casos de éxito, nombres de clientes, certificaciones, precios, capacidades técnicas, procesos internos, testimonios, estadísticas, modelos de equipos o cualquier dato factual específico de la empresa.
+- Si un paso AI necesita datos reales del cliente (fotos, precios, especificaciones, certificaciones, casos), el paso debe ser HUMAN, no AI.
+- Los pasos AI solo pueden generar estructura, contenido genérico del sector, y elementos técnicos (schema, meta tags, componentes).
+- Usa LITERALMENTE el título y objetivo de la tarea y la documentación del sitio (site-spec, catalog-schemas). No reinterpretes siglas ni términos técnicos del cliente — pueden tener significados específicos de su industria.
+
 RESPONDE ÚNICAMENTE con un JSON array:
 [
   {
@@ -133,7 +139,7 @@ Genera los pasos como JSON array.`;
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 4000,
+      max_tokens: 8000, // prompts AI para tareas CONTENT pueden ser largos
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
     });

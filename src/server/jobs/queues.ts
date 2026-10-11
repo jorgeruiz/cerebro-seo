@@ -38,6 +38,18 @@ export const syncQueue = new Queue("sync", {
   },
 });
 
+// Jobs de descomposición de tareas (Claude API, no Agent SDK).
+// Worker dedicado: decompose-worker.ts — ya no depende de insights ni advisor.
+export const decomposeQueue = new Queue("task-decompose", {
+  ...connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: "fixed", delay: 30_000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
+  },
+});
+
 // Jobs de ejecución de tareas del plan mensual (Agent SDK).
 // Este queue se consume SOLO por el worker separado (src/worker/plan-runner.ts).
 // El proceso web solo encola; init.ts NO arranca este worker.
@@ -105,6 +117,12 @@ export interface CycleCloseJobData {
 export interface ReportJobData {
   clientId: string;
   cycleId: string;
+}
+
+export interface DecomposeJobData {
+  taskId: string;
+  clientId: string;
+  candidateId: string;
 }
 
 export interface PlanTaskJobData {

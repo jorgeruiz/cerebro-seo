@@ -1,7 +1,6 @@
 import { createWorker } from "./base-worker";
 import { runInsightsProcessor } from "../processors/insights-processor";
 import { runAdvisorProcessor } from "@/lib/seo-advisor/advisor-processor";
-import { decomposeTask } from "../processors/task-decomposer";
 import { InsightsJobData, SeoAdvisorJobData } from "../queues";
 
 /**
@@ -15,6 +14,8 @@ import { InsightsJobData, SeoAdvisorJobData } from "../queues";
  *
  * NOTA: También procesa advisor:generate porque ambos workers comparten
  * la cola ai-analysis y BullMQ asigna jobs a cualquier worker disponible.
+ *
+ * task:decompose ya NO se procesa aquí — tiene su propio worker (decompose-worker.ts).
  */
 export const insightsWorker = createWorker<InsightsJobData | SeoAdvisorJobData>(
   "ai-analysis",
@@ -27,11 +28,6 @@ export const insightsWorker = createWorker<InsightsJobData | SeoAdvisorJobData>(
         scheduled: !data.force,
       });
       return result as never;
-    }
-
-    if (job.name === "task:decompose") {
-      await decomposeTask(job.data as { taskId: string; clientId: string; candidateId: string });
-      return undefined as never;
     }
 
     if (job.name !== "insights:generate") return undefined as never;

@@ -30,7 +30,7 @@ async function main() {
   console.log("|---|---|---|---|---|---|");
 
   for (const site of sites) {
-    const result = await detectPlatform(site.url, site.framework);
+    const result = await detectPlatform(site.url, site.framework, site.githubRepo);
 
     const icon =
       result.platform === "NEXTJS" ? "✅" :

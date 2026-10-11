@@ -1,4 +1,5 @@
 import { initSchedulers } from "./schedulers";
+import { initWatchdogScheduler } from "./schedulers/watchdog-scheduler";
 
 let initialized = false;
 
@@ -21,6 +22,7 @@ export async function initJobs(): Promise<void> {
   // Importar workers — los efectos de módulo registran los Workers en BullMQ
   await import("./workers/insights-worker");
   await import("./workers/seo-advisor-worker");
+  await import("./workers/decompose-worker");
   await import("./workers/audit-quick-worker");
   await import("./workers/audit-complete-worker");
   await import("./workers/rank-tracking-worker");
@@ -35,12 +37,8 @@ export async function initJobs(): Promise<void> {
   await import("./workers/competitor-worker");
   await import("./workers/ai-search-worker");
 
-  // Resto de workers se agregarán aquí según se implementen en las siguientes fases:
-  // await import("./workers/ai-search-worker");
-  // await import("./workers/cycle-close-worker");
-  // await import("./workers/report-worker");
-
   await initSchedulers();
+  await initWatchdogScheduler();
 
   console.log("[jobs] System initialized");
 }

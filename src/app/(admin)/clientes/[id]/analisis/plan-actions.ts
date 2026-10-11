@@ -2,7 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { aiAnalysisQueue } from "@/server/jobs/queues";
+import { decomposeQueue } from "@/server/jobs/queues";
 import type { AnalysisCandidate } from "@/lib/analysis-candidates";
 import { resolveSite } from "@/server/sites/resolve-site";
 import { ineligibilityReason } from "@/lib/site-platform";
@@ -153,7 +153,7 @@ export async function actionSendToPlan(
     });
 
     // Enqueue decomposition job (in ai-analysis queue, NOT the agent worker)
-    await aiAnalysisQueue.add("task:decompose", {
+    await decomposeQueue.add("task:decompose", {
       taskId: task.id,
       clientId,
       candidateId: candidate.id,
@@ -244,7 +244,7 @@ export async function actionRetryTask(
   // Delete any existing steps (from a partial previous attempt)
   await prisma.planStep.deleteMany({ where: { taskId } });
 
-  await aiAnalysisQueue.add("task:decompose", {
+  await decomposeQueue.add("task:decompose", {
     taskId,
     clientId: task.plan.clientId,
     candidateId: task.sourceCandidateId ?? "retry",

@@ -2,7 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { planTaskQueue, aiAnalysisQueue } from "@/server/jobs/queues";
+import { planTaskQueue, decomposeQueue } from "@/server/jobs/queues";
 import { runTaskWatchdog } from "@/server/jobs/processors/task-watchdog";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ export async function actionRetryFailedTask(
       data: { status: "PLANNING", failureReason: null },
     });
     await prisma.planStep.deleteMany({ where: { taskId } });
-    await aiAnalysisQueue.add("task:decompose", {
+    await decomposeQueue.add("task:decompose", {
       taskId,
       clientId: task.plan.clientId,
       candidateId: "retry",

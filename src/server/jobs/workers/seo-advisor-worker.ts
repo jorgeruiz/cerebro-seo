@@ -1,6 +1,5 @@
 import { createWorker } from "./base-worker";
 import { runAdvisorProcessor } from "@/lib/seo-advisor/advisor-processor";
-import { decomposeTask } from "../processors/task-decomposer";
 import type { SeoAdvisorJobData } from "../queues";
 
 /**
@@ -9,20 +8,14 @@ import type { SeoAdvisorJobData } from "../queues";
  * Genera el plan de "Próximos pasos sugeridos" para cada cliente SEO.
  * Corre diariamente a las 7 AM, justo después del InsightsAgent (6 AM).
  *
- * NOTA: también procesa task:decompose porque BullMQ asigna jobs a
- * cualquier worker en la cola ai-analysis. Si este worker recibe un
- * task:decompose, debe procesarlo — no descartarlo silenciosamente.
+ * task:decompose ya NO se procesa aquí — tiene su propio worker (decompose-worker.ts).
+ * Este worker se retira en S2c.
  *
  * Concurrencia: 2 clientes en paralelo.
  */
 export const seoAdvisorWorker = createWorker<SeoAdvisorJobData>(
   "ai-analysis",
   async (job) => {
-    if (job.name === "task:decompose") {
-      await decomposeTask(job.data as { taskId: string; clientId: string; candidateId: string });
-      return undefined as never;
-    }
-
     if (job.name !== "advisor:generate") return;
 
     const result = await runAdvisorProcessor({
