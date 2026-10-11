@@ -50,6 +50,18 @@ export const decomposeQueue = new Queue("task-decompose", {
   },
 });
 
+// Jobs de sesión de terminal (Agent SDK interactivo).
+// Cola separada de plan-task-execution para no bloquear tareas de otros planes.
+// Consumida por el worker separado (src/worker/plan-runner.ts).
+export const terminalQueue = new Queue("terminal-sessions", {
+  ...connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 20 },
+  },
+});
+
 // Jobs de ejecución de tareas del plan mensual (Agent SDK).
 // Este queue se consume SOLO por el worker separado (src/worker/plan-runner.ts).
 // El proceso web solo encola; init.ts NO arranca este worker.
@@ -123,5 +135,12 @@ export interface PlanTaskJobData {
   taskId: string;
   triggeredById?: string;
   preflight?: boolean; // clone → memoria → npm ci → build, sin agente/commit/PR
+}
+
+export interface TerminalJobData {
+  sessionId: string;
+  action: "turn" | "save" | "close";
+  prompt?: string; // for action=turn
+  triggeredById?: string;
 }
 

@@ -25,6 +25,7 @@ import {
   type PlanStepView,
   type PlanMonthOption,
 } from "./actions";
+import { TerminalPanel } from "./TerminalPanel";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -778,23 +779,14 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
         )}
       </div>
 
-      {/* Right column — terminal placeholder (S4) */}
-      <div className="hidden xl:flex w-80 shrink-0 flex-col">
-        <div className="sticky top-8 bg-card rounded-xl border border-border p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Terminal className="h-4 w-4 text-muted-foreground/60" />
-            <span className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
-              Terminal
-            </span>
-          </div>
-          <div className="bg-zinc-950 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-            <p className="font-mono text-[0.6rem] text-zinc-500 text-center">
-              Log de ejecucion en tiempo real
-              <br />
-              <span className="text-zinc-600">Disponible en S4</span>
-            </p>
-          </div>
-        </div>
+      {/* Right column — Terminal */}
+      <div className="hidden xl:flex w-96 shrink-0 flex-col">
+        <TerminalPanel
+          planId={plan?.id ?? ""}
+          taskId={null}
+          isAdmin={true}
+          planLocked={plan ? hasActiveWork(plan.tasks) : false}
+        />
       </div>
     </div>
   );
