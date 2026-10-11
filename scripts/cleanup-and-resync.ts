@@ -67,7 +67,6 @@ async function main() {
     { name: "MonthlyReport", fn: () => prisma.monthlyReport.deleteMany({}) },
     { name: "ContentPlan", fn: () => prisma.contentPlan.deleteMany({}) },
     { name: "AeoResearch", fn: () => prisma.aeoResearch.deleteMany({}) },
-    { name: "NextStepPlan", fn: () => prisma.nextStepPlan.deleteMany({}) },
     { name: "ClientUser", fn: () => prisma.clientUser.deleteMany({}) },
 
     // Cliente

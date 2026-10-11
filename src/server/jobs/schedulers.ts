@@ -69,13 +69,6 @@ export async function registerClientJobs(clientId: string, services: string[] = 
         { clientId, trigger: "scheduled" },
         { repeat: { pattern: "0 6 * * *" }, jobId: `insights:${clientId}` }
       );
-
-      // SeoAdvisor — diario 7 AM, encadenado después del InsightsAgent (6 AM)
-      await aiAnalysisQueue.add(
-        "advisor:generate",
-        { clientId },
-        { repeat: { pattern: "0 7 * * *" }, jobId: `advisor:${clientId}` }
-      );
     }
 
     // Backlinks — jueves 5 AM
@@ -179,7 +172,6 @@ export async function removeClientJobs(clientId: string): Promise<void> {
     `audit-quick:${clientId}`,
     `audit-full:${clientId}`,
     `insights:${clientId}`,
-    `advisor:${clientId}`,
     `backlinks:${clientId}`,
     `competitors:${clientId}`,
     `ai-search:${clientId}`,

@@ -10,8 +10,6 @@ import {
   buildOpportunitiesReport,
   type SeoOpportunity,
 } from "@/lib/seo-opportunities";
-import { getOrCreateMonthlyPlan } from "@/lib/seo-advisor/advisor-processor";
-import type { NextStep } from "@/lib/seo-advisor/types";
 import type {
   AnalysisOpportunity,
   AnalysisRisk,
@@ -164,50 +162,23 @@ export async function GET(
   const planType = req.nextUrl.searchParams.get("type"); // "monthly" | null
 
   if (planType === "monthly") {
-    // ── Plan mensual estable ──
-    // Genera lazy la primera vez, devuelve el mismo todo el mes.
-    // Max 6 steps accionables, sin setup, con origin tag.
-    try {
-      const monthlyResult = await getOrCreateMonthlyPlan({
-        clientId: internalId,
-        yearMonth: month,
-      });
-
-      return NextResponse.json({
-        clientId: cerebroClientId,
-        month,
-        type: "monthly",
-        planId: monthlyResult.planId,
-        planStatus: "valid",
-        model: monthlyResult.tokensUsed.input > 0 ? "claude" : "deterministic",
-        stale: false, // monthly plans are never stale within their month
-        nextSteps: monthlyResult.steps,
-        // Monthly plans don't include analysis or GSC — those are for the daily view
-        analysis: null,
-        gscOpportunities: [],
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error("[recommendations] monthly plan generation failed:", err);
-      return NextResponse.json(
-        { error: "Error generando plan mensual" },
-        { status: 500 }
-      );
-    }
+    // SeoAdvisor retirado en S2c — responder vacío para monthly
+    return NextResponse.json({
+      clientId: cerebroClientId,
+      month,
+      type: "monthly",
+      planId: null,
+      planStatus: null,
+      model: null,
+      stale: false,
+      nextSteps: [],
+      analysis: null,
+      gscOpportunities: [],
+      generatedAt: null,
+    });
   }
 
-  // ── Plan diario (comportamiento original) ──
-
-  // 5b. NextStepPlan más reciente del mes (excluir monthly-plan, preferir valid)
-  const plan = await prisma.nextStepPlan.findFirst({
-    where: {
-      clientId: internalId,
-      generatedAt: { gte: range.gte, lte: range.lte },
-      triggeredBy: { not: "monthly-plan" },
-      status: "valid",
-    },
-    orderBy: { generatedAt: "desc" },
-  });
+  // ── Plan diario — NextStepPlan retirado en S2c ──
 
   // 6. ClientAnalysis más reciente del mes
   const analysis = await prisma.clientAnalysis.findFirst({
@@ -218,8 +189,8 @@ export async function GET(
     orderBy: { createdAt: "desc" },
   });
 
-  // 7. Si no hay nada → 404
-  if (!plan && !analysis) {
+  // 7. Si no hay análisis → 404
+  if (!analysis) {
     return NextResponse.json(
       { error: `Sin recomendaciones para ${cerebroClientId} en ${month}` },
       { status: 404 }
@@ -246,35 +217,21 @@ export async function GET(
     }
   }
 
-  // 9. maxAgeDays — si el plan es más viejo que N días, marcar stale
-  const maxAgeDaysParam = req.nextUrl.searchParams.get("maxAgeDays");
-  const maxAgeDays = maxAgeDaysParam ? parseInt(maxAgeDaysParam, 10) : null;
-  let stale = false;
-  if (plan && maxAgeDays && !isNaN(maxAgeDays)) {
-    const ageMs = Date.now() - plan.generatedAt.getTime();
-    const ageDays = ageMs / (24 * 3600 * 1000);
-    stale = ageDays > maxAgeDays;
-  }
-
   // 10. GSC Opportunities (best-effort, live data)
   const gscOpportunities = await fetchGscOpportunities(internalId);
 
-  // 11. Respuesta enriquecida
+  // 11. Respuesta enriquecida — NextStepPlan retirado, campos vacíos
   return NextResponse.json({
     clientId: cerebroClientId,
     month,
     type: "daily",
-    // Plan metadata
-    planId: plan?.id ?? null,
-    planStatus: plan?.status ?? null,
-    model: plan?.model ?? null,
-    stale,
-    // Next steps
-    nextSteps: plan ? (plan.steps as unknown as NextStep[]) : [],
-    // Analysis
+    planId: null,
+    planStatus: null,
+    model: null,
+    stale: false,
+    nextSteps: [],
     analysis: analysisData,
-    // GSC opportunities (live)
     gscOpportunities,
-    generatedAt: plan?.generatedAt.toISOString() ?? null,
+    generatedAt: null,
   });
 }

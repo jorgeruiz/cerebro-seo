@@ -18,8 +18,8 @@ import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
 import { Decimal } from "@prisma/client/runtime/library";
-import { collectSignals } from "@/lib/seo-advisor/signals";
-import { checkPreconditions } from "@/lib/seo-advisor/preconditions";
+import { collectSignals } from "@/lib/seo-signals/signals";
+import { checkPreconditions } from "@/lib/seo-signals/preconditions";
 import { resolveSite } from "@/server/sites/resolve-site";
 import {
   type AnalysisCandidate,

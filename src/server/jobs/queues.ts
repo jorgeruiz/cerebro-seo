@@ -75,7 +75,6 @@ export type DataCollectionJobName =
 
 export type AiAnalysisJobName =
   | "insights:generate"
-  | "advisor:generate"
   | "cycle:close"
   | "report:monthly";
 
@@ -86,11 +85,6 @@ export interface InsightsJobData {
   trigger: "scheduled" | "audit_complete" | "backlink_alert" | "ranking_drop";
   priority?: "normal" | "high" | "urgent";
   context?: Record<string, unknown>;
-}
-
-export interface SeoAdvisorJobData {
-  clientId: string;
-  force?: boolean; // true = skip idempotency + invalidate signals cache
 }
 
 export interface CrawlerJobData {
