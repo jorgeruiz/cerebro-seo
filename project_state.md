@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-08 (Sesión S3 completa — flujo end-to-end conectado)
-**Fase actual:** Plan Mensual S3 completo, S2c (retiro Advisor) diferido
-**Próximo hito:** S4 terminal en vivo (log streaming del worker) o S2c limpieza Advisor
+**Última actualización:** 2026-10-10 (S2d cerrada — guard, watchdog auto, decompose-worker, preflight)
+**Fase actual:** S2d completa, S2c (retiro Advisor) en curso
+**Próximo hito:** S2c retiro Advisor → S4 terminal en vivo
 
 ---
 
@@ -473,6 +473,33 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 **Archivos nuevos:** 3 (page.tsx, actions.ts, PlanMensualPanel.tsx)
 **Archivos modificados:** 1 (ClientSidebar.tsx)
 **Commits:** 2 (feat S3 + fix flujo)
+
+---
+
+### Sesión S2d-cierre — 2026-10-10 ✅ COMPLETA (Guard, watchdog auto, decompose-worker, preflight)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ S2d cerrada con todos los fixes solicitados.
+
+**Implementado:**
+- **placeholder-guard.ts:** guard `[COMPLETAR` — si el diff de una tarea contiene marcadores, la tarea no pasa a DONE. Muestra archivo:línea. 6 tests.
+- **decompose-worker.ts:** worker dedicado para task:decompose (cola propia `task-decompose`). Ya no depende de insights-worker ni seo-advisor-worker. Evento `failed` marca tarea FAILED directamente.
+- **watchdog-scheduler.ts:** job BullMQ repetible cada 5 min. Detecta PLANNING >10min (1 retry) y RUNNING >15min (FAILED + cierra TaskRuns).
+- **task-decomposer.ts:** regla anti-invención en SYSTEM_PROMPT (prohibido inventar datos del cliente), max_tokens 8000.
+- **site-platform.ts:** githubRepo como señal de MIGRACION (producción WP + repo = MIGRACION). Continental FS ahora MIGRACION.
+- **import-site-repos.ts:** match por nombre (exact only, partial matches revertidos). 22 repos exact-match importados.
+- **detect-site-platforms.ts:** 19 sitios SEO detectados. 3 NEXTJS, 2 MIGRACION, 8 WORDPRESS, 7 OTRO.
+- **Preflight:** 8 tareas encoladas (Quicsa, Molino Azteca, Pon tu marca + 5 OTRO con framework=nextjs).
+- **Quicsa tareas:** AEO retrigger (5 pasos HUMAN), PAC policloruro de aluminio (1 paso AI), Landing Chillers (2 AI + 2 HUMAN). Todas en READY.
+
+**Candidatas Quicsa descompuestas:**
+- AEO Auditoría: 5 pasos HUMAN (auditar FAQPage, E-E-A-T, consolidar)
+- PAC (policloruro de aluminio): 1 paso AI (artículo MDX 2000-3000 palabras, sin datos inventados)
+- Landing Chillers: 2 AI (MDX + page.tsx/componente) + 2 HUMAN (datos reales + fotos)
+- Costo total descomposición: $0.113 USD
+
+**Partial matches revertidos a null (4):** JAC Forklift→JAC, Hernan Vazquez→Hernan Vazquez Reumatólogo, Frio Aislantes Landing→Frio Aislantes, Yackie Travel→Yackie Travels.
+
+**Ourense:** status=PAUSED, excluido por filtro de activos. Tiene repo pero no aparece en eligibles.
 
 ---
 

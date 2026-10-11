@@ -32,6 +32,7 @@ import {
   createPullRequest,
   sanitizePat,
 } from "./repo-manager";
+import { scanPlaceholders, formatPlaceholderHits } from "./placeholder-guard";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
 
 export async function processTask(jobData: PlanTaskJobData): Promise<void> {
@@ -130,7 +131,17 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       return;
     }
 
-    // ── 6b. Parse structured result from agent ────────────────────────
+    // ── 6b. Guard: [COMPLETAR markers in diff ─────────────────────────
+    const placeholderHits = scanPlaceholders(dir);
+    if (placeholderHits.length > 0) {
+      const detail = formatPlaceholderHits(placeholderHits);
+      console.log(`[plan-task] ✗ Placeholder markers found:\n${detail}`);
+      await failRun(run.id, "PLACEHOLDER_MARKERS", detail);
+      await failTask(taskId, `PLACEHOLDER_MARKERS: el agente dejó ${placeholderHits.length} marcador(es) [COMPLETAR sin resolver. ${detail}`);
+      return;
+    }
+
+    // ── 6c. Parse structured result from agent ────────────────────────
     const structured = parseAgentResult(agentResult.resultText);
     console.log(`[plan-task] Agent summary: ${structured.summary.slice(0, 200)}`);
 
