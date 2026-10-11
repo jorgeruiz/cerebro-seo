@@ -188,7 +188,7 @@ export async function actionExecuteTask(
   });
 
   if (!task) return { ok: false, error: "Tarea no encontrada." };
-  if (task.status !== "READY") {
+  if (task.status !== "READY" && task.status !== "WAITING_HUMAN") {
     return { ok: false, error: `Tarea no está lista (status: ${task.status}).` };
   }
   if (task.mode === "HUMAN") {
@@ -246,18 +246,26 @@ export async function actionCompleteHumanStep(
     },
   });
 
-  // Check if all steps of this task are done
+  // Check if there are remaining steps to process
   const allSteps = await prisma.planStep.findMany({
     where: { taskId: step.task.id },
+    orderBy: { order: "asc" },
   });
-  const allDone = allSteps.every(
-    (s) => s.id === stepId ? true : s.status === "DONE" || s.status === "SKIPPED"
+  const pendingSteps = allSteps.filter(
+    (s) => s.id !== stepId && s.status !== "DONE" && s.status !== "SKIPPED"
   );
 
-  if (allDone) {
+  if (pendingSteps.length === 0) {
+    // All done
     await prisma.planTask.update({
       where: { id: step.task.id },
       data: { status: "DONE", completedAt: new Date(), completedById: session.user.email },
+    });
+  } else {
+    // Re-enqueue to continue with remaining steps
+    await planTaskQueue.add("execute", {
+      taskId: step.task.id,
+      triggeredById: session.user.email ?? undefined,
     });
   }
 
@@ -269,18 +277,52 @@ export async function actionCompleteHumanStep(
 export async function actionVoidTask(
   taskId: string,
   reason: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; reverted: number } | { ok: false; error: string }> {
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
     return { ok: false, error: "Solo administradores." };
   }
 
-  const task = await prisma.planTask.findUnique({ where: { id: taskId } });
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: {
+      site: { select: { githubRepo: true, defaultBranch: true } },
+      plan: { select: { id: true, branchName: true } },
+    },
+  });
   if (!task) return { ok: false, error: "Tarea no encontrada." };
 
-  // Can void from most states except RUNNING
   if (task.status === "RUNNING") {
     return { ok: false, error: "No se puede anular una tarea en ejecucion. Espera a que termine." };
+  }
+
+  // If task has commits on the plan branch, revert them
+  let reverted = 0;
+  if (task.commitShas.length > 0 && task.site.githubRepo && task.plan.branchName) {
+    // Dynamic import to avoid loading worker-only code in the web process
+    const { ensureRepoPlanBranch, revertTaskCommits } = await import("@/worker/repo-manager");
+    const { acquirePlanLock } = await import("@/worker/plan-lock");
+
+    const lock = await acquirePlanLock(task.plan.id);
+    if (!lock.acquired) {
+      return { ok: false, error: "El plan está bloqueado por otra operación. Intenta de nuevo." };
+    }
+
+    try {
+      const dir = await ensureRepoPlanBranch(
+        task.site.githubRepo,
+        task.site.defaultBranch,
+        task.plan.branchName
+      );
+
+      const result = revertTaskCommits(dir, taskId, task.plan.branchName);
+      if (!result.ok) {
+        return { ok: false, error: `No se pudieron revertir los commits: ${result.error}` };
+      }
+      reverted = result.revertShas.length;
+    } finally {
+      await lock.release();
+    }
   }
 
   await prisma.planTask.update({
@@ -288,7 +330,7 @@ export async function actionVoidTask(
     data: { status: "VOIDED", voidReason: reason || "Anulada por el equipo" },
   });
 
-  return { ok: true };
+  return { ok: true, reverted };
 }
 
 // ─── Retry failed task ──────────────────────────────────────────────────────
@@ -351,6 +393,72 @@ export async function actionRunWatchdog(
 
   const result = await runTaskWatchdog(planId);
   return { ok: true, retried: result.retried.length, failed: result.failed.length };
+}
+
+// ─── Submit plan for review ──────────────────────────────────────────────────
+
+export async function actionSubmitForReview(
+  planId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    include: {
+      tasks: { select: { status: true } },
+      client: { select: { name: true } },
+    },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+  if (plan.status !== "ACTIVE") {
+    return { ok: false, error: `Plan no está en ACTIVE (status: ${plan.status}).` };
+  }
+
+  // Check all tasks are terminal (DONE/VOIDED/FAILED)
+  const pending = plan.tasks.filter(
+    (t) => !["DONE", "VOIDED", "FAILED"].includes(t.status)
+  );
+  if (pending.length > 0) {
+    return { ok: false, error: `${pending.length} tarea(s) aún no están terminadas.` };
+  }
+
+  // Plan-level guard: scan plan branch for [COMPLETAR markers
+  if (plan.branchName) {
+    try {
+      const site = await prisma.site.findFirst({
+        where: { client: { monthlyPlans: { some: { id: planId } } } },
+        select: { githubRepo: true, defaultBranch: true },
+      });
+
+      if (site?.githubRepo) {
+        const { ensureRepoPlanBranch, scanPlanPlaceholders } = await import("@/worker/repo-manager");
+        const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, plan.branchName);
+        const hits = scanPlanPlaceholders(dir, site.defaultBranch);
+
+        if (hits.length > 0) {
+          const detail = hits.map((h) => `${h.file}:${h.line || "?"} → ${h.text.slice(0, 80)}`).join("\n");
+          return {
+            ok: false,
+            error: `La rama contiene ${hits.length} marcador(es) [COMPLETAR sin resolver:\n${detail}`,
+          };
+        }
+      }
+    } catch (err) {
+      console.error("[submitForReview] Guard check failed:", err);
+      // Don't block review if guard check itself fails
+    }
+  }
+
+  await prisma.monthlyPlan.update({
+    where: { id: planId },
+    data: { status: "IN_REVIEW" },
+  });
+
+  return { ok: true };
 }
 
 // ─── Activate plan ──────────────────────────────────────────────────────────

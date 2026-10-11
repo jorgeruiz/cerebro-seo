@@ -194,7 +194,7 @@ export function commitAndPush(
 
   exec("git add -A", { cwd: dir });
   exec(`git commit -m "${message.replace(/"/g, '\\"')}" --author="${authorName} <${authorEmail}>"`, { cwd: dir });
-  exec(`git push origin ${branch} --force`, { cwd: dir });
+  exec(`git push origin ${branch}`, { cwd: dir });
 
   const sha = exec("git rev-parse HEAD", { cwd: dir, silent: true }).trim();
   return sha;
@@ -232,6 +232,283 @@ export async function createPullRequest(params: {
 
   const data = (await res.json()) as { number: number; html_url: string };
   return { number: data.number, url: data.html_url };
+}
+
+// ─── Plan-branch operations (S2e) ─────────────────────────────────────────
+
+export interface MergeResult {
+  ok: boolean;
+  conflictingFiles?: string[];
+}
+
+/**
+ * Clona o actualiza el repo y checkout la rama del plan.
+ * Si la rama existe remotamente, la reutiliza (nunca la borra).
+ * Si no existe, la crea desde el defaultBranch.
+ */
+export async function ensureRepoPlanBranch(
+  githubRepo: string,
+  defaultBranch: string,
+  planBranch: string
+): Promise<string> {
+  const [owner, name] = githubRepo.split("/");
+  if (!owner || !name) throw new Error(`githubRepo inválido: ${githubRepo}`);
+
+  const dir = repoDir(owner, name);
+  const cloneUrl = `https://github.com/${owner}/${name}.git`;
+
+  if (!existsSync(join(dir, ".git"))) {
+    exec(`git clone ${cloneUrl} "${dir}"`, { cwd: WORKSPACES });
+  } else {
+    exec("git fetch origin", { cwd: dir });
+  }
+
+  // Git author config
+  exec(`git config user.name "${workerEnv.GIT_AUTHOR_NAME}"`, { cwd: dir, silent: true });
+  exec(`git config user.email "${workerEnv.GIT_AUTHOR_EMAIL}"`, { cwd: dir, silent: true });
+
+  // Check if plan branch exists remotely
+  let branchExists = false;
+  try {
+    exec(`git rev-parse --verify origin/${planBranch}`, { cwd: dir, silent: true });
+    branchExists = true;
+  } catch {
+    // Branch doesn't exist remotely
+  }
+
+  if (branchExists) {
+    // Checkout and pull existing plan branch
+    try {
+      exec(`git checkout ${planBranch}`, { cwd: dir, silent: true });
+    } catch {
+      // Local branch might not exist yet
+      exec(`git checkout -b ${planBranch} origin/${planBranch}`, { cwd: dir, silent: true });
+    }
+    exec(`git reset --hard origin/${planBranch}`, { cwd: dir });
+    exec("git clean -fd", { cwd: dir });
+  } else {
+    // Create new branch from default
+    exec(`git checkout ${defaultBranch}`, { cwd: dir, silent: true });
+    exec(`git reset --hard origin/${defaultBranch}`, { cwd: dir });
+    exec("git clean -fd", { cwd: dir });
+    exec(`git checkout -b ${planBranch}`, { cwd: dir });
+  }
+
+  return dir;
+}
+
+/**
+ * Merge default branch into the plan branch.
+ * If conflict, aborts the merge and returns the conflicting files.
+ */
+export function mergeDefaultIntoPlan(
+  dir: string,
+  defaultBranch: string
+): MergeResult {
+  exec("git fetch origin", { cwd: dir });
+
+  try {
+    exec(`git merge origin/${defaultBranch} --no-edit`, { cwd: dir });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+
+    // Extract conflicting files from git status
+    const conflictFiles: string[] = [];
+    try {
+      const status = exec("git status --porcelain", { cwd: dir, silent: true });
+      for (const line of status.split("\n")) {
+        if (line.startsWith("UU ") || line.startsWith("AA ") || line.startsWith("DD ")) {
+          conflictFiles.push(line.slice(3).trim());
+        }
+      }
+    } catch {
+      // Can't get status
+    }
+
+    // Abort the merge to leave working tree clean
+    try {
+      exec("git merge --abort", { cwd: dir, silent: true });
+    } catch {
+      // Merge abort failed — try reset
+      try { exec("git reset --hard HEAD", { cwd: dir, silent: true }); } catch { /* last resort */ }
+    }
+
+    if (conflictFiles.length > 0 || msg.includes("CONFLICT") || msg.includes("Merge conflict")) {
+      return { ok: false, conflictingFiles: conflictFiles.length > 0 ? conflictFiles : ["(archivos en conflicto no identificados)"] };
+    }
+
+    // Non-conflict merge failure → rethrow
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Commit with [task:<id>] prefix. Normal push (never --force).
+ */
+export function commitStep(
+  dir: string,
+  branch: string,
+  taskId: string,
+  stepTitle: string
+): string | null {
+  if (!hasDiff(dir)) return null;
+
+  const message = `[task:${taskId.slice(0, 8)}] ${stepTitle}`;
+  const authorName = workerEnv.GIT_AUTHOR_NAME;
+  const authorEmail = workerEnv.GIT_AUTHOR_EMAIL;
+
+  exec("git add -A", { cwd: dir });
+  exec(`git commit -m "${message.replace(/"/g, '\\"')}" --author="${authorName} <${authorEmail}>"`, { cwd: dir });
+  exec(`git push origin ${branch}`, { cwd: dir });
+
+  return exec("git rev-parse HEAD", { cwd: dir, silent: true }).trim();
+}
+
+/**
+ * Find all commits for a task on the current branch and revert them in reverse order.
+ * Returns the list of revert commit SHAs, or null if revert had conflicts.
+ */
+export function revertTaskCommits(
+  dir: string,
+  taskId: string,
+  branch: string
+): { ok: true; revertShas: string[] } | { ok: false; error: string } {
+  const tag = `[task:${taskId.slice(0, 8)}]`;
+
+  // Find commits matching this task (newest first)
+  let logOutput: string;
+  try {
+    logOutput = exec(`git log --oneline --fixed-strings --grep="${tag}" --format="%H"`, { cwd: dir, silent: true });
+  } catch {
+    return { ok: true, revertShas: [] }; // no commits found
+  }
+
+  const shas = logOutput.trim().split("\n").filter(Boolean);
+  if (shas.length === 0) return { ok: true, revertShas: [] };
+
+  const revertShas: string[] = [];
+
+  // Revert in order (newest first, which is how git log returns them)
+  for (const sha of shas) {
+    try {
+      exec(`git revert ${sha} --no-edit`, { cwd: dir });
+      const revertSha = exec("git rev-parse HEAD", { cwd: dir, silent: true }).trim();
+      revertShas.push(revertSha);
+    } catch (err) {
+      // Revert conflict
+      try { exec("git revert --abort", { cwd: dir, silent: true }); } catch { /* */ }
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: sanitizePat(`Revert conflict on ${sha}: ${msg.slice(0, 200)}`) };
+    }
+  }
+
+  // Push the reverts
+  exec(`git push origin ${branch}`, { cwd: dir });
+
+  return { ok: true, revertShas };
+}
+
+/**
+ * Create or update the plan-level PR.
+ * If a PR already exists for this branch, update its body.
+ * If not, create a new one.
+ */
+export async function createOrUpdatePlanPR(params: {
+  githubRepo: string;
+  planBranch: string;
+  defaultBranch: string;
+  title: string;
+  body: string;
+}): Promise<{ number: number; url: string; isNew: boolean }> {
+  const [owner] = params.githubRepo.split("/");
+
+  // Check for existing open PR
+  const searchRes = await fetch(
+    `https://api.github.com/repos/${params.githubRepo}/pulls?` +
+      `head=${encodeURIComponent(`${owner}:${params.planBranch}`)}&state=open`,
+    {
+      headers: {
+        Authorization: `Bearer ${PAT}`,
+        Accept: "application/vnd.github+json",
+      },
+    }
+  );
+
+  if (searchRes.ok) {
+    const prs = (await searchRes.json()) as Array<{ number: number; html_url: string }>;
+    if (prs.length > 0) {
+      // Update existing PR body
+      const pr = prs[0];
+      await fetch(`https://api.github.com/repos/${params.githubRepo}/pulls/${pr.number}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${PAT}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ body: params.body }),
+      });
+      return { number: pr.number, url: pr.html_url, isNew: false };
+    }
+  }
+
+  // Create new PR
+  const createRes = await fetch(`https://api.github.com/repos/${params.githubRepo}/pulls`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PAT}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      title: params.title,
+      body: params.body,
+      head: params.planBranch,
+      base: params.defaultBranch,
+    }),
+  });
+
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(`GitHub API error ${createRes.status}: ${sanitizePat(text.slice(0, 500))}`);
+  }
+
+  const data = (await createRes.json()) as { number: number; html_url: string };
+  return { number: data.number, url: data.html_url, isNew: true };
+}
+
+/**
+ * Scan plan branch diff against default for [COMPLETAR markers.
+ * Used for plan-level guard before IN_REVIEW.
+ */
+export function scanPlanPlaceholders(
+  dir: string,
+  defaultBranch: string
+): { file: string; line: number; text: string }[] {
+  let diffOutput: string;
+  try {
+    diffOutput = exec(`git diff origin/${defaultBranch}...HEAD`, { cwd: dir, silent: true });
+  } catch {
+    return [];
+  }
+
+  const hits: { file: string; line: number; text: string }[] = [];
+  let currentFile = "";
+
+  for (const rawLine of diffOutput.split("\n")) {
+    const fileMatch = rawLine.match(/^\+\+\+ b\/(.+)$/);
+    if (fileMatch) {
+      currentFile = fileMatch[1];
+      continue;
+    }
+    if (!rawLine.startsWith("+") || rawLine.startsWith("+++")) continue;
+    if (rawLine.includes("[COMPLETAR")) {
+      hits.push({ file: currentFile, line: 0, text: rawLine.slice(1).trim() });
+    }
+  }
+
+  return hits;
 }
 
 /**

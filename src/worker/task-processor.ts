@@ -1,15 +1,17 @@
 /**
- * Procesador de tareas del plan mensual.
+ * Procesador de tareas del plan mensual — S2e: rama por plan + ejecución por pasos.
  *
  * Flujo por tarea:
- * 1. Cargar task + site. Validar githubRepo.
- * 2. Clonar/actualizar repo. Crear rama cr/<taskId>.
- * 3. Clasificar memoria del sitio. Si AUTO + incompleta → FAILED.
- * 4. npm ci si cambió lockfile.
- * 5. Ejecutar Agent SDK query() con prompt compuesto.
- * 6. Verificar build (npm run build).
- * 7. Commit, push, crear PR.
- * 8. Actualizar task → DONE, run → SUCCEEDED.
+ * 1. Cargar task + plan + site + steps.
+ * 2. Adquirir candado del plan en Redis.
+ * 3. Checkout rama del plan (plan/{slug}-{YYYY-MM}). Reutilizar si existe.
+ * 4. Merge default branch. Si conflicto → WAITING_HUMAN.
+ * 5. Clasificar memoria. npm ci si lockfile cambió.
+ * 6. Recorrer steps en orden:
+ *    - AI: agente → build → guard → commit [task:<id>] → push
+ *    - HUMAN: WAITING_HUMAN, se detiene. Server action reenqueue.
+ * 7. Todos los pasos hechos → task DONE. Crear/actualizar PR del plan.
+ * 8. Liberar candado.
  */
 
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
@@ -20,20 +22,24 @@ import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
 import { classifyMemory, isMemoryComplete } from "./memory-classifier";
+import { acquirePlanLock } from "./plan-lock";
+import { scanPlaceholders, formatPlaceholderHits } from "./placeholder-guard";
 import {
   ensureRepo,
-  checkoutBranch,
-  branchName,
+  ensureRepoPlanBranch,
+  mergeDefaultIntoPlan,
   needsInstall,
   runInstall,
   verifyBuild,
   hasDiff,
-  commitAndPush,
-  createPullRequest,
+  commitStep,
+  createOrUpdatePlanPR,
+  getPreviewUrl,
   sanitizePat,
 } from "./repo-manager";
-import { scanPlaceholders, formatPlaceholderHits } from "./placeholder-guard";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
+
+// ─── Main entry ──────────────────────────────────────────────────────────────
 
 export async function processTask(jobData: PlanTaskJobData): Promise<void> {
   if (jobData.preflight) {
@@ -42,64 +48,82 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
 
   const { taskId, triggeredById } = jobData;
 
-  // ── 1. Cargar task + site ──────────────────────────────────────────────
+  // ── 1. Cargar task + plan + site + steps ─────────────────────────────
   const task = await prisma.planTask.findUniqueOrThrow({
     where: { id: taskId },
-    include: { site: true, plan: { select: { clientId: true } } },
+    include: {
+      site: true,
+      plan: { select: { id: true, clientId: true, branchName: true, month: true } },
+      steps: { orderBy: { order: "asc" } },
+    },
   });
 
   const site = task.site;
+  const plan = task.plan;
+
   if (!site.githubRepo) {
     await failTask(taskId, "Site no tiene githubRepo configurado.");
     return;
   }
+  if (!plan.branchName) {
+    await failTask(taskId, "Plan no tiene branchName configurado.");
+    return;
+  }
 
-  // Status → RUNNING
+  // ── 2. Adquirir candado del plan ─────────────────────────────────────
+  const lock = await acquirePlanLock(plan.id);
+  if (!lock.acquired) {
+    console.log(`[plan-task] Plan ${plan.id} locked by ${lock.holder ?? "unknown"} — re-queuing`);
+    // La tarea se reintentará automáticamente por BullMQ
+    throw new Error("PLAN_LOCKED");
+  }
+
+  // Task → RUNNING
   await prisma.planTask.update({
     where: { id: taskId },
     data: { status: "RUNNING" },
   });
 
-  // Crear TaskRun
-  const run = await prisma.taskRun.create({
-    data: {
-      taskId,
-      kind: "AUTO",
-      status: "RUNNING",
-      triggeredById: triggeredById ?? null,
-    },
-  });
-
   try {
-    // ── 2. Clonar/actualizar repo ──────────────────────────────────────
-    console.log(`[plan-task] Ensuring repo ${site.githubRepo}...`);
-    const dir = await ensureRepo(site.githubRepo, site.defaultBranch);
+    // ── 3. Checkout rama del plan ───────────────────────────────────────
+    console.log(`[plan-task] Ensuring plan branch ${plan.branchName} for ${site.githubRepo}...`);
+    const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, plan.branchName);
 
-    const branch = branchName(taskId);
-    checkoutBranch(dir, branch);
+    // ── 4. Merge default → plan branch ─────────────────────────────────
+    console.log(`[plan-task] Merging ${site.defaultBranch} into ${plan.branchName}...`);
+    const mergeResult = mergeDefaultIntoPlan(dir, site.defaultBranch);
 
-    // ── 3. Clasificar memoria ──────────────────────────────────────────
-    const memoryStatus = await classifyMemory(dir);
-    await prisma.taskRun.update({
-      where: { id: run.id },
-      data: { memoryStatus: memoryStatus as unknown as InputJsonValue },
-    });
-
-    if (task.mode === "AI" && !isMemoryComplete(memoryStatus)) {
-      await failRun(run.id, "MEMORY_INCOMPLETE", JSON.stringify(memoryStatus));
-      await failTask(taskId, "MEMORY_INCOMPLETE");
+    if (!mergeResult.ok) {
+      const files = mergeResult.conflictingFiles?.join(", ") ?? "(desconocidos)";
+      console.log(`[plan-task] Merge conflict: ${files}`);
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: {
+          status: "WAITING_HUMAN",
+          failureReason: `MERGE_CONFLICT: conflicto al traer ${site.defaultBranch} a la rama del plan. Archivos: ${files}`,
+        },
+      });
       return;
     }
 
-    // ── 4. npm ci si lockfile cambió ───────────────────────────────────
+    // ── 5. Memoria + npm ci ────────────────────────────────────────────
+    const memoryStatus = await classifyMemory(dir);
+
+    if (task.mode === "AI" && !isMemoryComplete(memoryStatus)) {
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: { status: "WAITING_HUMAN", failureReason: "MEMORY_INCOMPLETE" },
+      });
+      return;
+    }
+
     if (needsInstall(dir)) {
-      console.log(`[plan-task] Running npm ci --include=dev...`);
+      console.log("[plan-task] Running npm ci --include=dev...");
       try {
         runInstall(dir);
       } catch (installErr) {
-        const installMsg = installErr instanceof Error ? installErr.message : String(installErr);
-        if (installMsg === "LOCKFILE_OUT_OF_SYNC") {
-          await failRun(run.id, "LOCKFILE_OUT_OF_SYNC");
+        const msg = installErr instanceof Error ? installErr.message : String(installErr);
+        if (msg === "LOCKFILE_OUT_OF_SYNC") {
           await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
           return;
         }
@@ -107,145 +131,246 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
       }
     }
 
-    // ── 5. Agent SDK query() ───────────────────────────────────────────
-    console.log(`[plan-task] Running agent for task "${task.title}"...`);
-    const agentResult = await runAgent(dir, task, site.defaultBranch);
+    // ── 6. Recorrer steps ──────────────────────────────────────────────
+    const allShas: string[] = [...task.commitShas]; // preserve any prior commits
 
-    await prisma.taskRun.update({
-      where: { id: run.id },
-      data: { agentSessionId: agentResult.sessionId },
-    });
+    for (const step of task.steps) {
+      // Skip already completed/skipped steps
+      if (step.status === "DONE" || step.status === "SKIPPED") continue;
 
-    // ── 6. Verificar build ─────────────────────────────────────────────
-    console.log(`[plan-task] Verifying build...`);
-    const buildResult = verifyBuild(dir);
+      if (step.type === "HUMAN") {
+        // ── HUMAN step: pause ──────────────────────────────────────
+        console.log(`[plan-task] Step ${step.order} "${step.title}" is HUMAN — pausing`);
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: { status: "WAITING_HUMAN" },
+        });
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: { status: "WAITING_HUMAN", commitShas: allShas },
+        });
+        return; // stop processing — server action will re-enqueue
+      }
 
-    await prisma.taskRun.update({
-      where: { id: run.id },
-      data: { buildPassed: buildResult.passed },
-    });
+      // ── AI step ──────────────────────────────────────────────────
+      console.log(`[plan-task] Step ${step.order}/${task.steps.length}: "${step.title}" [AI]`);
 
-    if (!buildResult.passed) {
-      await failRun(run.id, "BUILD_FAILED", buildResult.logTail);
-      await failTask(taskId, `Build falló: ${(buildResult.logTail ?? "").slice(0, 200)}`);
-      return;
-    }
+      await prisma.planStep.update({
+        where: { id: step.id },
+        data: { status: "RUNNING" },
+      });
 
-    // ── 6b. Guard: [COMPLETAR markers in diff ─────────────────────────
-    const placeholderHits = scanPlaceholders(dir);
-    if (placeholderHits.length > 0) {
-      const detail = formatPlaceholderHits(placeholderHits);
-      console.log(`[plan-task] ✗ Placeholder markers found:\n${detail}`);
-      await failRun(run.id, "PLACEHOLDER_MARKERS", detail);
-      await failTask(taskId, `PLACEHOLDER_MARKERS: el agente dejó ${placeholderHits.length} marcador(es) [COMPLETAR sin resolver. ${detail}`);
-      return;
-    }
+      const run = await prisma.taskRun.create({
+        data: {
+          taskId,
+          stepId: step.id,
+          kind: "AUTO",
+          status: "RUNNING",
+          triggeredById: triggeredById ?? null,
+        },
+      });
 
-    // ── 6c. Parse structured result from agent ────────────────────────
-    const structured = parseAgentResult(agentResult.resultText);
-    console.log(`[plan-task] Agent summary: ${structured.summary.slice(0, 200)}`);
+      try {
+        const agentResult = await runAgent(dir, task, step);
 
-    // Sin cambios → check if justified
-    if (!hasDiff(dir)) {
-      if (structured.noChangeReason) {
-        // Agent explained why no changes needed → SUCCEEDED, not FAILED
-        console.log(`[plan-task] No changes needed: ${structured.noChangeReason}`);
+        await prisma.taskRun.update({
+          where: { id: run.id },
+          data: { agentSessionId: agentResult.sessionId },
+        });
+
+        // Build check
+        const buildResult = verifyBuild(dir);
+        await prisma.taskRun.update({
+          where: { id: run.id },
+          data: { buildPassed: buildResult.passed },
+        });
+
+        if (!buildResult.passed) {
+          throw new Error(`BUILD_FAILED: ${(buildResult.logTail ?? "").slice(0, 200)}`);
+        }
+
+        // Placeholder guard
+        const placeholderHits = scanPlaceholders(dir);
+        if (placeholderHits.length > 0) {
+          const detail = formatPlaceholderHits(placeholderHits);
+          throw new Error(`PLACEHOLDER_MARKERS: ${detail}`);
+        }
+
+        // Parse structured result
+        const structured = parseAgentResult(agentResult.resultText);
+
+        // Commit if there are changes
+        let sha: string | null = null;
+        if (hasDiff(dir)) {
+          sha = commitStep(dir, plan.branchName, taskId, step.title);
+          if (sha) allShas.push(sha);
+        } else if (!structured.noChangeReason) {
+          throw new Error("NO_CHANGES: el agente no hizo cambios sin justificación");
+        }
+
+        // Step → DONE
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: { status: "DONE" },
+        });
+
         await prisma.taskRun.update({
           where: { id: run.id },
           data: {
             status: "SUCCEEDED",
+            commitSha: sha,
             costUsd: new Decimal(agentResult.costUsd.toFixed(6)),
             inputTokens: agentResult.inputTokens,
             outputTokens: agentResult.outputTokens,
-            logTail: JSON.stringify(structured),
+            logTail: structured.summary.slice(0, 2000),
+            changedRoutes: structured.changedRoutes,
             finishedAt: new Date(),
           },
         });
+
+        await logApiUsage({
+          provider: "anthropic",
+          endpoint: "agent-sdk-plan-step",
+          cost: agentResult.costUsd,
+          clientId: plan.clientId,
+        });
+
+        console.log(
+          `[plan-task] Step ${step.order} ✓ ` +
+            `${sha ? `sha=${sha.slice(0, 7)}` : "no changes"} ` +
+            `$${agentResult.costUsd.toFixed(4)}`
+        );
+      } catch (stepErr) {
+        const errMsg = stepErr instanceof Error ? sanitizePat(stepErr.message) : String(stepErr);
+        console.error(`[plan-task] Step ${step.order} ✗: ${errMsg}`);
+
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: { status: "FAILED" },
+        });
+        await failRun(run.id, errMsg);
+        await failTask(taskId, `Paso ${step.order} falló: ${errMsg}`);
+        // Update commitShas with whatever we collected so far
         await prisma.planTask.update({
           where: { id: taskId },
-          data: { status: "DONE", failureReason: `NO_CHANGES_NEEDED: ${structured.noChangeReason}` },
+          data: { commitShas: allShas },
         });
-        await logApiUsage({ provider: "anthropic", endpoint: "agent-sdk-plan-task", cost: agentResult.costUsd, clientId: task.plan.clientId });
-        return;
+        return; // stop this task, rest of plan continues
       }
-      // No changes and no justification → FAILED
-      await failRun(run.id, "NO_CHANGES", JSON.stringify(structured));
-      await failTask(taskId, "NO_CHANGES");
-      return;
     }
 
-    // ── 7. Commit, push, PR ────────────────────────────────────────────
-    console.log(`[plan-task] Committing and creating PR...`);
-    const sha = commitAndPush(dir, branch, `feat: ${task.title}`);
-
-    const prBody = [
-      `## ${task.title}`,
-      "",
-      `**Objetivo:** ${task.objective}`,
-      "",
-      "**Resumen del agente:**",
-      structured.summary,
-      "",
-      structured.changedRoutes.length > 0 ? `**Rutas afectadas:** ${structured.changedRoutes.join(", ")}` : "",
-      "",
-      "**Criterios de aceptación:**",
-      ...task.acceptanceCriteria.map((c) => `- ${c}`),
-      "",
-      `**Costo:** $${agentResult.costUsd.toFixed(4)} USD`,
-      `**Run ID:** ${run.id}`,
-      "",
-      "---",
-      "_Generado por Cerebro SEO Agent_",
-    ].filter(Boolean).join("\n");
-
-    // TODO S2e: PR creation moves to plan level (one PR per plan, not per task)
-    // For now, push branch and create PR per task as temporary behavior
-    const pr = await createPullRequest({
-      githubRepo: site.githubRepo,
-      branch,
-      defaultBranch: site.defaultBranch,
-      title: task.title,
-      body: prBody,
-    });
-
-    // ── 8. Actualizar task y run ───────────────────────────────────────
+    // ── 7. All steps done → task DONE ──────────────────────────────────
     await prisma.planTask.update({
       where: { id: taskId },
       data: {
         status: "DONE",
-        commitShas: [sha],
+        commitShas: allShas,
+        completedAt: new Date(),
       },
     });
 
-    await prisma.taskRun.update({
-      where: { id: run.id },
-      data: {
-        status: "SUCCEEDED",
-        commitSha: sha,
-        costUsd: new Decimal(agentResult.costUsd.toFixed(6)),
-        inputTokens: agentResult.inputTokens,
-        outputTokens: agentResult.outputTokens,
-        logTail: JSON.stringify(structured),
-        changedRoutes: structured.changedRoutes,
-        finishedAt: new Date(),
-      },
-    });
+    // ── 8. Create or update plan-level PR ──────────────────────────────
+    if (allShas.length > 0) {
+      console.log("[plan-task] Creating/updating plan PR...");
+      try {
+        const prBody = await buildPlanPRBody(plan.id);
+        const pr = await createOrUpdatePlanPR({
+          githubRepo: site.githubRepo,
+          planBranch: plan.branchName,
+          defaultBranch: site.defaultBranch,
+          title: `Plan ${plan.month}`,
+          body: prBody,
+        });
 
-    await logApiUsage({
-      provider: "anthropic",
-      endpoint: "agent-sdk-plan-task",
-      cost: agentResult.costUsd,
-      clientId: task.plan.clientId,
-    });
+        // Try to get preview URL
+        const lastSha = allShas[allShas.length - 1];
+        const previewUrl = await getPreviewUrl(site.githubRepo, lastSha);
 
-    console.log(`[plan-task] ✓ Task "${task.title}" → DONE (PR #${pr.number})`);
+        await prisma.monthlyPlan.update({
+          where: { id: plan.id },
+          data: {
+            prNumber: pr.number,
+            prUrl: pr.url,
+            previewUrl: previewUrl ?? undefined,
+          },
+        });
+
+        console.log(`[plan-task] ✓ Task "${task.title}" → DONE (PR #${pr.number})`);
+      } catch (prErr) {
+        // PR creation failure doesn't fail the task — commits are already pushed
+        console.error("[plan-task] PR creation failed:", prErr instanceof Error ? prErr.message : prErr);
+      }
+    } else {
+      console.log(`[plan-task] ✓ Task "${task.title}" → DONE (no commits)`);
+    }
   } catch (err) {
     const errMsg = err instanceof Error ? sanitizePat(err.message) : String(err);
-    console.error(`[plan-task] ✗ Task "${task.title}" failed:`, errMsg);
+    if (errMsg === "PLAN_LOCKED") throw err; // let BullMQ retry
 
-    await failRun(run.id, errMsg);
+    console.error(`[plan-task] ✗ Task "${task.title}" failed:`, errMsg);
     await failTask(taskId, errMsg);
+  } finally {
+    await lock.release();
   }
+}
+
+// ─── PR Body Builder ─────────────────────────────────────────────────────────
+
+async function buildPlanPRBody(planId: string): Promise<string> {
+  const plan = await prisma.monthlyPlan.findUniqueOrThrow({
+    where: { id: planId },
+    include: {
+      client: { select: { name: true } },
+      tasks: {
+        orderBy: { order: "asc" },
+        include: {
+          runs: {
+            where: { status: "SUCCEEDED" },
+            orderBy: { finishedAt: "desc" },
+            take: 1,
+            select: { costUsd: true, changedRoutes: true },
+          },
+        },
+      },
+    },
+  });
+
+  const sections: string[] = [
+    `# Plan ${plan.month} — ${plan.client.name}`,
+    "",
+  ];
+
+  let totalCost = 0;
+
+  for (const task of plan.tasks) {
+    const icon = task.status === "DONE" ? "✅" : task.status === "VOIDED" ? "🚫" : task.status === "FAILED" ? "❌" : "⏳";
+    sections.push(`## ${icon} ${task.title}`);
+    sections.push(`**Mode:** ${task.mode} | **Status:** ${task.status}`);
+
+    if (task.voidReason) sections.push(`**Anulada:** ${task.voidReason}`);
+    if (task.failureReason) sections.push(`**Error:** ${task.failureReason}`);
+
+    if (task.runs.length > 0) {
+      const run = task.runs[0];
+      const cost = run.costUsd ? Number(run.costUsd) : 0;
+      totalCost += cost;
+      if (run.changedRoutes.length > 0) {
+        sections.push(`**Rutas:** ${run.changedRoutes.join(", ")}`);
+      }
+    }
+
+    if (task.commitShas.length > 0) {
+      sections.push(`**Commits:** ${task.commitShas.map((s) => s.slice(0, 7)).join(", ")}`);
+    }
+
+    sections.push("");
+  }
+
+  sections.push("---");
+  sections.push(`**Costo total:** $${totalCost.toFixed(4)} USD`);
+  sections.push("_Generado por Cerebro SEO_");
+
+  return sections.join("\n");
 }
 
 // ─── Agent SDK ───────────────────────────────────────────────────────────────
@@ -255,7 +380,7 @@ interface AgentResult {
   costUsd: number;
   inputTokens: number;
   outputTokens: number;
-  resultText: string; // raw text from the agent's final result
+  resultText: string;
 }
 
 export interface AgentStructuredResult {
@@ -265,7 +390,6 @@ export interface AgentStructuredResult {
 }
 
 function parseAgentResult(text: string): AgentStructuredResult {
-  // Try to extract JSON block from agent output
   const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*"summary"[\s\S]*\}/);
   if (jsonMatch) {
     try {
@@ -277,51 +401,50 @@ function parseAgentResult(text: string): AgentStructuredResult {
       };
     } catch { /* fall through */ }
   }
-  // Fallback: use full text as summary
   return { summary: text.slice(0, 2000), changedRoutes: [], noChangeReason: null };
 }
 
-function composePrompt(task: {
-  title: string;
-  objective: string;
-  prompt: string;
-  acceptanceCriteria: string[];
-}): string {
+function composeStepPrompt(
+  task: { title: string; objective: string },
+  step: { title: string; prompt: string | null; acceptanceCriteria: string[] }
+): string {
   const sections = [
-    `# Tarea: ${task.title}`,
+    `# Paso: ${step.title}`,
     "",
-    `## Objetivo`,
-    task.objective,
+    `## Contexto de la tarea`,
+    `Tarea: ${task.title}`,
+    `Objetivo: ${task.objective}`,
     "",
-    `## Instrucciones detalladas`,
-    task.prompt,
+    `## Instrucciones de este paso`,
+    step.prompt ?? "(sin instrucciones específicas)",
     "",
     `## Criterios de aceptación`,
-    ...task.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`),
+    ...step.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`),
     "",
     `## Reglas`,
     "- Respeta CLAUDE.md y DESIGN.md del repo si existen.",
-    "- Alcance mínimo: solo los cambios necesarios para cumplir los criterios.",
+    "- Alcance mínimo: solo los cambios de ESTE paso.",
     "- Deja el build pasando (npm run build).",
     "- No toques archivos .env*.",
     "- No instales dependencias nuevas sin justificación clara.",
     "- No hagas git commit ni git push — el worker lo hace después.",
     "- No salgas del directorio del repo.",
+    "- PROHIBIDO inventar datos del cliente (precios, clientes, certificaciones, casos).",
     "",
     `## Resultado`,
     "Al terminar, responde con un bloque JSON:",
     "```json",
     `{"summary": "resumen de lo que hiciste", "changedRoutes": ["/ruta1", "/ruta2"], "noChangeReason": null}`,
     "```",
-    "Si no hiciste cambios, explica por qué en noChangeReason y deja changedRoutes vacío.",
+    "Si no hiciste cambios, explica por qué en noChangeReason.",
   ];
   return sections.join("\n");
 }
 
 async function runAgent(
   dir: string,
-  task: { title: string; objective: string; prompt: string; acceptanceCriteria: string[] },
-  _defaultBranch: string
+  task: { title: string; objective: string },
+  step: { title: string; prompt: string | null; acceptanceCriteria: string[] }
 ): Promise<AgentResult> {
   const ac = new AbortController();
   const timeout = setTimeout(
@@ -336,8 +459,7 @@ async function runAgent(
   let resultText = "";
 
   try {
-    const prompt = composePrompt(task);
-
+    const prompt = composeStepPrompt(task, step);
     const canUseTool = createCanUseTool(dir);
 
     const stream = query({
@@ -345,10 +467,8 @@ async function runAgent(
       options: {
         cwd: dir,
         tools: { type: "preset", preset: "claude_code" },
-        disallowedTools: [
-          "WebFetch", "WebSearch", "Agent",
-        ],
-        canUseTool: canUseTool as never, // SDK expects its own CanUseTool type
+        disallowedTools: ["WebFetch", "WebSearch", "Agent"],
+        canUseTool: canUseTool as never,
         permissionMode: "default",
         maxTurns: workerEnv.AGENT_MAX_TURNS,
         maxBudgetUsd: workerEnv.AGENT_MAX_BUDGET_USD,
@@ -356,7 +476,7 @@ async function runAgent(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: "Estás ejecutando una tarea SEO automatizada para Click Society. No hagas preguntas — ejecuta directamente. No hagas git commit ni git push. Solo puedes usar Bash para: npm run build, npm run lint, git status, git diff.",
+          append: "Estás ejecutando un paso SEO automatizado para Click Society. No hagas preguntas — ejecuta directamente. No hagas git commit ni git push. Solo puedes usar Bash para: npm run build, npm run lint, git status, git diff. PROHIBIDO inventar datos del cliente.",
         },
         settingSources: ["project"],
         persistSession: false,
@@ -386,10 +506,6 @@ async function runAgent(
 
 // ─── Preflight ───────────────────────────────────────────────────────────────
 
-/**
- * Preflight: clone → memoria → npm ci --include=dev → build.
- * Sin agente, sin commit, sin PR. Solo verifica que el sitio puede compilar.
- */
 async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
   const { taskId } = jobData;
 
@@ -414,13 +530,11 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
   const startTotal = Date.now();
 
   try {
-    // Clone/fetch
     let phaseStart = Date.now();
     console.log(`[preflight] ${task.title} — cloning ${site.githubRepo}...`);
     const dir = await ensureRepo(site.githubRepo, site.defaultBranch);
     phases.push(`clone: ${Date.now() - phaseStart}ms`);
 
-    // Memory
     phaseStart = Date.now();
     const memoryStatus = await classifyMemory(dir);
     phases.push(`memory: ${Date.now() - phaseStart}ms`);
@@ -428,9 +542,7 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
       where: { id: run.id },
       data: { memoryStatus: memoryStatus as unknown as InputJsonValue },
     });
-    console.log(`[preflight] ${task.title} — memory: ${JSON.stringify(memoryStatus)}`);
 
-    // npm ci
     phaseStart = Date.now();
     if (needsInstall(dir)) {
       console.log(`[preflight] ${task.title} — npm ci --include=dev...`);
@@ -442,7 +554,6 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
           phases.push(`install: LOCKFILE_OUT_OF_SYNC (${Date.now() - phaseStart}ms)`);
           await failRun(run.id, "LOCKFILE_OUT_OF_SYNC", phases.join(" | "));
           await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
-          console.log(`[preflight] ${task.title} — ❌ LOCKFILE_OUT_OF_SYNC`);
           return;
         }
         throw installErr;
@@ -452,7 +563,6 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
       phases.push("install: skipped (lockfile unchanged)");
     }
 
-    // Build
     phaseStart = Date.now();
     console.log(`[preflight] ${task.title} — building...`);
     const buildResult = verifyBuild(dir);
@@ -463,21 +573,16 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
     if (buildResult.passed) {
       await prisma.taskRun.update({
         where: { id: run.id },
-        data: {
-          status: "SUCCEEDED",
-          buildPassed: true,
-          logTail: phases.join(" | "),
-          finishedAt: new Date(),
-        },
+        data: { status: "SUCCEEDED", buildPassed: true, logTail: phases.join(" | "), finishedAt: new Date() },
       });
       await prisma.planTask.update({
         where: { id: taskId },
-        data: { status: "DONE", failureReason: null }, // MERGED = preflight passed
+        data: { status: "DONE", failureReason: null },
       });
       console.log(`[preflight] ${task.title} — ✅ OK (${totalMs}ms) | ${phases.join(" | ")}`);
     } else {
       await failRun(run.id, "BUILD_FAILED", buildResult.logTail);
-      await failTask(taskId, `BUILD_FAILED`);
+      await failTask(taskId, "BUILD_FAILED");
       console.log(`[preflight] ${task.title} — ❌ BUILD_FAILED (${totalMs}ms)`);
     }
   } catch (err) {
@@ -497,18 +602,9 @@ async function failTask(taskId: string, reason: string): Promise<void> {
   });
 }
 
-async function failRun(
-  runId: string,
-  error: string,
-  logTail?: string
-): Promise<void> {
+async function failRun(runId: string, error: string, logTail?: string): Promise<void> {
   await prisma.taskRun.update({
     where: { id: runId },
-    data: {
-      status: "FAILED",
-      error,
-      logTail: logTail ?? null,
-      finishedAt: new Date(),
-    },
+    data: { status: "FAILED", error, logTail: logTail ?? null, finishedAt: new Date() },
   });
 }
