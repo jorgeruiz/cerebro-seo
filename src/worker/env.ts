@@ -19,7 +19,8 @@ const workerEnvSchema = z.object({
   WORKSPACES_DIR: z.string().min(1), // ruta al volumen persistente
 
   // Worker-specific (optional with defaults)
-  AGENT_MAX_TURNS: z.coerce.number().int().positive().default(30),
+  AGENT_MAX_TURNS: z.coerce.number().int().positive().default(40), // default for "medium" complexity
+  AGENT_MAX_TURNS_CAP: z.coerce.number().int().positive().default(60), // absolute max
   AGENT_TIMEOUT_MIN: z.coerce.number().positive().default(10),
   AGENT_MAX_BUDGET_USD: z.coerce.number().positive().default(2.0),
 

@@ -450,11 +450,27 @@ function composeStepPrompt(
   return sections.join("\n");
 }
 
+/**
+ * Complexity → maxTurns mapping.
+ * The decomposer stores "complexity:low|medium|high" in step.notes.
+ * The cap (AGENT_MAX_TURNS_CAP) prevents runaway agents.
+ */
+function turnsForStep(step: { notes: string | null }): number {
+  const match = step.notes?.match(/complexity:(\w+)/);
+  const complexity = match?.[1] ?? "medium";
+
+  const base: Record<string, number> = { low: 20, medium: 40, high: 60 };
+  const turns = base[complexity] ?? 40;
+
+  return Math.min(turns, workerEnv.AGENT_MAX_TURNS_CAP);
+}
+
 async function runAgent(
   dir: string,
   task: { title: string; objective: string },
-  step: { title: string; prompt: string | null; acceptanceCriteria: string[] }
+  step: { title: string; prompt: string | null; acceptanceCriteria: string[]; notes: string | null }
 ): Promise<AgentResult> {
+  const maxTurns = turnsForStep(step);
   const ac = new AbortController();
   const timeout = setTimeout(
     () => ac.abort(),
@@ -471,6 +487,8 @@ async function runAgent(
     const prompt = composeStepPrompt(task, step);
     const canUseTool = createCanUseTool(dir);
 
+    console.log(`[plan-task] Agent maxTurns=${maxTurns} (${step.notes?.match(/complexity:\w+/)?.[0] ?? "medium"})`);
+
     const stream = query({
       prompt,
       options: {
@@ -479,7 +497,7 @@ async function runAgent(
         disallowedTools: ["WebFetch", "WebSearch", "Agent"],
         canUseTool: canUseTool as never,
         permissionMode: "default",
-        maxTurns: workerEnv.AGENT_MAX_TURNS,
+        maxTurns,
         maxBudgetUsd: workerEnv.AGENT_MAX_BUDGET_USD,
         abortController: ac,
         systemPrompt: {

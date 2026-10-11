@@ -19,6 +19,7 @@ const stepSchema = z.object({
   type: z.enum(["AI", "HUMAN"]),
   prompt: z.string().nullable().optional(),
   acceptanceCriteria: z.array(z.string()),
+  complexity: z.enum(["low", "medium", "high"]).optional().default("medium"),
 });
 
 interface DecompositionJobData {
@@ -98,11 +99,17 @@ REGLA ANTI-INVENCIÓN (CRÍTICA):
 - Los pasos AI solo pueden generar estructura, contenido genérico del sector, y elementos técnicos (schema, meta tags, componentes).
 - Usa LITERALMENTE el título y objetivo de la tarea y la documentación del sitio (site-spec, catalog-schemas). No reinterpretes siglas ni términos técnicos del cliente — pueden tener significados específicos de su industria.
 
+COMPLEJIDAD DE CADA PASO:
+- Asigna "complexity" a cada paso AI: "low" (editar 1-2 archivos existentes, ej: meta tags), "medium" (crear 1 archivo o modificar 3-5, ej: artículo blog), "high" (crear múltiples archivos + componentes, ej: landing con page.tsx + componente + MDX).
+- Si un paso sería "high" y tiene más de un entregable independiente (ej: crear MDX + crear componente React), DIVÍDELO en dos pasos "medium" separados.
+- Nunca dejes un solo paso que cree más de 2 archivos nuevos — eso excede los turnos del agente.
+
 RESPONDE ÚNICAMENTE con un JSON array:
 [
   {
     "title": "Título corto del paso (max 120 chars)",
     "type": "AI|HUMAN",
+    "complexity": "low|medium|high",
     "prompt": "Prompt completo autosuficiente para el agente (solo AI, null para HUMAN)",
     "acceptanceCriteria": ["Criterio 1 verificable", "Criterio 2"]
   }
@@ -177,7 +184,7 @@ Genera los pasos como JSON array.`;
       throw new Error("Todos los pasos fueron inválidos");
     }
 
-    // Create PlanSteps
+    // Create PlanSteps (complexity stored in notes as metadata for the worker)
     for (let i = 0; i < validSteps.length; i++) {
       const step = validSteps[i];
       await prisma.planStep.create({
@@ -189,6 +196,7 @@ Genera los pasos como JSON array.`;
           prompt: step.type === "AI" ? step.prompt : null,
           acceptanceCriteria: step.acceptanceCriteria,
           status: "PENDING",
+          notes: step.type === "AI" ? `complexity:${step.complexity ?? "medium"}` : null,
         },
       });
     }

@@ -159,18 +159,46 @@ export function runInstall(dir: string): void {
 
 /**
  * Verifica el build del proyecto.
- * Retorna { passed: true } o { passed: false, logTail: string }.
+ * Si falla por errores de red (Google Fonts, fetch de dependencias),
+ * reintenta una vez antes de marcar BUILD_FAILED.
  */
 export function verifyBuild(dir: string): { passed: boolean; logTail?: string } {
-  try {
-    exec("NODE_OPTIONS=--max-old-space-size=2048 npm run build", { cwd: dir });
-    return { passed: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const lines = msg.split("\n");
-    const tail = lines.slice(-100).join("\n");
-    return { passed: false, logTail: tail };
+  const NETWORK_ERROR_PATTERNS = [
+    "next/font",
+    "google",
+    "ENOTFOUND",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "fetch failed",
+    "getaddrinfo",
+    "UND_ERR_CONNECT_TIMEOUT",
+  ];
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      exec("NODE_OPTIONS=--max-old-space-size=2048 npm run build", { cwd: dir });
+      return { passed: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+
+      // On first attempt, retry if it looks like a network error
+      if (attempt === 0) {
+        const isNetworkError = NETWORK_ERROR_PATTERNS.some((p) => msg.toLowerCase().includes(p.toLowerCase()));
+        if (isNetworkError) {
+          console.log("[build] Network error detected, retrying in 5s...");
+          // Sync sleep (we're in a worker, blocking is fine)
+          execSync("sleep 5", { cwd: dir });
+          continue;
+        }
+      }
+
+      const lines = msg.split("\n");
+      const tail = lines.slice(-100).join("\n");
+      return { passed: false, logTail: tail };
+    }
   }
+
+  return { passed: false, logTail: "Build failed after retries" };
 }
 
 /**
@@ -558,9 +586,14 @@ export async function getPreviewUrl(
         description?: string;
       }>;
 
-      const vercel = statuses.find(
+      // Find Vercel status — prefer "success" over "pending"
+      const vercelSuccess = statuses.find(
+        (s) => s.context?.includes("vercel") && s.state === "success"
+      );
+      const vercelAny = statuses.find(
         (s) => s.context?.includes("vercel")
       );
+      const vercel = vercelSuccess ?? vercelAny;
 
       if (!vercel) continue; // no Vercel status yet, retry
 
