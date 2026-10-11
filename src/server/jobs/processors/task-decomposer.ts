@@ -93,6 +93,10 @@ ANTI-CANIBALIZACIÓN:
 - Revisa el site-map del contexto antes de crear una página nueva. Si ya existe una ruta que cubra el mismo tema o keyword, el paso debe OPTIMIZAR la página existente en vez de crear una nueva.
 - Si se necesita una página nueva, su ruta debe seguir la estructura del sitio (ej: /blog/..., /servicios/...) y el prompt debe indicar explícitamente que revisó las rutas existentes.
 
+SERVICIOS VERIFICADOS:
+- Si la tarea pide crear una landing o página de servicio, verifica en site-spec y catalog-schemas que el servicio/producto exista. Si no aparece, el paso debe ser HUMAN con la instrucción "Confirmar con el cliente si ofrece [servicio] antes de crear la página."
+- Artículos de blog técnicos del sector no requieren esta verificación (no afirman que el cliente ofrezca el servicio).
+
 REGLA ANTI-INVENCIÓN (CRÍTICA):
 - PROHIBIDO inventar datos del cliente: casos de éxito, nombres de clientes, certificaciones, precios, capacidades técnicas, procesos internos, testimonios, estadísticas, modelos de equipos o cualquier dato factual específico de la empresa.
 - Si un paso AI necesita datos reales del cliente (fotos, precios, especificaciones, certificaciones, casos), el paso debe ser HUMAN, no AI.

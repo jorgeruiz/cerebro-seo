@@ -88,6 +88,11 @@ ANTI-CANIBALIZACIÓN (CRÍTICO):
 - Si es necesario crear una página nueva, la ruta debe ser coherente con la estructura del sitio (ej: /servicios/..., /blog/...) y la justificación debe explicar por qué no sirve la página existente.
 - Nunca proponer dos candidatas que compitan por la misma keyword o el mismo intent de búsqueda.
 
+SERVICIOS Y PRODUCTOS VERIFICADOS (CRÍTICO):
+- Solo proponer landings o páginas de servicio/producto que existan en site-spec o en el catálogo del sitio.
+- Si una oportunidad SEO sugiere un servicio o producto que NO aparece en la documentación del sitio, la candidata DEBE ser mode=HUMAN con la pregunta explícita "¿El cliente ofrece [servicio]? Si sí, agregar a site-spec antes de crear la página."
+- Artículos de blog técnicos del sector son OK sin verificación (no afirman que el cliente ofrezca el servicio), pero NO deben incluir CTAs ni enlaces a páginas de servicio que no existan.
+
 CANDIDATAS — COMPOSICIÓN:
 - Genera tantas como sean justificables con datos reales (idealmente 4+ CONTENT y 4+ CODE)
 - MÁXIMO 8 de cada tipo
