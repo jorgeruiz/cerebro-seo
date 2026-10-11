@@ -8,11 +8,17 @@ export interface EligibilityResult {
   reason: string | null;
   platform: string | null;
   hasRepo: boolean;
+  /** Missing memory files for CODE tasks (site-spec, site-map, site-state) */
+  missingForCode: string[];
+  /** Missing memory files for CONTENT tasks (adds catalog-schemas sections) */
+  missingForContent: string[];
 }
 
 /**
  * Determina si una candidata se puede enviar al plan dado el estado de elegibilidad.
  * SETUP y HUMAN siempre se pueden enviar. AI y HYBRID requieren NEXTJS + repo.
+ * Memory is checked at execution time by the worker — not blocked here,
+ * but the UI shows what's missing.
  */
 export function canSendCandidate(
   candidate: { mode: string; kind: string },

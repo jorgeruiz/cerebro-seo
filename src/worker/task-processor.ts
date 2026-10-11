@@ -21,7 +21,13 @@ import { createCanUseTool } from "./agent-permissions";
 import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
-import { classifyMemory, isMemoryComplete } from "./memory-classifier";
+import {
+  classifyMemory,
+  detectCatalogSections,
+  contentCategoryForTask,
+  isMemoryReadyForCode,
+  isMemoryReadyForContent,
+} from "./memory-classifier";
 import { acquirePlanLock } from "./plan-lock";
 import { scanPlaceholders, formatPlaceholderHits } from "./placeholder-guard";
 import {
@@ -110,16 +116,30 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     // ── 5. Memoria + npm ci ────────────────────────────────────────────
     const memoryStatus = await classifyMemory(dir);
 
-    // Spec §4 regla 5: AI and HYBRID tasks require complete site memory
-    if ((task.mode === "AI" || task.mode === "HYBRID") && !isMemoryComplete(memoryStatus)) {
-      await prisma.planTask.update({
-        where: { id: taskId },
-        data: {
-          status: "WAITING_HUMAN",
-          failureReason: `MEMORY_INCOMPLETE: ${Object.entries(memoryStatus).filter(([, v]) => v !== "FULL").map(([k, v]) => `${k}=${v}`).join(", ")}`,
-        },
-      });
-      return;
+    // Spec §4 regla 5: AI and HYBRID tasks require site memory
+    if (task.mode === "AI" || task.mode === "HYBRID") {
+      const contentCategory = contentCategoryForTask(task.category);
+      let gate;
+
+      if (contentCategory) {
+        // CONTENT task — requires catalog-schemas with the right section
+        const catalogSections = await detectCatalogSections(dir);
+        gate = isMemoryReadyForContent(memoryStatus, catalogSections, contentCategory);
+      } else {
+        // CODE/SETUP task — requires site-spec, site-map, site-state
+        gate = isMemoryReadyForCode(memoryStatus);
+      }
+
+      if (!gate.ready) {
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: {
+            status: "WAITING_HUMAN",
+            failureReason: `MEMORY_INCOMPLETE: ${gate.missing.join(", ")}`,
+          },
+        });
+        return;
+      }
     }
 
     if (needsInstall(dir)) {

@@ -16,23 +16,51 @@ export async function checkEligibility(clientId: string): Promise<EligibilityRes
     select: { status: true, services: true },
   });
 
-  if (!client) return { eligible: false, reason: "Cliente no encontrado.", platform: null, hasRepo: false };
-  if (client.status !== "ACTIVE") return { eligible: false, reason: "Cliente no está activo.", platform: null, hasRepo: false };
-  if (!client.services.includes("seo")) return { eligible: false, reason: "Cliente no tiene servicio SEO.", platform: null, hasRepo: false };
+  const empty: EligibilityResult = { eligible: false, reason: "", platform: null, hasRepo: false, missingForCode: [], missingForContent: [] };
+
+  if (!client) return { ...empty, reason: "Cliente no encontrado." };
+  if (client.status !== "ACTIVE") return { ...empty, reason: "Cliente no está activo." };
+  if (!client.services.includes("seo")) return { ...empty, reason: "Cliente no tiene servicio SEO." };
 
   const site = await resolveSite(clientId).catch(() => null);
-  if (!site) return { eligible: false, reason: "No hay sitio configurado.", platform: null, hasRepo: false };
+  if (!site) return { ...empty, reason: "No hay sitio configurado." };
 
   const hasRepo = !!site.githubRepo;
   const platformReason = ineligibilityReason(site.platform);
 
-  // SETUP y HUMAN se pueden mandar sin NEXTJS ni repo
-  // Pero el gate general reporta si IA/HYBRID están disponibles
+  // Get memory status from the latest preflight run (if any)
+  const missingForCode: string[] = [];
+  let missingForContent: string[] = [];
+
+  const latestPreflight = await prisma.taskRun.findFirst({
+    where: {
+      task: { siteId: site.id, category: "preflight", status: { not: "VOIDED" } },
+      status: "SUCCEEDED",
+    },
+    orderBy: { startedAt: "desc" },
+    select: { memoryStatus: true },
+  });
+
+  if (latestPreflight?.memoryStatus) {
+    const mem = latestPreflight.memoryStatus as Record<string, string>;
+    // CODE requires: site-spec, site-map, site-state
+    for (const key of ["site-spec", "site-map", "site-state"]) {
+      if (mem[key] !== "FULL") missingForCode.push(`${key} (${mem[key] ?? "ABSENT"})`);
+    }
+    // CONTENT adds: catalog-schemas
+    missingForContent = [...missingForCode];
+    if (mem["catalog-schemas"] !== "FULL") {
+      missingForContent.push(`catalog-schemas (${mem["catalog-schemas"] ?? "ABSENT"})`);
+    }
+  }
+
   return {
-    eligible: true, // siempre se pueden mandar SETUP/HUMAN
-    reason: platformReason, // motivo si IA no está disponible
+    eligible: true,
+    reason: platformReason,
     platform: site.platform,
     hasRepo,
+    missingForCode,
+    missingForContent,
   };
 }
 
