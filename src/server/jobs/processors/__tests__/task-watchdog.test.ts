@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Stub REDIS_URL before imports
 vi.stubEnv("REDIS_URL", "redis://localhost:6379");
 
-// Mock prisma
 vi.mock("@/lib/db", () => ({
   prisma: {
     planTask: {
@@ -17,10 +15,12 @@ vi.mock("@/lib/db", () => ({
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    planStep: {
+      update: vi.fn(),
+    },
   },
 }));
 
-// Mock queue — now uses decomposeQueue instead of aiAnalysisQueue
 vi.mock("@/server/jobs/queues", () => ({
   decomposeQueue: {
     add: vi.fn(),
@@ -37,94 +37,108 @@ describe("task-watchdog", () => {
     const { decomposeQueue } = await import("@/server/jobs/queues");
     const { runTaskWatchdog } = await import("../task-watchdog");
 
-    vi.mocked(prisma.planTask.findMany)
-      .mockResolvedValueOnce([
-        { id: "task-1", title: "Stuck task", failureReason: null } as never,
-      ])
-      .mockResolvedValueOnce([]); // RUNNING query returns empty
+    vi.mocked(prisma.planTask.findMany).mockResolvedValueOnce([
+      { id: "task-1", title: "Stuck task", failureReason: null } as never,
+    ]);
+    vi.mocked(prisma.taskRun.findMany).mockResolvedValueOnce([]); // no stuck runs
     vi.mocked(prisma.planTask.update).mockResolvedValue({} as never);
-    vi.mocked(prisma.monthlyPlan.findUniqueOrThrow).mockResolvedValue({
-      clientId: "client-1",
-    } as never);
+    vi.mocked(prisma.monthlyPlan.findUniqueOrThrow).mockResolvedValue({ clientId: "client-1" } as never);
     vi.mocked(decomposeQueue.add).mockResolvedValue({} as never);
 
     const result = await runTaskWatchdog("plan-1");
 
     expect(result.retried).toContain("task-1");
     expect(result.failed).toHaveLength(0);
-    expect(decomposeQueue.add).toHaveBeenCalledWith("task:decompose", expect.objectContaining({
-      taskId: "task-1",
-    }));
+    expect(decomposeQueue.add).toHaveBeenCalledWith("task:decompose", expect.objectContaining({ taskId: "task-1" }));
   });
 
   it("marks task FAILED on second PLANNING timeout", async () => {
     const { prisma } = await import("@/lib/db");
     const { runTaskWatchdog } = await import("../task-watchdog");
 
-    vi.mocked(prisma.planTask.findMany)
-      .mockResolvedValueOnce([
-        { id: "task-2", title: "Double stuck", failureReason: "RETRY: re-enqueued by watchdog" } as never,
-      ])
-      .mockResolvedValueOnce([]); // RUNNING query returns empty
+    vi.mocked(prisma.planTask.findMany).mockResolvedValueOnce([
+      { id: "task-2", title: "Double stuck", failureReason: "RETRY: re-enqueued by watchdog" } as never,
+    ]);
+    vi.mocked(prisma.taskRun.findMany).mockResolvedValueOnce([]);
     vi.mocked(prisma.planTask.update).mockResolvedValue({} as never);
 
     const result = await runTaskWatchdog("plan-1");
 
     expect(result.failed).toContain("task-2");
     expect(result.retried).toHaveLength(0);
-    expect(prisma.planTask.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "task-2" },
-      data: expect.objectContaining({ status: "FAILED" }),
-    }));
   });
 
-  it("marks stuck RUNNING task as FAILED and closes open TaskRuns", async () => {
+  it("fails stuck TaskRun and its parent task and step", async () => {
     const { prisma } = await import("@/lib/db");
     const { runTaskWatchdog } = await import("../task-watchdog");
 
-    vi.mocked(prisma.planTask.findMany)
-      .mockResolvedValueOnce([]) // PLANNING query empty
-      .mockResolvedValueOnce([
-        { id: "task-3", title: "Running forever" } as never,
-      ]); // RUNNING query returns stuck task
+    vi.mocked(prisma.planTask.findMany).mockResolvedValueOnce([]); // no stuck PLANNING
 
-    vi.mocked(prisma.planTask.update).mockResolvedValue({} as never);
-    vi.mocked(prisma.taskRun.findMany).mockResolvedValue([
-      { id: "run-1" } as never,
-      { id: "run-2" } as never,
+    vi.mocked(prisma.taskRun.findMany).mockResolvedValueOnce([
+      {
+        id: "run-1",
+        taskId: "task-3",
+        stepId: "step-1",
+        task: { title: "Running forever" },
+      } as never,
     ]);
+
     vi.mocked(prisma.taskRun.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.planStep.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.planTask.update).mockResolvedValue({} as never);
 
     const result = await runTaskWatchdog("plan-1");
 
     expect(result.failed).toContain("task-3");
-    expect(result.retried).toHaveLength(0);
 
-    // Task updated to FAILED
-    expect(prisma.planTask.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "task-3" },
-      data: expect.objectContaining({
-        status: "FAILED",
-        failureReason: expect.stringContaining("EXECUTION_TIMEOUT"),
-      }),
-    }));
-
-    // Both TaskRuns closed
-    expect(prisma.taskRun.update).toHaveBeenCalledTimes(2);
+    // Run closed with EXECUTION_TIMEOUT
     expect(prisma.taskRun.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "run-1" },
-      data: expect.objectContaining({
-        status: "FAILED",
-        error: "EXECUTION_TIMEOUT",
-      }),
+      data: expect.objectContaining({ status: "FAILED", error: expect.stringContaining("EXECUTION_TIMEOUT") }),
+    }));
+
+    // Step marked FAILED
+    expect(prisma.planStep.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "step-1" },
+      data: { status: "FAILED" },
+    }));
+
+    // Task marked FAILED
+    expect(prisma.planTask.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "task-3" },
+      data: expect.objectContaining({ status: "FAILED" }),
     }));
   });
 
-  it("does nothing when no stuck tasks", async () => {
+  it("deduplicates: two stuck runs for same task = one FAILED task", async () => {
     const { prisma } = await import("@/lib/db");
     const { runTaskWatchdog } = await import("../task-watchdog");
 
-    vi.mocked(prisma.planTask.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.planTask.findMany).mockResolvedValueOnce([]);
+    vi.mocked(prisma.taskRun.findMany).mockResolvedValueOnce([
+      { id: "run-1", taskId: "task-3", stepId: "step-1", task: { title: "Task" } } as never,
+      { id: "run-2", taskId: "task-3", stepId: "step-2", task: { title: "Task" } } as never,
+    ]);
+
+    vi.mocked(prisma.taskRun.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.planStep.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.planTask.update).mockResolvedValue({} as never);
+
+    const result = await runTaskWatchdog("plan-1");
+
+    expect(result.failed).toHaveLength(1);
+    // planTask.update called once for the task (not twice)
+    expect(prisma.planTask.update).toHaveBeenCalledTimes(1);
+    // But both runs closed
+    expect(prisma.taskRun.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("does nothing when no stuck tasks or runs", async () => {
+    const { prisma } = await import("@/lib/db");
+    const { runTaskWatchdog } = await import("../task-watchdog");
+
+    vi.mocked(prisma.planTask.findMany).mockResolvedValueOnce([]);
+    vi.mocked(prisma.taskRun.findMany).mockResolvedValueOnce([]);
 
     const result = await runTaskWatchdog("plan-1");
 

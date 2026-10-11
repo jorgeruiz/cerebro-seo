@@ -1,19 +1,18 @@
 /**
- * Watchdog: finds stuck tasks and retries them once.
+ * Watchdog: finds stuck tasks and retries/fails them.
  *
  * - PLANNING > 10 min → re-enqueue decomposition (1 retry, then FAILED)
- * - RUNNING > RUNNING_TIMEOUT_MS → FAILED with EXECUTION_TIMEOUT
- *   (no retry — agent runs are expensive and have side effects)
+ * - TaskRun RUNNING > AGENT_TIMEOUT + margin → FAILED (measured per run, not per task)
  *
- * Called from actionSendToPlan after sending, and can be called
- * manually via a server action.
+ * Called every 5 min by watchdog-scheduler.
  */
 
 import { prisma } from "@/lib/db";
 import { decomposeQueue } from "@/server/jobs/queues";
 
 const PLANNING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-const RUNNING_TIMEOUT_MS = 15 * 60 * 1000; // 15 min (> AGENT_TIMEOUT_MIN default 10)
+// Agent timeout default is 10 min. We add 5 min margin for npm ci + build.
+const RUN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export async function runTaskWatchdog(planId: string): Promise<{
   retried: string[];
@@ -21,9 +20,9 @@ export async function runTaskWatchdog(planId: string): Promise<{
 }> {
   const now = new Date();
   const planningCutoff = new Date(now.getTime() - PLANNING_TIMEOUT_MS);
-  const runningCutoff = new Date(now.getTime() - RUNNING_TIMEOUT_MS);
+  const runCutoff = new Date(now.getTime() - RUN_TIMEOUT_MS);
 
-  // ── 1. PLANNING stuck ───────────────────────────────────────────────────
+  // ── 1. PLANNING stuck (task-level) ──────────────────────────────────────
   const stuckPlanning = await prisma.planTask.findMany({
     where: {
       planId,
@@ -33,14 +32,19 @@ export async function runTaskWatchdog(planId: string): Promise<{
     select: { id: true, title: true, failureReason: true },
   });
 
-  // ── 2. RUNNING stuck ───────────────────────────────────────────────────
-  const stuckRunning = await prisma.planTask.findMany({
+  // ── 2. TaskRun stuck in RUNNING (run-level, not task-level) ─────────────
+  const stuckRuns = await prisma.taskRun.findMany({
     where: {
-      planId,
+      task: { planId },
       status: "RUNNING",
-      updatedAt: { lt: runningCutoff },
+      startedAt: { lt: runCutoff },
     },
-    select: { id: true, title: true },
+    select: {
+      id: true,
+      taskId: true,
+      stepId: true,
+      task: { select: { title: true } },
+    },
   });
 
   const retried: string[] = [];
@@ -49,7 +53,6 @@ export async function runTaskWatchdog(planId: string): Promise<{
   // ── Handle PLANNING ─────────────────────────────────────────────────────
   for (const task of stuckPlanning) {
     if (task.failureReason?.startsWith("RETRY:")) {
-      // Already retried once → mark as FAILED
       await prisma.planTask.update({
         where: { id: task.id },
         data: {
@@ -60,7 +63,6 @@ export async function runTaskWatchdog(planId: string): Promise<{
       failed.push(task.id);
       console.log(`[watchdog] Task "${task.title}" → FAILED (2nd timeout)`);
     } else {
-      // First timeout → retry
       await prisma.planTask.update({
         where: { id: task.id },
         data: { failureReason: "RETRY: re-enqueued by watchdog" },
@@ -82,36 +84,42 @@ export async function runTaskWatchdog(planId: string): Promise<{
     }
   }
 
-  // ── Handle RUNNING ──────────────────────────────────────────────────────
-  for (const task of stuckRunning) {
-    // No retry for RUNNING — agent runs are expensive and have side effects (branches, PRs).
-    // Mark FAILED and close any open TaskRun.
-    await prisma.planTask.update({
-      where: { id: task.id },
+  // ── Handle stuck TaskRuns ───────────────────────────────────────────────
+  // Group by task to avoid marking the same task FAILED multiple times
+  const failedTaskIds = new Set<string>();
+
+  for (const run of stuckRuns) {
+    // Close the stuck run
+    await prisma.taskRun.update({
+      where: { id: run.id },
       data: {
         status: "FAILED",
-        failureReason: `EXECUTION_TIMEOUT: la tarea estuvo en RUNNING más de ${RUNNING_TIMEOUT_MS / 60_000} min sin completar.`,
+        error: `EXECUTION_TIMEOUT: el paso estuvo en RUNNING más de ${RUN_TIMEOUT_MS / 60_000} min.`,
+        finishedAt: new Date(),
       },
     });
 
-    // Close open TaskRuns for this task
-    const openRuns = await prisma.taskRun.findMany({
-      where: { taskId: task.id, status: "RUNNING" },
-      select: { id: true },
-    });
-    for (const run of openRuns) {
-      await prisma.taskRun.update({
-        where: { id: run.id },
-        data: {
-          status: "FAILED",
-          error: "EXECUTION_TIMEOUT",
-          finishedAt: new Date(),
-        },
+    // Mark the step as FAILED if stepId exists
+    if (run.stepId) {
+      await prisma.planStep.update({
+        where: { id: run.stepId },
+        data: { status: "FAILED" },
       });
     }
 
-    failed.push(task.id);
-    console.log(`[watchdog] Task "${task.title}" → FAILED (RUNNING timeout)`);
+    // Mark parent task as FAILED (once per task)
+    if (!failedTaskIds.has(run.taskId)) {
+      failedTaskIds.add(run.taskId);
+      await prisma.planTask.update({
+        where: { id: run.taskId },
+        data: {
+          status: "FAILED",
+          failureReason: `EXECUTION_TIMEOUT: un paso estuvo en RUNNING más de ${RUN_TIMEOUT_MS / 60_000} min.`,
+        },
+      });
+      failed.push(run.taskId);
+      console.log(`[watchdog] Task "${run.task.title}" → FAILED (run ${run.id} timeout)`);
+    }
   }
 
   return { retried, failed };

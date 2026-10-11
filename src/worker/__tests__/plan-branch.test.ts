@@ -36,12 +36,12 @@ function setupBareAndClone() {
 }
 
 describe("plan-branch git operations", () => {
-  let bare: string;
+  let _bare: string;
   let dir: string;
   let cleanup: () => void;
 
   beforeEach(() => {
-    ({ bare, work: dir, cleanup } = setupBareAndClone());
+    ({ bare: _bare, work: dir, cleanup } = setupBareAndClone());
   });
 
   afterEach(() => {
