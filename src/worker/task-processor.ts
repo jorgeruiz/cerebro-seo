@@ -189,11 +189,16 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           throw new Error(`BUILD_FAILED: ${(buildResult.logTail ?? "").slice(0, 200)}`);
         }
 
-        // Placeholder guard
-        const placeholderHits = scanPlaceholders(dir);
-        if (placeholderHits.length > 0) {
-          const detail = formatPlaceholderHits(placeholderHits);
-          throw new Error(`PLACEHOLDER_MARKERS: ${detail}`);
+        // Placeholder guard — only for pure AI tasks.
+        // HYBRID tasks intentionally produce [COMPLETAR markers in AI steps
+        // that get resolved in the HUMAN steps. The plan-level guard
+        // (actionSubmitForReview) catches any remaining markers before merge.
+        if (task.mode === "AI") {
+          const placeholderHits = scanPlaceholders(dir);
+          if (placeholderHits.length > 0) {
+            const detail = formatPlaceholderHits(placeholderHits);
+            throw new Error(`PLACEHOLDER_MARKERS: ${detail}`);
+          }
         }
 
         // Parse structured result
