@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-10 (S2d cerrada — guard, watchdog auto, decompose-worker, preflight)
-**Fase actual:** S2d completa, S2c (retiro Advisor) en curso
-**Próximo hito:** S2c retiro Advisor → S4 terminal en vivo
+**Última actualización:** 2026-10-10 (S2c completa — retiro Advisor, S2d cerrada)
+**Fase actual:** S2c y S2d completas
+**Próximo hito:** S4 terminal en vivo (log streaming del worker)
 
 ---
 
@@ -473,6 +473,30 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 **Archivos nuevos:** 3 (page.tsx, actions.ts, PlanMensualPanel.tsx)
 **Archivos modificados:** 1 (ClientSidebar.tsx)
 **Commits:** 2 (feat S3 + fix flujo)
+
+---
+
+### Sesión S2c — 2026-10-10 ✅ COMPLETA (Retiro del SeoAdvisor)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ SeoAdvisor retirado limpiamente. -1,551 líneas.
+
+**Eliminado:**
+- `src/lib/seo-advisor/` completo (advisor-processor.ts, validation.ts, tests) — 1,300+ líneas
+- `seo-advisor-worker.ts` — worker de cola ai-analysis
+- `NextStepsPanel.tsx` + `next-steps-actions.ts` — UI "Próximos pasos sugeridos"
+- API `/api/internal/advisor/` (regenerate, regenerate-all, jobs)
+- Scheduler `advisor:generate` (diario 7 AM)
+- `SeoAdvisorJobData`, `"advisor:generate"` de types
+- Modelo `NextStepPlan` + migración DROP TABLE
+
+**Conservado (movido a `src/lib/seo-signals/`):**
+- `signals.ts`, `preconditions.ts`, `types.ts` — usados por `claude-analysis.ts` para el Análisis unificado
+
+**Compatibilidad:**
+- `/api/internal/recommendations/` sigue respondiendo pero con `nextSteps: []` (Cerebro web compatible)
+- `task:decompose` corre en `decompose-worker.ts` (cola propia `task-decompose`) — no depende del Advisor
+
+**Tests:** 190 tests pasan (26 archivos). Build limpio.
 
 ---
 
