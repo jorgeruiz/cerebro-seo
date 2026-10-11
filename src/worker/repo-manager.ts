@@ -287,10 +287,13 @@ export async function ensureRepoPlanBranch(
     exec(`git reset --hard origin/${planBranch}`, { cwd: dir });
     exec("git clean -fd", { cwd: dir });
   } else {
-    // Create new branch from default
+    // Branch doesn't exist remotely — create or reuse local
     exec(`git checkout ${defaultBranch}`, { cwd: dir, silent: true });
     exec(`git reset --hard origin/${defaultBranch}`, { cwd: dir });
     exec("git clean -fd", { cwd: dir });
+
+    // Delete stale local branch if it exists (leftover from a previous failed run)
+    try { exec(`git branch -D ${planBranch}`, { cwd: dir, silent: true }); } catch { /* ok */ }
     exec(`git checkout -b ${planBranch}`, { cwd: dir });
   }
 
