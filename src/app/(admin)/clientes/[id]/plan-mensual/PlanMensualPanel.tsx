@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, Loader2,
   Play, CheckCircle2, XCircle,
   Clock, Ban, RotateCcw, Terminal,
+  ExternalLink, GitMerge, Send, DollarSign, Eye,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,8 @@ import {
   actionRetryFailedTask,
   actionActivatePlan,
   actionRunWatchdog,
+  actionSubmitForReview,
+  actionMergePlan,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -448,11 +451,15 @@ function PlanStatusBanner({
   plan,
   onActivate,
   onWatchdog,
+  onSubmitReview,
+  onMerge,
   isActing,
 }: {
   plan: PlanFullView;
   onActivate: () => void;
   onWatchdog: () => void;
+  onSubmitReview: () => void;
+  onMerge: () => void;
   isActing: boolean;
 }) {
   if (plan.status === "PLANNING") {
@@ -473,25 +480,88 @@ function PlanStatusBanner({
         </div>
         <div className="flex items-center gap-2">
           {planningCount > 0 && (
-            <button
-              onClick={onWatchdog}
-              disabled={isActing}
-              className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
-            >
+            <button onClick={onWatchdog} disabled={isActing}
+              className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}>
               <RotateCcw className="h-3 w-3" /> Watchdog
             </button>
           )}
           {allReady && !hasFailed && (
-            <button
-              onClick={onActivate}
-              disabled={isActing}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}
-            >
+            <button onClick={onActivate} disabled={isActing}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
               {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
               Activar plan
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  const allTerminal = plan.tasks.every((t) => ["DONE", "VOIDED", "FAILED"].includes(t.status));
+
+  if (plan.status === "ACTIVE" && allTerminal) {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Plan al 100%</p>
+          <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+            Todas las tareas terminadas. Pasa a revision para ver el preview y hacer merge.
+          </p>
+        </div>
+        <button onClick={onSubmitReview} disabled={isActing}
+          className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+          {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+          Pasar a revision
+        </button>
+      </div>
+    );
+  }
+
+  if (plan.status === "IN_REVIEW") {
+    return (
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Eye className="h-4 w-4 text-blue-500" /> En revision
+            </p>
+            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+              Revisa el preview y haz merge cuando estes listo.
+            </p>
+          </div>
+          <button onClick={onMerge} disabled={isActing}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+            {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitMerge className="h-3 w-3" />}
+            Merge a produccion
+          </button>
+        </div>
+        <div className="flex items-center gap-4 font-mono text-[0.6rem]">
+          {plan.prUrl && (
+            <a href={plan.prUrl} target="_blank" rel="noopener noreferrer"
+              className="text-blue-500 hover:underline flex items-center gap-1">
+              <ExternalLink className="h-2.5 w-2.5" /> PR #{plan.prNumber}
+            </a>
+          )}
+          {plan.previewUrl && (
+            <a href={plan.previewUrl} target="_blank" rel="noopener noreferrer"
+              className="text-emerald-500 hover:underline flex items-center gap-1">
+              <ExternalLink className="h-2.5 w-2.5" /> Preview
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (plan.status === "PUBLISHED") {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+        <p className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" /> Plan publicado
+        </p>
+        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+          Merge completado{plan.mergedAt ? ` el ${new Date(plan.mergedAt).toLocaleDateString("es-MX")}` : ""}.
+        </p>
       </div>
     );
   }
@@ -596,6 +666,17 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
     handleAction(() => actionRunWatchdog(plan.id));
   }
 
+  function handleSubmitReview() {
+    if (!plan) return;
+    handleAction(() => actionSubmitForReview(plan.id));
+  }
+
+  function handleMerge() {
+    if (!plan) return;
+    if (!confirm("¿Merge a producción? Esta acción no se puede deshacer.")) return;
+    handleAction(() => actionMergePlan(plan.id));
+  }
+
   // Group tasks by mode
   const grouped = plan
     ? (["AI", "HYBRID", "HUMAN"] as const)
@@ -649,16 +730,34 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
                 </span>
               </div>
               <ProgressBar percent={progress} />
-              <div className="flex items-center gap-4 font-mono text-[0.6rem] text-muted-foreground">
+              <div className="flex items-center gap-4 font-mono text-[0.6rem] text-muted-foreground flex-wrap">
                 <span>{plan.tasks.length} tareas</span>
                 <span>{plan.tasks.filter((t) => t.status === "DONE").length} completadas</span>
                 <span>{plan.tasks.filter((t) => t.status === "FAILED").length} fallidas</span>
                 <span>{plan.tasks.filter((t) => t.status === "VOIDED").length} anuladas</span>
+                {plan.totalCostUsd > 0 && (
+                  <span className="flex items-center gap-0.5">
+                    <DollarSign className="h-2.5 w-2.5" />
+                    {plan.totalCostUsd.toFixed(4)} USD
+                  </span>
+                )}
+                {plan.prUrl && (
+                  <a href={plan.prUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline flex items-center gap-0.5">
+                    <ExternalLink className="h-2.5 w-2.5" /> PR #{plan.prNumber}
+                  </a>
+                )}
+                {plan.previewUrl && (
+                  <a href={plan.previewUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-emerald-500 hover:underline flex items-center gap-0.5">
+                    <ExternalLink className="h-2.5 w-2.5" /> Preview
+                  </a>
+                )}
               </div>
             </div>
 
             {/* Plan status banner */}
-            <PlanStatusBanner plan={plan} onActivate={handleActivate} onWatchdog={handleWatchdog} isActing={isActing} />
+            <PlanStatusBanner plan={plan} onActivate={handleActivate} onWatchdog={handleWatchdog} onSubmitReview={handleSubmitReview} onMerge={handleMerge} isActing={isActing} />
 
             {/* Task groups */}
             <div className="space-y-8">

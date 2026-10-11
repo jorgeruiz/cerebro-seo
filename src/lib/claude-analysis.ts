@@ -83,6 +83,11 @@ CANDIDATAS — KIND:
 - CODE: meta tags, schema, técnico, interlinking, performance
 - SETUP: verificaciones, cuentas externas (GSC, GBP), tracking, configuración de plataformas. Mode siempre HUMAN.
 
+ANTI-CANIBALIZACIÓN (CRÍTICO):
+- Antes de proponer una página nueva, verifica las rutas existentes del sitio (site-map). Si ya existe una página sobre el mismo tema o keyword, propón OPTIMIZAR la existente (mode AI o HYBRID) en lugar de crear una nueva.
+- Si es necesario crear una página nueva, la ruta debe ser coherente con la estructura del sitio (ej: /servicios/..., /blog/...) y la justificación debe explicar por qué no sirve la página existente.
+- Nunca proponer dos candidatas que compitan por la misma keyword o el mismo intent de búsqueda.
+
 CANDIDATAS — COMPOSICIÓN:
 - Genera tantas como sean justificables con datos reales (idealmente 4+ CONTENT y 4+ CODE)
 - MÁXIMO 8 de cada tipo

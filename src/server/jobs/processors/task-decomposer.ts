@@ -88,6 +88,10 @@ REGLAS:
 6. Entre 1 y 5 pasos por tarea. Un paso = una acción atómica.
 7. Los prompts de pasos AI deben mencionar el CLAUDE.md y DESIGN.md del repo si existen.
 
+ANTI-CANIBALIZACIÓN:
+- Revisa el site-map del contexto antes de crear una página nueva. Si ya existe una ruta que cubra el mismo tema o keyword, el paso debe OPTIMIZAR la página existente en vez de crear una nueva.
+- Si se necesita una página nueva, su ruta debe seguir la estructura del sitio (ej: /blog/..., /servicios/...) y el prompt debe indicar explícitamente que revisó las rutas existentes.
+
 REGLA ANTI-INVENCIÓN (CRÍTICA):
 - PROHIBIDO inventar datos del cliente: casos de éxito, nombres de clientes, certificaciones, precios, capacidades técnicas, procesos internos, testimonios, estadísticas, modelos de equipos o cualquier dato factual específico de la empresa.
 - Si un paso AI necesita datos reales del cliente (fotos, precios, especificaciones, certificaciones, casos), el paso debe ser HUMAN, no AI.

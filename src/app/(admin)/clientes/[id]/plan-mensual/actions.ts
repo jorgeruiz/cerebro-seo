@@ -62,6 +62,8 @@ export interface PlanFullView {
   prUrl: string | null;
   previewUrl: string | null;
   completedAt: string | null;
+  mergedAt: string | null;
+  totalCostUsd: number;
   tasks: PlanTaskFullView[];
 }
 
@@ -117,6 +119,14 @@ export async function getPlanData(
 
   if (!plan) return { plan: null, months };
 
+  // Compute total cost from all runs
+  let totalCostUsd = 0;
+  for (const t of plan.tasks) {
+    for (const r of t.runs) {
+      if (r.costUsd) totalCostUsd += Number(r.costUsd);
+    }
+  }
+
   const planView: PlanFullView = {
     id: plan.id,
     month: plan.month,
@@ -126,6 +136,8 @@ export async function getPlanData(
     prUrl: plan.prUrl,
     previewUrl: plan.previewUrl,
     completedAt: plan.completedAt?.toISOString() ?? null,
+    mergedAt: plan.mergedAt?.toISOString() ?? null,
+    totalCostUsd,
     tasks: plan.tasks.map((t) => ({
       id: t.id,
       order: t.order,
@@ -496,4 +508,116 @@ export async function actionActivatePlan(
   });
 
   return { ok: true };
+}
+
+// ─── Merge plan ─────────────────────────────────────────────────────────────
+
+export async function actionMergePlan(
+  planId: string
+): Promise<{ ok: true; mergedAt: string } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    include: {
+      tasks: {
+        where: { status: "DONE" },
+        select: { id: true, commitShas: true },
+      },
+    },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+  if (plan.status !== "IN_REVIEW") {
+    return { ok: false, error: `Plan no está en IN_REVIEW (status: ${plan.status}).` };
+  }
+  if (!plan.prNumber || !plan.branchName) {
+    return { ok: false, error: "Plan no tiene PR ni rama configurada." };
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { client: { monthlyPlans: { some: { id: planId } } } },
+    select: { githubRepo: true, url: true },
+  });
+
+  if (!site?.githubRepo) {
+    return { ok: false, error: "No hay repositorio GitHub configurado." };
+  }
+
+  const GH_PAT = process.env.GITHUB_PAT_CLIENT_REPOS;
+  if (!GH_PAT) return { ok: false, error: "GITHUB_PAT no configurado." };
+
+  // Merge via GitHub API (merge commit, not squash)
+  const mergeRes = await fetch(
+    `https://api.github.com/repos/${site.githubRepo}/pulls/${plan.prNumber}/merge`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${GH_PAT}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        merge_method: "merge",
+        commit_title: `Plan ${plan.month} — merge`,
+      }),
+    }
+  );
+
+  if (!mergeRes.ok) {
+    const text = await mergeRes.text();
+    return { ok: false, error: `GitHub merge falló (${mergeRes.status}): ${text.slice(0, 200)}` };
+  }
+
+  const now = new Date();
+
+  // Verify production URLs (best-effort)
+  const allRoutes: string[] = [];
+  for (const task of plan.tasks) {
+    const runs = await prisma.taskRun.findMany({
+      where: { taskId: task.id, status: "SUCCEEDED" },
+      select: { changedRoutes: true },
+    });
+    for (const r of runs) allRoutes.push(...r.changedRoutes);
+  }
+
+  const resultUrls: string[] = [];
+  if (site.url && allRoutes.length > 0) {
+    const baseUrl = site.url.startsWith("http") ? site.url.replace(/\/$/, "") : `https://${site.url}`;
+    for (const route of Array.from(new Set(allRoutes))) {
+      const url = `${baseUrl}${route}`;
+      try {
+        const res = await fetch(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(10_000) });
+        if (res.ok) resultUrls.push(url);
+      } catch { /* URL not live yet */ }
+    }
+  }
+
+  await prisma.monthlyPlan.update({
+    where: { id: planId },
+    data: { status: "PUBLISHED", mergedAt: now, mergedById: session.user.email, completedAt: now },
+  });
+
+  for (const task of plan.tasks) {
+    const taskRoutes = (await prisma.taskRun.findMany({
+      where: { taskId: task.id, status: "SUCCEEDED" },
+      select: { changedRoutes: true },
+    })).flatMap((r) => r.changedRoutes);
+
+    const taskUrls = resultUrls.filter((url) =>
+      taskRoutes.some((route) => url.endsWith(route))
+    );
+
+    if (taskUrls.length > 0) {
+      await prisma.planTask.update({
+        where: { id: task.id },
+        data: { resultUrls: taskUrls },
+      });
+    }
+  }
+
+  return { ok: true, mergedAt: now.toISOString() };
 }

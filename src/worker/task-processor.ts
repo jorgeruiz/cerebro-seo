@@ -287,18 +287,22 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           body: prBody,
         });
 
-        // Try to get preview URL
+        // Try to get preview URL (polls with retries, up to ~5 min)
         const lastSha = allShas[allShas.length - 1];
-        const previewUrl = await getPreviewUrl(site.githubRepo, lastSha);
+        const preview = await getPreviewUrl(site.githubRepo, lastSha, 6, 20_000);
 
         await prisma.monthlyPlan.update({
           where: { id: plan.id },
           data: {
             prNumber: pr.number,
             prUrl: pr.url,
-            previewUrl: previewUrl ?? undefined,
+            previewUrl: preview.url ?? undefined,
           },
         });
+
+        if (preview.state && preview.state !== "success") {
+          console.log(`[plan-task] Preview deploy ${preview.state}: ${preview.description ?? ""}`);
+        }
 
         console.log(`[plan-task] ✓ Task "${task.title}" → DONE (PR #${pr.number})`);
       } catch (prErr) {

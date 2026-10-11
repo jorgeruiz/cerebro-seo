@@ -514,37 +514,78 @@ export function scanPlanPlaceholders(
   return hits;
 }
 
+export interface PreviewStatus {
+  url: string | null;
+  state: "pending" | "success" | "failure" | "error" | null;
+  description: string | null;
+}
+
 /**
- * Intenta obtener la preview URL de los deployment statuses de Vercel.
+ * Polls deployment statuses for the preview URL with retries.
+ * Vercel typically takes 1-5 min to deploy a preview.
+ *
+ * @param maxRetries - Number of retries (default: 10, ~5 min with 30s intervals)
+ * @param intervalMs - Delay between retries (default: 30s)
  */
 export async function getPreviewUrl(
   githubRepo: string,
-  sha: string
-): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://api.github.com/repos/${githubRepo}/commits/${sha}/statuses`,
-      {
-        headers: {
-          Authorization: `Bearer ${PAT}`,
-          Accept: "application/vnd.github+json",
-        },
+  sha: string,
+  maxRetries = 10,
+  intervalMs = 30_000
+): Promise<PreviewStatus> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${githubRepo}/commits/${sha}/statuses`,
+        {
+          headers: {
+            Authorization: `Bearer ${PAT}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+
+      if (!res.ok) continue;
+
+      const statuses = (await res.json()) as Array<{
+        target_url?: string;
+        context?: string;
+        state?: string;
+        description?: string;
+      }>;
+
+      const vercel = statuses.find(
+        (s) => s.context?.includes("vercel")
+      );
+
+      if (!vercel) continue; // no Vercel status yet, retry
+
+      if (vercel.state === "success" && vercel.target_url) {
+        return {
+          url: vercel.target_url,
+          state: "success",
+          description: vercel.description ?? null,
+        };
       }
-    );
 
-    if (!res.ok) return null;
+      if (vercel.state === "failure" || vercel.state === "error") {
+        return {
+          url: vercel.target_url ?? null,
+          state: vercel.state,
+          description: vercel.description ?? null,
+        };
+      }
 
-    const statuses = (await res.json()) as Array<{
-      target_url?: string;
-      context?: string;
-      state?: string;
-    }>;
-
-    const vercel = statuses.find(
-      (s) => s.context?.includes("vercel") && s.target_url
-    );
-    return vercel?.target_url ?? null;
-  } catch {
-    return null;
+      // state is "pending" — continue polling
+      console.log(`[preview] Attempt ${attempt + 1}/${maxRetries + 1}: ${vercel.state} — ${vercel.description ?? ""}`);
+    } catch {
+      // Network error, retry
+    }
   }
+
+  return { url: null, state: null, description: "Preview no disponible después de reintentos" };
 }
