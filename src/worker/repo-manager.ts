@@ -304,24 +304,19 @@ export async function ensureRepoPlanBranch(
     // Branch doesn't exist remotely
   }
 
-  if (branchExists) {
-    // Checkout and pull existing plan branch
-    try {
-      exec(`git checkout ${planBranch}`, { cwd: dir, silent: true });
-    } catch {
-      // Local branch might not exist yet
-      exec(`git checkout -b ${planBranch} origin/${planBranch}`, { cwd: dir, silent: true });
-    }
-    exec(`git reset --hard origin/${planBranch}`, { cwd: dir });
-    exec("git clean -fd", { cwd: dir });
-  } else {
-    // Branch doesn't exist remotely — create or reuse local
-    exec(`git checkout ${defaultBranch}`, { cwd: dir, silent: true });
-    exec(`git reset --hard origin/${defaultBranch}`, { cwd: dir });
-    exec("git clean -fd", { cwd: dir });
+  // Always start from default branch to avoid "can't delete current branch" issues
+  try { exec(`git checkout ${defaultBranch}`, { cwd: dir, silent: true }); } catch { /* */ }
+  exec(`git reset --hard origin/${defaultBranch}`, { cwd: dir });
+  exec("git clean -fd", { cwd: dir });
 
-    // Delete stale local branch if it exists (leftover from a previous failed run)
-    try { exec(`git branch -D ${planBranch}`, { cwd: dir, silent: true }); } catch { /* ok */ }
+  // Delete stale local plan branch unconditionally (safe because we're on default now)
+  try { exec(`git branch -D ${planBranch}`, { cwd: dir, silent: true }); } catch { /* ok if didn't exist */ }
+
+  if (branchExists) {
+    // Track remote plan branch with a fresh local copy
+    exec(`git checkout -b ${planBranch} origin/${planBranch}`, { cwd: dir });
+  } else {
+    // Create new branch from default (no stale local to worry about)
     exec(`git checkout -b ${planBranch}`, { cwd: dir });
   }
 
@@ -540,6 +535,42 @@ export function scanPlanPlaceholders(
   }
 
   return hits;
+}
+
+/**
+ * Audits all [task:id] commits on the plan branch against the default branch.
+ * Returns commits that don't belong to tasks in the allowedTaskIds set.
+ */
+export function auditPlanCommits(
+  dir: string,
+  defaultBranch: string,
+  allowedTaskIds: Set<string>
+): { sha: string; tag: string; message: string }[] {
+  let logOutput: string;
+  try {
+    logOutput = exec(
+      `git log --oneline --format="%H %s" origin/${defaultBranch}..HEAD`,
+      { cwd: dir, silent: true }
+    );
+  } catch {
+    return [];
+  }
+
+  const orphans: { sha: string; tag: string; message: string }[] = [];
+
+  for (const line of logOutput.split("\n").filter(Boolean)) {
+    const sha = line.slice(0, 40);
+    const message = line.slice(41);
+    const match = message.match(/\[task:([a-z0-9]+)\]/);
+    if (!match) continue; // merge commits, reverts without tag — ok
+
+    const tag = match[1];
+    if (!allowedTaskIds.has(tag)) {
+      orphans.push({ sha: sha.slice(0, 8), tag, message: message.slice(0, 80) });
+    }
+  }
+
+  return orphans;
 }
 
 export interface PreviewStatus {

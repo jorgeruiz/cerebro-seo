@@ -438,7 +438,7 @@ export async function actionSubmitForReview(
     return { ok: false, error: `${pending.length} tarea(s) aún no están terminadas.` };
   }
 
-  // Plan-level guard: scan plan branch for [COMPLETAR markers
+  // Guards: placeholder markers + commit integrity
   if (plan.branchName) {
     try {
       const site = await prisma.site.findFirst({
@@ -447,10 +447,11 @@ export async function actionSubmitForReview(
       });
 
       if (site?.githubRepo) {
-        const { ensureRepoPlanBranch, scanPlanPlaceholders } = await import("@/worker/repo-manager");
+        const { ensureRepoPlanBranch, scanPlanPlaceholders, auditPlanCommits } = await import("@/worker/repo-manager");
         const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, plan.branchName);
-        const hits = scanPlanPlaceholders(dir, site.defaultBranch);
 
+        // Guard 1: [COMPLETAR markers
+        const hits = scanPlanPlaceholders(dir, site.defaultBranch);
         if (hits.length > 0) {
           const detail = hits.map((h) => `${h.file}:${h.line || "?"} → ${h.text.slice(0, 80)}`).join("\n");
           return {
@@ -458,10 +459,27 @@ export async function actionSubmitForReview(
             error: `La rama contiene ${hits.length} marcador(es) [COMPLETAR sin resolver:\n${detail}`,
           };
         }
+
+        // Guard 2: commit integrity — every [task:id] must be from a DONE task
+        const allTasks = await prisma.planTask.findMany({
+          where: { planId },
+          select: { id: true, status: true },
+        });
+        const allowedIds = new Set(
+          allTasks.filter((t) => t.status === "DONE").map((t) => t.id.slice(0, 8))
+        );
+
+        const orphans = auditPlanCommits(dir, site.defaultBranch, allowedIds);
+        if (orphans.length > 0) {
+          const detail = orphans.map((o) => `  ${o.sha} [task:${o.tag}] ${o.message}`).join("\n");
+          return {
+            ok: false,
+            error: `La rama contiene ${orphans.length} commit(s) de tareas que no están DONE:\n${detail}`,
+          };
+        }
       }
     } catch (err) {
       console.error("[submitForReview] Guard check failed:", err);
-      // Don't block review if guard check itself fails
     }
   }
 
