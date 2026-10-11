@@ -110,11 +110,16 @@ function metaHashPath(dir: string): string {
 }
 
 /**
- * Verifica si npm ci es necesario (lockfile cambió).
+ * Verifica si npm ci es necesario.
+ * Checks: (1) node_modules exists, (2) lockfile hash unchanged.
+ * Both must be true to skip.
  */
 export function needsInstall(dir: string): boolean {
   const lockPath = join(dir, "package-lock.json");
   if (!existsSync(lockPath)) return false;
+
+  // Always install if node_modules doesn't exist
+  if (!existsSync(join(dir, "node_modules"))) return true;
 
   const lockContent = readFileSync(lockPath, "utf-8");
   const currentHash = createHash("sha256").update(lockContent).digest("hex");
@@ -126,6 +131,17 @@ export function needsInstall(dir: string): boolean {
   }
 
   return true;
+}
+
+/**
+ * Removes .next build cache to force a clean build.
+ * Called before preflight builds to ensure timing is real.
+ */
+export function cleanBuildCache(dir: string): void {
+  const nextDir = join(dir, ".next");
+  if (existsSync(nextDir)) {
+    execSync(`rm -rf "${nextDir}"`, { timeout: 30_000 });
+  }
 }
 
 export function saveInstallHash(dir: string): void {

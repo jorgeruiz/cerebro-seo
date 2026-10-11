@@ -31,6 +31,7 @@ import {
   needsInstall,
   runInstall,
   verifyBuild,
+  cleanBuildCache,
   hasDiff,
   commitStep,
   createOrUpdatePlanPR,
@@ -109,10 +110,14 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     // ── 5. Memoria + npm ci ────────────────────────────────────────────
     const memoryStatus = await classifyMemory(dir);
 
-    if (task.mode === "AI" && !isMemoryComplete(memoryStatus)) {
+    // Spec §4 regla 5: AI and HYBRID tasks require complete site memory
+    if ((task.mode === "AI" || task.mode === "HYBRID") && !isMemoryComplete(memoryStatus)) {
       await prisma.planTask.update({
         where: { id: taskId },
-        data: { status: "WAITING_HUMAN", failureReason: "MEMORY_INCOMPLETE" },
+        data: {
+          status: "WAITING_HUMAN",
+          failureReason: `MEMORY_INCOMPLETE: ${Object.entries(memoryStatus).filter(([, v]) => v !== "FULL").map(([k, v]) => `${k}=${v}`).join(", ")}`,
+        },
       });
       return;
     }
@@ -570,25 +575,25 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
       data: { memoryStatus: memoryStatus as unknown as InputJsonValue },
     });
 
+    // Preflight ALWAYS installs and builds clean — no caching
     phaseStart = Date.now();
-    if (needsInstall(dir)) {
-      console.log(`[preflight] ${task.title} — npm ci --include=dev...`);
-      try {
-        runInstall(dir);
-      } catch (installErr) {
-        const msg = installErr instanceof Error ? installErr.message : String(installErr);
-        if (msg === "LOCKFILE_OUT_OF_SYNC") {
-          phases.push(`install: LOCKFILE_OUT_OF_SYNC (${Date.now() - phaseStart}ms)`);
-          await failRun(run.id, "LOCKFILE_OUT_OF_SYNC", phases.join(" | "));
-          await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
-          return;
-        }
-        throw installErr;
+    console.log(`[preflight] ${task.title} — npm ci --include=dev (forced)...`);
+    try {
+      runInstall(dir);
+    } catch (installErr) {
+      const msg = installErr instanceof Error ? installErr.message : String(installErr);
+      if (msg === "LOCKFILE_OUT_OF_SYNC") {
+        phases.push(`install: LOCKFILE_OUT_OF_SYNC (${Date.now() - phaseStart}ms)`);
+        await failRun(run.id, "LOCKFILE_OUT_OF_SYNC", phases.join(" | "));
+        await failTask(taskId, "LOCKFILE_OUT_OF_SYNC");
+        return;
       }
-      phases.push(`install: ${Date.now() - phaseStart}ms`);
-    } else {
-      phases.push("install: skipped (lockfile unchanged)");
+      throw installErr;
     }
+    phases.push(`install: ${Date.now() - phaseStart}ms`);
+
+    // Clean .next cache to force a real build
+    cleanBuildCache(dir);
 
     phaseStart = Date.now();
     console.log(`[preflight] ${task.title} — building...`);
