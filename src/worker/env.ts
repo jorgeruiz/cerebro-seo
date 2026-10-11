@@ -24,6 +24,9 @@ const workerEnvSchema = z.object({
   AGENT_TIMEOUT_MIN: z.coerce.number().positive().default(10),
   AGENT_MAX_BUDGET_USD: z.coerce.number().positive().default(2.0),
 
+  // Vercel token for fetching preview URLs (read-only scope)
+  VERCEL_TOKEN: z.string().optional(),
+
   // Git author for commits in client repos.
   // Vercel blocks deploys from unknown authors, so this should match
   // a GitHub identity in the Vercel team.

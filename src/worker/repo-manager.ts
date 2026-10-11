@@ -544,28 +544,94 @@ export function scanPlanPlaceholders(
 
 export interface PreviewStatus {
   url: string | null;
+  dashboardUrl: string | null;
   state: "pending" | "success" | "failure" | "error" | null;
   description: string | null;
 }
 
 /**
- * Polls deployment statuses for the preview URL with retries.
- * Vercel typically takes 1-5 min to deploy a preview.
+ * Fetches the preview URL for a commit.
  *
- * @param maxRetries - Number of retries (default: 10, ~5 min with 30s intervals)
- * @param intervalMs - Delay between retries (default: 30s)
+ * Strategy:
+ * 1. If VERCEL_TOKEN is set: query the Vercel API for the deployment matching
+ *    this git SHA and return its .vercel.app URL.
+ * 2. Fallback: poll GitHub commit statuses for the Vercel dashboard link.
+ *
+ * Polls with retries (up to ~3 min).
  */
 export async function getPreviewUrl(
   githubRepo: string,
   sha: string,
-  maxRetries = 10,
+  maxRetries = 6,
   intervalMs = 30_000
 ): Promise<PreviewStatus> {
+  const vercelToken = process.env.VERCEL_TOKEN;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, intervalMs));
     }
 
+    // ── Strategy 1: Vercel API ─────────────────────────────────────────
+    if (vercelToken) {
+      try {
+        // Query Vercel deployments filtered by git SHA
+        const res = await fetch(
+          `https://api.vercel.com/v6/deployments?limit=5&meta-gitCommitSha=${sha}`,
+          {
+            headers: { Authorization: `Bearer ${vercelToken}` },
+            signal: AbortSignal.timeout(10_000),
+          }
+        );
+
+        if (res.ok) {
+          const data = (await res.json()) as {
+            deployments: Array<{
+              url: string;
+              state: string;
+              readyState: string;
+              inspectorUrl: string;
+              meta?: { gitCommitSha?: string };
+            }>;
+          };
+
+          const dep = data.deployments.find(
+            (d) => d.meta?.gitCommitSha === sha
+          );
+
+          if (dep) {
+            const previewUrl = dep.url.startsWith("http") ? dep.url : `https://${dep.url}`;
+            const isReady = dep.readyState === "READY";
+
+            if (isReady) {
+              return {
+                url: previewUrl,
+                dashboardUrl: dep.inspectorUrl ?? null,
+                state: "success",
+                description: null,
+              };
+            }
+
+            if (dep.readyState === "ERROR") {
+              return {
+                url: null,
+                dashboardUrl: dep.inspectorUrl ?? null,
+                state: "error",
+                description: `Vercel deployment failed (${dep.readyState})`,
+              };
+            }
+
+            // Still building — continue polling
+            console.log(`[preview] Vercel deployment ${dep.readyState}, retrying...`);
+            continue;
+          }
+        }
+      } catch {
+        // Vercel API error, fall through to GitHub statuses
+      }
+    }
+
+    // ── Strategy 2: GitHub commit statuses (dashboard link) ────────────
     try {
       const res = await fetch(
         `https://api.github.com/repos/${githubRepo}/commits/${sha}/statuses`,
@@ -586,20 +652,18 @@ export async function getPreviewUrl(
         description?: string;
       }>;
 
-      // Find Vercel status — prefer "success" over "pending"
-      const vercelSuccess = statuses.find(
+      const vercel = statuses.find(
         (s) => s.context?.includes("vercel") && s.state === "success"
-      );
-      const vercelAny = statuses.find(
+      ) ?? statuses.find(
         (s) => s.context?.includes("vercel")
       );
-      const vercel = vercelSuccess ?? vercelAny;
 
-      if (!vercel) continue; // no Vercel status yet, retry
+      if (!vercel) continue;
 
-      if (vercel.state === "success" && vercel.target_url) {
+      if (vercel.state === "success") {
         return {
-          url: vercel.target_url,
+          url: null, // no real preview URL without Vercel API
+          dashboardUrl: vercel.target_url ?? null,
           state: "success",
           description: vercel.description ?? null,
         };
@@ -607,18 +671,18 @@ export async function getPreviewUrl(
 
       if (vercel.state === "failure" || vercel.state === "error") {
         return {
-          url: vercel.target_url ?? null,
+          url: null,
+          dashboardUrl: vercel.target_url ?? null,
           state: vercel.state,
           description: vercel.description ?? null,
         };
       }
 
-      // state is "pending" — continue polling
-      console.log(`[preview] Attempt ${attempt + 1}/${maxRetries + 1}: ${vercel.state} — ${vercel.description ?? ""}`);
+      console.log(`[preview] GitHub status: ${vercel.state} — ${vercel.description ?? ""}`);
     } catch {
       // Network error, retry
     }
   }
 
-  return { url: null, state: null, description: "Preview no disponible después de reintentos" };
+  return { url: null, dashboardUrl: null, state: null, description: "Preview no disponible después de reintentos" };
 }

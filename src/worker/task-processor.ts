@@ -296,7 +296,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           data: {
             prNumber: pr.number,
             prUrl: pr.url,
-            previewUrl: preview.url ?? undefined,
+            previewUrl: preview.url ?? preview.dashboardUrl ?? undefined,
           },
         });
 
