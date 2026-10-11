@@ -62,11 +62,36 @@ export interface SeededClient {
   notionPageId: string;
   name: string;
   domain: string;
+  siteUrl: string;               // URL normalizada del sitio (de "Sitio web" o derivada de GSC)
   estado: NotionEstado;           // "Activo" | "En Pausa"
   gscProperty: string | null;    // ej: "sc-domain:ejemplo.mx" o "https://www.ejemplo.mx/"
   ga4PropertyId: string | null;  // ej: "123456789" (solo el número)
   services: string[];            // slugs normalizados: ["seo", "google_ads", ...]
   framework: string | null;      // "nextjs" | "wordpress" | "custom" | null
+}
+
+/**
+ * Normaliza una URL de sitio web:
+ * - Quita espacios, barra final
+ * - Asegura https:// si no tiene protocolo
+ * - Quita protocolo duplicado (https://https://...)
+ */
+function normalizeSiteUrl(raw: string): string {
+  let url = raw.trim();
+  if (!url) return "";
+
+  // Fix double protocol
+  url = url.replace(/^https?:\/\/https?:\/\//i, "https://");
+
+  // Add protocol if missing
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  // Remove trailing slash
+  url = url.replace(/\/+$/, "");
+
+  return url;
 }
 
 type NotionPropertyValue = PageObjectResponse["properties"][string];
@@ -114,17 +139,31 @@ export async function getClientsFromNotion(): Promise<SeededClient[]> {
       const estado: NotionEstado =
         estadoRaw === "En Pausa" ? "En Pausa" : "Activo";
 
-      // Derivar dominio desde la URL de Search Console
+      // URL del sitio — fuente primaria: "Sitio web", fallback: derivar de GSC
+      const sitioWebRaw = extractText(props["Sitio web"]);
       const gscRaw = extractText(props["Search Console URL"]);
+
+      // Dominio para Client.domain (hostname puro)
       let domain = "";
-      if (gscRaw) {
+      // URL completa para Site.url
+      let siteUrl = "";
+
+      if (sitioWebRaw) {
+        siteUrl = normalizeSiteUrl(sitioWebRaw);
+        try { domain = new URL(siteUrl).hostname; } catch { domain = sitioWebRaw; }
+      } else if (gscRaw) {
+        // Fallback: derivar del GSC URL
         if (gscRaw.startsWith("sc-domain:")) {
           domain = gscRaw.replace("sc-domain:", "");
+          siteUrl = normalizeSiteUrl(domain);
         } else {
           try {
-            domain = new URL(gscRaw).hostname;
+            const parsed = new URL(gscRaw);
+            domain = parsed.hostname;
+            siteUrl = normalizeSiteUrl(gscRaw);
           } catch {
             domain = gscRaw;
+            siteUrl = normalizeSiteUrl(gscRaw);
           }
         }
       }
@@ -152,6 +191,7 @@ export async function getClientsFromNotion(): Promise<SeededClient[]> {
         notionPageId: page.id.replace(/-/g, ""),
         name,
         domain,
+        siteUrl,
         estado,
         gscProperty: gscProperty || null,
         ga4PropertyId: ga4PropertyId || null,

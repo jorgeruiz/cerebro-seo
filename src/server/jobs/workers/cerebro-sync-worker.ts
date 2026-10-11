@@ -64,7 +64,7 @@ const worker = new Worker(
             services: nc.services,
             sites: {
               create: {
-                url: nc.domain.startsWith("http") ? nc.domain : `https://${nc.domain}`,
+                url: nc.siteUrl || (nc.domain.startsWith("http") ? nc.domain : `https://${nc.domain}`),
                 gscProperty: nc.gscProperty ?? null,
                 ga4Property: nc.ga4PropertyId ?? null,
                 framework: nc.framework,
@@ -85,12 +85,20 @@ const worker = new Worker(
           },
         });
 
-        // Actualizar framework en el site principal si cambió en Notion
-        if (nc.framework && existing.sites[0]) {
-          await prisma.site.update({
-            where: { id: existing.sites[0].id },
-            data: { framework: nc.framework },
-          });
+        // Actualizar Site.url y framework si cambiaron en Notion
+        if (existing.sites[0]) {
+          const siteUpdate: Record<string, string> = {};
+          if (nc.framework) siteUpdate.framework = nc.framework;
+          // Update url if Notion has a value and it's different from the current one
+          if (nc.siteUrl && nc.siteUrl !== "https://" && existing.sites[0].url !== nc.siteUrl) {
+            siteUpdate.url = nc.siteUrl;
+          }
+          if (Object.keys(siteUpdate).length > 0) {
+            await prisma.site.update({
+              where: { id: existing.sites[0].id },
+              data: siteUpdate,
+            });
+          }
         }
 
         updated++;
