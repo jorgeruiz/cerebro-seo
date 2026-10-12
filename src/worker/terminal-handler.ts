@@ -18,7 +18,7 @@ import { Worker, Job } from "bullmq";
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
 import { Decimal } from "@prisma/client/runtime/library";
 import { redisBullMQ } from "@/lib/redis-connection";
-import { redis } from "@/lib/redis";
+import { redisBullMQ as redis } from "@/lib/redis"; // use the BullMQ client (enableOfflineQueue: true)
 import { prisma } from "@/lib/db";
 import { createCanUseTool } from "./agent-permissions";
 import { workerEnv } from "./env";

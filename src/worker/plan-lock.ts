@@ -7,7 +7,7 @@
  * TTL: 15 min con renovación cada 5 min.
  */
 
-import { redis } from "@/lib/redis";
+import { redisBullMQ as redis } from "@/lib/redis"; // use BullMQ client (enableOfflineQueue: true)
 import { randomUUID } from "crypto";
 
 const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 min

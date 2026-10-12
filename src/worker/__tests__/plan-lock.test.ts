@@ -11,7 +11,7 @@ const mockRedis = {
   exists: vi.fn(),
 };
 
-vi.mock("@/lib/redis", () => ({ redis: mockRedis }));
+vi.mock("@/lib/redis", () => ({ redis: mockRedis, redisBullMQ: mockRedis }));
 
 describe("plan-lock", () => {
   beforeEach(() => {

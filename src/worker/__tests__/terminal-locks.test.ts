@@ -12,7 +12,7 @@ const mockRedis = {
   del: vi.fn(),
 };
 
-vi.mock("@/lib/redis", () => ({ redis: mockRedis }));
+vi.mock("@/lib/redis", () => ({ redis: mockRedis, redisBullMQ: mockRedis }));
 
 describe("plan lock - session-level for terminal", () => {
   beforeEach(() => vi.clearAllMocks());
