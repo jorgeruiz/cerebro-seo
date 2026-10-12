@@ -22,10 +22,12 @@ export interface TaskRunView {
   id: string;
   kind: string;
   status: string;
+  stepId: string | null;
   commitSha: string | null;
   buildPassed: boolean | null;
   costUsd: number | null;
   error: string | null;
+  logTail: string | null;
   startedAt: string;
   finishedAt: string | null;
   changedRoutes: string[];
@@ -170,10 +172,12 @@ export async function getPlanData(
         id: r.id,
         kind: r.kind,
         status: r.status,
+        stepId: r.stepId,
         commitSha: r.commitSha,
         buildPassed: r.buildPassed,
         costUsd: r.costUsd ? Number(r.costUsd) : null,
         error: r.error,
+        logTail: r.logTail,
         startedAt: r.startedAt.toISOString(),
         finishedAt: r.finishedAt?.toISOString() ?? null,
         changedRoutes: r.changedRoutes,

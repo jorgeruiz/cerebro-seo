@@ -132,10 +132,12 @@ function ProgressBar({ percent, size = "lg" }: { percent: number; size?: "sm" | 
 
 function StepRow({
   step,
+  stepResult,
   onComplete,
   isCompleting,
 }: {
   step: PlanStepView;
+  stepResult: string | null;
   onComplete: (stepId: string) => void;
   isCompleting: boolean;
 }) {
@@ -194,6 +196,19 @@ function StepRow({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Step result (from AI step runs) — expandable */}
+        {stepResult && step.status === "DONE" && (
+          <details className="mt-2 group/result">
+            <summary className="font-mono text-[0.6rem] text-ds-blue cursor-pointer hover:underline flex items-center gap-1">
+              <ChevronRight className="h-2.5 w-2.5 group-open/result:rotate-90 transition-transform" />
+              Ver resultado del agente
+            </summary>
+            <div className="mt-1 bg-muted/20 rounded px-3 py-2 max-h-[300px] overflow-y-auto">
+              <pre className="font-mono text-[0.6rem] text-muted-foreground whitespace-pre-wrap leading-relaxed">{stepResult}</pre>
+            </div>
+          </details>
         )}
       </div>
 
@@ -329,14 +344,18 @@ function TaskCard({
               <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground/60 px-2 pb-1">
                 Pasos ({task.steps.filter((s) => s.status === "DONE").length}/{task.steps.length})
               </p>
-              {task.steps.map((step) => (
-                <StepRow
-                  key={step.id}
-                  step={step}
-                  onComplete={onCompleteStep}
-                  isCompleting={isActing}
-                />
-              ))}
+              {task.steps.map((step) => {
+                const stepRun = task.runs.find((r) => r.stepId === step.id && r.status === "SUCCEEDED");
+                return (
+                  <StepRow
+                    key={step.id}
+                    step={step}
+                    stepResult={stepRun?.logTail ?? null}
+                    onComplete={onCompleteStep}
+                    isCompleting={isActing}
+                  />
+                );
+              })}
             </div>
           )}
 
