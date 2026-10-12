@@ -280,6 +280,41 @@ export async function createPullRequest(params: {
 
 // ─── Plan-branch operations (S2e) ─────────────────────────────────────────
 
+/**
+ * Returns the repo workspace dir, ensuring the clone exists and the plan branch
+ * is checked out. Does NOT reset or clean — preserves working tree changes.
+ * Use for terminal sessions where edits accumulate across turns.
+ */
+export async function getRepoPlanDir(
+  githubRepo: string,
+  defaultBranch: string,
+  planBranch: string
+): Promise<string> {
+  const [owner, name] = githubRepo.split("/");
+  if (!owner || !name) throw new Error(`githubRepo inválido: ${githubRepo}`);
+
+  const dir = repoDir(owner, name);
+  const cloneUrl = `https://github.com/${owner}/${name}.git`;
+
+  if (!existsSync(join(dir, ".git"))) {
+    exec(`git clone ${cloneUrl} "${dir}"`, { cwd: WORKSPACES });
+  }
+
+  // Git author config
+  exec(`git config user.name "${workerEnv.GIT_AUTHOR_NAME}"`, { cwd: dir, silent: true });
+  exec(`git config user.email "${workerEnv.GIT_AUTHOR_EMAIL}"`, { cwd: dir, silent: true });
+
+  // Check current branch
+  const currentBranch = exec("git rev-parse --abbrev-ref HEAD", { cwd: dir, silent: true }).trim();
+  if (currentBranch === planBranch) {
+    return dir; // already on the right branch, preserve working tree
+  }
+
+  // Need to switch — but only if clean or if the branch doesn't exist locally yet
+  // For the initial checkout, use ensureRepoPlanBranch (full reset)
+  return ensureRepoPlanBranch(githubRepo, defaultBranch, planBranch);
+}
+
 export interface MergeResult {
   ok: boolean;
   conflictingFiles?: string[];

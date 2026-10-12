@@ -24,6 +24,7 @@ import { createCanUseTool } from "./agent-permissions";
 import { workerEnv } from "./env";
 import {
   ensureRepoPlanBranch,
+  getRepoPlanDir,
   needsInstall,
   runInstall,
   verifyBuild,
@@ -124,9 +125,13 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
   await publish(sessionId, { type: "status", status: "running" });
 
   try {
-    const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
+    // First turn: full checkout+reset. Subsequent turns: preserve working tree.
+    const isFirstTurn = !session.agentSessionId;
+    const dir = isFirstTurn
+      ? await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName)
+      : await getRepoPlanDir(site.githubRepo, site.defaultBranch, session.plan.branchName);
 
-    if (needsInstall(dir)) {
+    if (isFirstTurn && needsInstall(dir)) {
       await publish(sessionId, { type: "status", status: "installing" });
       runInstall(dir);
     }
@@ -262,7 +267,8 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
   await publish(sessionId, { type: "status", status: "saving" });
 
   try {
-    const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
+    // Save must NOT reset — preserve the agent's working tree changes
+    const dir = await getRepoPlanDir(site.githubRepo, site.defaultBranch, session.plan.branchName);
 
     if (!hasDiff(dir)) {
       await publish(sessionId, { type: "save_result", saved: false, message: "Sin cambios para guardar." });
@@ -333,7 +339,7 @@ async function handleClose(job: Job<TerminalJobData>): Promise<void> {
   // WIP commit if there are unsaved changes (repo lock is held for the session)
   if (site?.githubRepo && session.plan.branchName) {
     try {
-      const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
+      const dir = await getRepoPlanDir(site.githubRepo, site.defaultBranch, session.plan.branchName);
       if (hasDiff(dir)) {
         const wipBranch = `wip/terminal-${sessionId.slice(0, 8)}`;
         const { execSync } = await import("child_process");
