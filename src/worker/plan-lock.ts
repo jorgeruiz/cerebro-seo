@@ -151,12 +151,13 @@ const BUILD_SEMAPHORE_TTL = 300; // 5 min max per build
 
 /**
  * Global build semaphore: one build at a time on the VPS.
- * Acquires, runs the callback, and releases. Waits up to waitMs for the
- * semaphore. Throws if timeout is exceeded.
+ * Acquires, runs the callback, and releases. Waits up to waitMs.
+ * Throws BUILD_BUSY if timeout exceeded — caller should re-enqueue,
+ * never mark as BUILD_FAILED for contention.
  */
 export async function withBuildSemaphore<T>(
   fn: () => T | Promise<T>,
-  waitMs = 180_000 // 3 min max wait
+  waitMs = 900_000 // 15 min max wait
 ): Promise<T> {
   const holder = randomUUID();
   const deadline = Date.now() + waitMs;
@@ -178,5 +179,5 @@ export async function withBuildSemaphore<T>(
     await new Promise((r) => setTimeout(r, 3000));
   }
 
-  throw new Error("BUILD_SEMAPHORE_TIMEOUT: otro build en curso, intentar más tarde");
+  throw new Error("BUILD_BUSY");
 }

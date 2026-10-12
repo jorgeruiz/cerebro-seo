@@ -33,7 +33,7 @@ import {
   createOrUpdatePlanPR,
   sanitizePat,
 } from "./repo-manager";
-import { acquireRepoLock, withBuildSemaphore } from "./plan-lock";
+import { withBuildSemaphore } from "./plan-lock";
 import type { TerminalJobData } from "@/server/jobs/queues";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -119,12 +119,8 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
     return;
   }
 
-  // Acquire repo lock for this turn
-  const repoLock = await acquireRepoLock(site.githubRepo);
-  if (!repoLock.acquired) {
-    await publish(sessionId, { type: "error", message: "Repo ocupado por otra operación. Intenta en unos segundos." });
-    return;
-  }
+  // Repo lock is held for the entire session (acquired in /api/terminal/open).
+  // No per-turn acquisition needed — the workspace is ours.
 
   await publish(sessionId, { type: "status", status: "running" });
 
@@ -237,8 +233,6 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? sanitizePat(err.message) : String(err);
     await publish(sessionId, { type: "error", message: msg.slice(0, 500) });
-  } finally {
-    await repoLock.release();
   }
 
   await publish(sessionId, { type: "status", status: "idle" });
@@ -264,11 +258,7 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
     return;
   }
 
-  const repoLock = await acquireRepoLock(site.githubRepo);
-  if (!repoLock.acquired) {
-    await publish(sessionId, { type: "error", message: "Repo ocupado. Intenta en unos segundos." });
-    return;
-  }
+  // Repo lock is held for the entire session — no acquisition needed here.
 
   await publish(sessionId, { type: "status", status: "saving" });
 
@@ -319,8 +309,6 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? sanitizePat(err.message) : String(err);
     await publish(sessionId, { type: "error", message: `Error al guardar: ${msg.slice(0, 300)}` });
-  } finally {
-    await repoLock.release();
   }
 
   await publish(sessionId, { type: "status", status: "idle" });
@@ -343,29 +331,24 @@ async function handleClose(job: Job<TerminalJobData>): Promise<void> {
     select: { githubRepo: true, defaultBranch: true },
   });
 
-  // WIP commit if there are unsaved changes
+  // WIP commit if there are unsaved changes (repo lock is held for the session)
   if (site?.githubRepo && session.plan.branchName) {
-    const repoLock = await acquireRepoLock(site.githubRepo);
-    if (repoLock.acquired) {
-      try {
-        const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
-        if (hasDiff(dir)) {
-          const wipBranch = `wip/terminal-${sessionId.slice(0, 8)}`;
-          const { execSync } = await import("child_process");
-          try { execSync(`git branch -D ${wipBranch}`, { cwd: dir, timeout: 5000 }); } catch { /* ok */ }
-          execSync(`git checkout -b ${wipBranch}`, { cwd: dir, timeout: 5000 });
-          commitStep(dir, wipBranch, session.taskId ?? "plan-review", "WIP: cambios sin guardar de terminal");
-          await publish(sessionId, {
-            type: "wip_saved",
-            branch: wipBranch,
-            message: `Cambios sin guardar commiteados a ${wipBranch}`,
-          });
-        }
-      } catch (err) {
-        console.error("[terminal] WIP save failed:", err);
-      } finally {
-        await repoLock.release();
+    try {
+      const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
+      if (hasDiff(dir)) {
+        const wipBranch = `wip/terminal-${sessionId.slice(0, 8)}`;
+        const { execSync } = await import("child_process");
+        try { execSync(`git branch -D ${wipBranch}`, { cwd: dir, timeout: 5000 }); } catch { /* ok */ }
+        execSync(`git checkout -b ${wipBranch}`, { cwd: dir, timeout: 5000 });
+        commitStep(dir, wipBranch, session.taskId ?? "plan-review", "WIP: cambios sin guardar de terminal");
+        await publish(sessionId, {
+          type: "wip_saved",
+          branch: wipBranch,
+          message: `Cambios sin guardar commiteados a ${wipBranch}`,
+        });
       }
+    } catch (err) {
+      console.error("[terminal] WIP save failed:", err);
     }
   }
 
@@ -403,6 +386,18 @@ async function handleClose(job: Job<TerminalJobData>): Promise<void> {
       1, planLockKey, terminalLockHolder
     );
     await redis.del(`terminal-lock-holder:${sessionId}`);
+  }
+
+  // Release repo lock (acquired in /api/terminal/open)
+  const repoLockHolder = await redis.get(`terminal-repo-lock-holder:${sessionId}`);
+  const repoName = await redis.get(`terminal-repo:${sessionId}`);
+  if (repoLockHolder && repoName) {
+    await redis.eval(
+      `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+      1, `repo-lock:${repoName}`, repoLockHolder
+    );
+    await redis.del(`terminal-repo-lock-holder:${sessionId}`);
+    await redis.del(`terminal-repo:${sessionId}`);
   }
 
   // Clean up activity key

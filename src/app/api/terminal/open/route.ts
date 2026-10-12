@@ -3,15 +3,19 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { acquirePlanLock } from "@/worker/plan-lock";
+import { acquirePlanLock, acquireRepoLock } from "@/worker/plan-lock";
 import { redis } from "@/lib/redis";
 
 /**
  * POST /api/terminal/open
  * Body: { planId: string, taskId?: string }
  *
- * Acquires the plan lock for the entire terminal session (held via heartbeat).
- * Stores the lock holder in Redis so the close handler can release it.
+ * Acquires BOTH locks for the entire terminal session:
+ * - Plan lock: prevents task AI execution on this plan
+ * - Repo lock: prevents preflight/other operations on the shared workspace
+ *
+ * Both locks auto-renew via their internal timers (every 5 min, TTL 15 min).
+ * Lock holders are stored in Redis so handleClose can release them.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -26,12 +30,18 @@ export async function POST(req: NextRequest) {
 
   const plan = await prisma.monthlyPlan.findUnique({
     where: { id: body.planId },
-    select: { id: true, status: true, branchName: true },
+    select: { id: true, status: true, branchName: true, clientId: true },
   });
 
   if (!plan) {
     return NextResponse.json({ error: "Plan no encontrado." }, { status: 404 });
   }
+
+  // Find the site for repo lock
+  const site = await prisma.site.findFirst({
+    where: { clientId: plan.clientId },
+    select: { githubRepo: true },
+  });
 
   // Check for existing active terminal session
   const existing = await prisma.terminalSession.findFirst({
@@ -44,13 +54,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Acquire plan lock for the terminal session
-  const lock = await acquirePlanLock(body.planId);
-  if (!lock.acquired) {
+  // Acquire plan lock
+  const planLock = await acquirePlanLock(body.planId);
+  if (!planLock.acquired) {
     return NextResponse.json(
       { error: "El plan está bloqueado por una tarea en ejecución." },
       { status: 409 }
     );
+  }
+
+  // Acquire repo lock (if site has a repo)
+  let repoLockHolder: string | null = null;
+  if (site?.githubRepo) {
+    const repoLock = await acquireRepoLock(site.githubRepo);
+    if (!repoLock.acquired) {
+      await planLock.release();
+      return NextResponse.json(
+        { error: "El repositorio está ocupado por otra operación (preflight o tarea)." },
+        { status: 409 }
+      );
+    }
+    repoLockHolder = repoLock.holder!;
   }
 
   // Create terminal session
@@ -63,12 +87,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Store the lock holder so the close handler can release it
-  // The lock.release() function is lost after this request ends,
-  // so we store the holder UUID to do compare-and-delete later.
-  await redis.set(`terminal-lock-holder:${ts.id}`, lock.holder!, "EX", 86400);
+  // Store lock holders for release in handleClose
+  await redis.set(`terminal-lock-holder:${ts.id}`, planLock.holder!, "EX", 86400);
+  if (repoLockHolder && site?.githubRepo) {
+    await redis.set(`terminal-repo-lock-holder:${ts.id}`, repoLockHolder, "EX", 86400);
+    await redis.set(`terminal-repo:${ts.id}`, site.githubRepo, "EX", 86400);
+  }
 
-  // Record initial activity for inactivity tracking
+  // Record initial activity
   await redis.set(`terminal-activity:${ts.id}`, Date.now().toString(), "EX", 3600);
 
   return NextResponse.json({ sessionId: ts.id });

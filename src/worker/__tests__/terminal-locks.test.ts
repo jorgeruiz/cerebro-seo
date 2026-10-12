@@ -136,6 +136,84 @@ describe("build semaphore", () => {
   });
 });
 
+describe("repo lock held for entire terminal session", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("preflight is blocked between two terminal turns (session holds repo lock)", async () => {
+    // Terminal session acquires repo lock in open (first call succeeds)
+    // Preflight tries between turns (fails — lock held)
+    // Terminal's second turn doesn't re-acquire (it already has it)
+    mockRedis.set
+      .mockResolvedValueOnce("OK")   // terminal open: repo lock acquired
+      .mockResolvedValueOnce(null);  // preflight: blocked
+
+    mockRedis.get.mockResolvedValue("terminal-session-holder");
+
+    const { acquireRepoLock } = await import("../plan-lock");
+
+    // Terminal opens — acquires repo lock
+    const terminalLock = await acquireRepoLock("jorgeruiz/quicsa-web");
+    expect(terminalLock.acquired).toBe(true);
+
+    // Between turns: preflight tries to clone+build the same repo
+    const preflightLock = await acquireRepoLock("jorgeruiz/quicsa-web");
+    expect(preflightLock.acquired).toBe(false);
+    expect(preflightLock.holder).toBe("terminal-session-holder");
+
+    // Terminal's turn 2 does NOT try to acquire repo lock (it already has it)
+    // — this is verified by the source code check below
+  });
+
+  it("terminal-handler does NOT acquire repo lock per turn", async () => {
+    const { readFileSync } = await import("fs");
+    const { join } = await import("path");
+    const source = readFileSync(join(__dirname, "..", "terminal-handler.ts"), "utf-8");
+
+    // handleTurn should NOT call acquireRepoLock
+    expect(source).toContain("Repo lock is held for the entire session");
+    expect(source).not.toContain("acquireRepoLock(site.githubRepo)");
+  });
+
+  it("repo lock is released in handleClose via stored holder", async () => {
+    const { readFileSync } = await import("fs");
+    const { join } = await import("path");
+    const source = readFileSync(join(__dirname, "..", "terminal-handler.ts"), "utf-8");
+
+    expect(source).toContain("terminal-repo-lock-holder");
+    expect(source).toContain("terminal-repo:");
+    expect(source).toContain("repo-lock:");
+  });
+});
+
+describe("BUILD_BUSY is retriable, not FAILED", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("withBuildSemaphore throws BUILD_BUSY on timeout", async () => {
+    // Semaphore never acquired
+    mockRedis.set.mockResolvedValue(null);
+
+    const { withBuildSemaphore } = await import("../plan-lock");
+
+    await expect(
+      withBuildSemaphore(() => "should not run", 100) // 100ms timeout
+    ).rejects.toThrow("BUILD_BUSY");
+  });
+
+  it("task-processor treats BUILD_BUSY as retriable (not FAILED)", async () => {
+    const { readFileSync } = await import("fs");
+    const { join } = await import("path");
+    const source = readFileSync(join(__dirname, "..", "task-processor.ts"), "utf-8");
+
+    // BUILD_BUSY should be in the retriable errors list alongside PLAN_LOCKED
+    expect(source).toContain('"BUILD_BUSY"');
+    expect(source).toContain('"PLAN_LOCKED"');
+    expect(source).toContain('"REPO_LOCKED"');
+    // All three should be in the same if block
+    const match = source.match(/if \(.*PLAN_LOCKED.*REPO_LOCKED.*BUILD_BUSY/s);
+    expect(match).not.toBeNull();
+  });
+});
+
 describe("inactivity detection", () => {
   it("source code has inactivity checker with configurable timeout", async () => {
     const { readFileSync } = await import("fs");

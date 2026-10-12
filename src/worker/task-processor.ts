@@ -345,7 +345,10 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     }
   } catch (err) {
     const errMsg = err instanceof Error ? sanitizePat(err.message) : String(err);
-    if (errMsg === "PLAN_LOCKED") throw err; // let BullMQ retry
+    // Retriable errors — let BullMQ re-queue, don't mark task FAILED
+    if (errMsg === "PLAN_LOCKED" || errMsg === "REPO_LOCKED" || errMsg === "BUILD_BUSY") {
+      throw err;
+    }
 
     console.error(`[plan-task] ✗ Task "${task.title}" failed:`, errMsg);
     await failTask(taskId, errMsg);
