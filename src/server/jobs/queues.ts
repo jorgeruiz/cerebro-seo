@@ -139,7 +139,7 @@ export interface PlanTaskJobData {
 
 export interface TerminalJobData {
   sessionId: string;
-  action: "turn" | "save" | "close";
+  action: "turn" | "preview" | "save" | "close";
   prompt?: string; // for action=turn
   triggeredById?: string;
 }

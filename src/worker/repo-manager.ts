@@ -315,6 +315,37 @@ export async function getRepoPlanDir(
   return ensureRepoPlanBranch(githubRepo, defaultBranch, planBranch);
 }
 
+/**
+ * Returns a summary of uncommitted changes: file stats + first lines of diff per file.
+ */
+export function getDiffSummary(dir: string): { stat: string; patches: { file: string; diff: string }[] } {
+  const stat = exec("git diff --stat", { cwd: dir, silent: true }).trim();
+  if (!stat) return { stat: "", patches: [] };
+
+  const patches: { file: string; diff: string }[] = [];
+  const diffOutput = exec("git diff --unified=3", { cwd: dir, silent: true });
+
+  let currentFile = "";
+  let currentLines: string[] = [];
+
+  for (const line of diffOutput.split("\n")) {
+    if (line.startsWith("diff --git")) {
+      if (currentFile && currentLines.length > 0) {
+        patches.push({ file: currentFile, diff: currentLines.slice(0, 15).join("\n") });
+      }
+      currentFile = line.replace(/^diff --git a\//, "").replace(/ b\/.*/, "");
+      currentLines = [];
+    } else if (currentFile) {
+      currentLines.push(line);
+    }
+  }
+  if (currentFile && currentLines.length > 0) {
+    patches.push({ file: currentFile, diff: currentLines.slice(0, 15).join("\n") });
+  }
+
+  return { stat, patches };
+}
+
 export interface MergeResult {
   ok: boolean;
   conflictingFiles?: string[];

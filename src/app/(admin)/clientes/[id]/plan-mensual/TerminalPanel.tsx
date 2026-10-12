@@ -23,6 +23,11 @@ interface StreamMessage {
   branch?: string;
   detail?: string;
   is_error?: boolean;
+  toolUseId?: string;
+  output?: string;
+  hasChanges?: boolean;
+  stat?: string;
+  patches?: Array<{ file: string; diff: string }>;
 }
 
 interface Props {
@@ -139,7 +144,20 @@ export function TerminalPanel({ planId, taskId, isAdmin, planLocked }: Props) {
     }
   }
 
-  async function handleSave() {
+  async function handlePreview() {
+    if (!sessionId) return;
+    try {
+      await fetch("/api/terminal/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+    } catch {
+      setError("Error al obtener preview");
+    }
+  }
+
+  async function handleConfirmSave() {
     if (!sessionId) return;
     try {
       await fetch("/api/terminal/save", {
@@ -232,10 +250,10 @@ export function TerminalPanel({ planId, taskId, isAdmin, planLocked }: Props) {
             </span>
           )}
           <button
-            onClick={handleSave}
+            onClick={handlePreview}
             disabled={status === "running" || status === "saving"}
             className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "h-6 text-[0.6rem] px-2 gap-1")}
-            title="Guardar en la rama (build + commit + push)"
+            title="Ver cambios y guardar en la rama"
           >
             <Save className="h-2.5 w-2.5" /> Guardar
           </button>
@@ -252,7 +270,7 @@ export function TerminalPanel({ planId, taskId, isAdmin, planLocked }: Props) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-zinc-950 p-3 space-y-2 min-h-[300px]">
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
+          <MessageBubble key={i} msg={msg} onConfirmSave={handleConfirmSave} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -291,7 +309,28 @@ export function TerminalPanel({ planId, taskId, isAdmin, planLocked }: Props) {
 
 // ─── Message Bubble ──────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: StreamMessage }) {
+function DiffPreview({ msg, onConfirm }: { msg: StreamMessage; onConfirm: () => void }) {
+  return (
+    <div className="bg-zinc-800/50 rounded-lg px-3 py-2 space-y-2 border border-zinc-700">
+      <p className="font-mono text-[0.65rem] text-zinc-300 font-semibold">Cambios a guardar:</p>
+      <pre className="font-mono text-[0.55rem] text-zinc-400 whitespace-pre-wrap">{msg.stat}</pre>
+      {msg.patches?.map((p, i) => (
+        <details key={i} className="group">
+          <summary className="font-mono text-[0.6rem] text-blue-400 cursor-pointer hover:underline">{p.file}</summary>
+          <pre className="font-mono text-[0.5rem] text-zinc-500 whitespace-pre-wrap mt-1 pl-2 border-l border-zinc-700">{p.diff}</pre>
+        </details>
+      ))}
+      <button
+        onClick={onConfirm}
+        className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-6 text-[0.6rem] px-3 gap-1 mt-1")}
+      >
+        <CheckCircle2 className="h-2.5 w-2.5" /> Confirmar y guardar
+      </button>
+    </div>
+  );
+}
+
+function MessageBubble({ msg, onConfirmSave }: { msg: StreamMessage; onConfirmSave: () => void }) {
   switch (msg.type) {
     case "user_input":
       return (
@@ -348,6 +387,32 @@ function MessageBubble({ msg }: { msg: StreamMessage }) {
     case "save_warning":
       return (
         <div className="bg-yellow-500/10 rounded-lg px-3 py-1.5">
+          <p className="font-mono text-[0.6rem] text-yellow-400">{msg.message}</p>
+        </div>
+      );
+
+    case "tool_result":
+      return (
+        <div className="bg-zinc-800/50 rounded-lg px-3 py-1 ml-4 border-l-2 border-blue-500/30">
+          <p className="font-mono text-[0.55rem] text-zinc-500 whitespace-pre-wrap">{msg.output?.slice(0, 200)}</p>
+        </div>
+      );
+
+    case "diff_preview":
+      if (!msg.hasChanges) {
+        return (
+          <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
+            <p className="font-mono text-[0.6rem] text-zinc-400">Sin cambios para guardar.</p>
+          </div>
+        );
+      }
+      return (
+        <DiffPreview msg={msg} onConfirm={onConfirmSave} />
+      );
+
+    case "limit_warning":
+      return (
+        <div className="bg-yellow-500/10 rounded-lg px-3 py-1.5 border border-yellow-500/20">
           <p className="font-mono text-[0.6rem] text-yellow-400">{msg.message}</p>
         </div>
       );

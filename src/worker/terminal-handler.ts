@@ -25,6 +25,7 @@ import { workerEnv } from "./env";
 import {
   ensureRepoPlanBranch,
   getRepoPlanDir,
+  getDiffSummary,
   needsInstall,
   runInstall,
   verifyBuild,
@@ -172,23 +173,44 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
       let turnOutput = 0;
 
       for await (const message of stream) {
-        if (message.type === "assistant" && "content" in message) {
-          const textBlocks = (message.content as Array<{ type: string; text?: string }>)
-            .filter((b) => b.type === "text" && b.text)
-            .map((b) => b.text)
-            .join("");
-          if (textBlocks) {
-            await publish(sessionId, { type: "agent_text", text: textBlocks });
-          }
+        // Assistant messages: text blocks and tool_use blocks
+        // SDK wraps Anthropic's BetaMessage as message.message
+        if (message.type === "assistant") {
+          const betaMsg = (message as { message?: { content?: unknown[] } }).message;
+          const blocks = (betaMsg?.content ?? []) as Array<{ type: string; text?: string; name?: string; input?: unknown; id?: string }>;
 
-          const toolBlocks = (message.content as Array<{ type: string; name?: string; input?: unknown }>)
-            .filter((b) => b.type === "tool_use");
-          for (const tb of toolBlocks) {
-            await publish(sessionId, {
-              type: "agent_tool_use",
-              tool: tb.name ?? "unknown",
-              input: JSON.stringify(tb.input ?? {}).slice(0, 500),
-            });
+          for (const block of blocks) {
+            if (block.type === "text" && block.text) {
+              await publish(sessionId, { type: "agent_text", text: block.text });
+            }
+            if (block.type === "tool_use" && block.name) {
+              await publish(sessionId, {
+                type: "agent_tool_use",
+                tool: block.name,
+                input: JSON.stringify(block.input ?? {}).slice(0, 500),
+                toolUseId: block.id,
+              });
+            }
+          }
+        }
+
+        // User messages: tool_result blocks (the output of tools)
+        if (message.type === "user") {
+          const userMsg = (message as { message?: { content?: unknown[] | string } }).message;
+          const content = userMsg?.content;
+          if (Array.isArray(content)) {
+            for (const block of content as Array<{ type: string; content?: unknown; tool_use_id?: string }>) {
+              if (block.type === "tool_result" && block.tool_use_id) {
+                const output = typeof block.content === "string"
+                  ? block.content
+                  : JSON.stringify(block.content ?? "").slice(0, 300);
+                await publish(sessionId, {
+                  type: "tool_result",
+                  toolUseId: block.tool_use_id,
+                  output: output.slice(0, 500),
+                });
+              }
+            }
           }
         }
 
@@ -240,6 +262,47 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
   }
 
   await publish(sessionId, { type: "status", status: "idle" });
+}
+
+// ─── Preview handler (diff summary before save) ──────────────────────────────
+
+async function handlePreview(job: Job<TerminalJobData>): Promise<void> {
+  const { sessionId } = job.data;
+
+  const session = await prisma.terminalSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    include: { plan: true },
+  });
+
+  const site = await prisma.site.findFirst({
+    where: { client: { monthlyPlans: { some: { id: session.planId } } } },
+    select: { githubRepo: true, defaultBranch: true },
+  });
+
+  if (!site?.githubRepo || !session.plan.branchName) {
+    await publish(sessionId, { type: "error", message: "No hay repo o rama configurada." });
+    return;
+  }
+
+  try {
+    const dir = await getRepoPlanDir(site.githubRepo, site.defaultBranch, session.plan.branchName);
+
+    if (!hasDiff(dir)) {
+      await publish(sessionId, { type: "diff_preview", hasChanges: false, stat: "", patches: [] });
+      return;
+    }
+
+    const summary = getDiffSummary(dir);
+    await publish(sessionId, {
+      type: "diff_preview",
+      hasChanges: true,
+      stat: summary.stat,
+      patches: summary.patches.map((p) => ({ file: p.file, diff: p.diff.slice(0, 500) })),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? sanitizePat(err.message) : String(err);
+    await publish(sessionId, { type: "error", message: `Error al obtener diff: ${msg.slice(0, 200)}` });
+  }
 }
 
 // ─── Save handler ────────────────────────────────────────────────────────────
@@ -457,6 +520,9 @@ const worker = new Worker<TerminalJobData>(
     switch (job.data.action) {
       case "turn":
         await handleTurn(job);
+        break;
+      case "preview":
+        await handlePreview(job);
         break;
       case "save":
         await handleSave(job);
