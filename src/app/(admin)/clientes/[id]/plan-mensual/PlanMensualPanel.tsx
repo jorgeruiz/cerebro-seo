@@ -161,7 +161,32 @@ function StepRow({
 
       <div className="flex-1 min-w-0">
         <p className="text-xs text-foreground leading-snug">{step.title}</p>
-        {step.acceptanceCriteria.length > 0 && (
+
+        {/* Human step instructions */}
+        {step.type === "HUMAN" && isHumanPending && (
+          <div className="mt-1.5 bg-orange-500/5 border border-orange-500/20 rounded px-2.5 py-2 space-y-1.5">
+            <p className="font-mono text-[0.6rem] font-semibold text-orange-400">Que hacer:</p>
+            {step.acceptanceCriteria.length > 0 ? (
+              <ul className="space-y-0.5">
+                {step.acceptanceCriteria.map((c, i) => (
+                  <li key={i} className="font-mono text-[0.6rem] text-muted-foreground pl-2 border-l border-orange-500/30">
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-mono text-[0.6rem] text-muted-foreground">
+                Resuelve este paso y marca como completado.
+              </p>
+            )}
+            <p className="font-mono text-[0.55rem] text-muted-foreground/60 pt-0.5">
+              Usa la terminal para hacer los cambios, o trabaja fuera y marca como hecho.
+            </p>
+          </div>
+        )}
+
+        {/* Acceptance criteria for non-human or completed steps */}
+        {!(step.type === "HUMAN" && isHumanPending) && step.acceptanceCriteria.length > 0 && (
           <ul className="mt-1 space-y-0.5">
             {step.acceptanceCriteria.map((c, i) => (
               <li key={i} className="font-mono text-[0.6rem] text-muted-foreground/70 pl-2 border-l border-border">
@@ -183,13 +208,13 @@ function StepRow({
             disabled={isCompleting}
             className={cn(
               buttonVariants({ variant: "default", size: "sm" }),
-              "h-6 text-[0.6rem] px-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              "h-6 text-[0.6rem] px-2 gap-1"
             )}
           >
             {isCompleting ? (
               <Loader2 className="h-2.5 w-2.5 animate-spin" />
             ) : (
-              <><CheckCircle2 className="h-2.5 w-2.5" /> Completar</>
+              <><CheckCircle2 className="h-2.5 w-2.5" /> Hecho</>
             )}
           </button>
         )}
@@ -251,8 +276,8 @@ function TaskCard({
         />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-foreground truncate">
+          <div className="flex items-start gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-foreground leading-snug">
               {task.title}
             </span>
             <span className={cn("font-mono text-[0.6rem] uppercase px-1.5 py-0.5 rounded border flex items-center gap-0.5", badge.color)}>
