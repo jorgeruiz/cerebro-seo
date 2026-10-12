@@ -28,7 +28,7 @@ import {
   isMemoryReadyForCode,
   isMemoryReadyForContent,
 } from "./memory-classifier";
-import { acquirePlanLock } from "./plan-lock";
+import { acquirePlanLock, acquireRepoLock, withBuildSemaphore } from "./plan-lock";
 import { scanPlaceholders, formatPlaceholderHits } from "./placeholder-guard";
 import {
   ensureRepo,
@@ -77,12 +77,18 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     return;
   }
 
-  // ── 2. Adquirir candado del plan ─────────────────────────────────────
+  // ── 2. Adquirir candados (plan + repo) ─────────────────────────────
   const lock = await acquirePlanLock(plan.id);
   if (!lock.acquired) {
     console.log(`[plan-task] Plan ${plan.id} locked by ${lock.holder ?? "unknown"} — re-queuing`);
-    // La tarea se reintentará automáticamente por BullMQ
     throw new Error("PLAN_LOCKED");
+  }
+
+  const repoLock = await acquireRepoLock(site.githubRepo);
+  if (!repoLock.acquired) {
+    await lock.release();
+    console.log(`[plan-task] Repo ${site.githubRepo} locked — re-queuing`);
+    throw new Error("REPO_LOCKED");
   }
 
   // Task → RUNNING
@@ -204,7 +210,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         });
 
         // Build check
-        const buildResult = verifyBuild(dir);
+        const buildResult = await withBuildSemaphore(() => verifyBuild(dir));
         await prisma.taskRun.update({
           where: { id: run.id },
           data: { buildPassed: buildResult.passed },
@@ -344,6 +350,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     console.error(`[plan-task] ✗ Task "${task.title}" failed:`, errMsg);
     await failTask(taskId, errMsg);
   } finally {
+    await repoLock.release();
     await lock.release();
   }
 }
@@ -617,7 +624,7 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
 
     phaseStart = Date.now();
     console.log(`[preflight] ${task.title} — building...`);
-    const buildResult = verifyBuild(dir);
+    const buildResult = await withBuildSemaphore(() => verifyBuild(dir));
     phases.push(`build: ${Date.now() - phaseStart}ms`);
 
     const totalMs = Date.now() - startTotal;

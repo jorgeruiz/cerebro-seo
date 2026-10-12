@@ -3,12 +3,15 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { isPlanLocked } from "@/worker/plan-lock";
+import { acquirePlanLock } from "@/worker/plan-lock";
+import { redis } from "@/lib/redis";
 
 /**
  * POST /api/terminal/open
  * Body: { planId: string, taskId?: string }
- * Returns: { sessionId: string } or { error: string }
+ *
+ * Acquires the plan lock for the entire terminal session (held via heartbeat).
+ * Stores the lock holder in Redis so the close handler can release it.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -30,18 +33,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Plan no encontrado." }, { status: 404 });
   }
 
-  // Check if plan is locked (task AI running)
-  const locked = await isPlanLocked(body.planId);
-  if (locked) {
-    return NextResponse.json({ error: "El plan está bloqueado por una tarea en ejecución." }, { status: 409 });
-  }
-
   // Check for existing active terminal session
   const existing = await prisma.terminalSession.findFirst({
     where: { planId: body.planId, status: "ACTIVE" },
   });
   if (existing) {
-    return NextResponse.json({ error: "Ya hay una terminal activa para este plan.", sessionId: existing.id }, { status: 409 });
+    return NextResponse.json(
+      { error: "Ya hay una terminal activa para este plan.", sessionId: existing.id },
+      { status: 409 }
+    );
+  }
+
+  // Acquire plan lock for the terminal session
+  const lock = await acquirePlanLock(body.planId);
+  if (!lock.acquired) {
+    return NextResponse.json(
+      { error: "El plan está bloqueado por una tarea en ejecución." },
+      { status: 409 }
+    );
   }
 
   // Create terminal session
@@ -53,6 +62,14 @@ export async function POST(req: NextRequest) {
       status: "ACTIVE",
     },
   });
+
+  // Store the lock holder so the close handler can release it
+  // The lock.release() function is lost after this request ends,
+  // so we store the holder UUID to do compare-and-delete later.
+  await redis.set(`terminal-lock-holder:${ts.id}`, lock.holder!, "EX", 86400);
+
+  // Record initial activity for inactivity tracking
+  await redis.set(`terminal-activity:${ts.id}`, Date.now().toString(), "EX", 3600);
 
   return NextResponse.json({ sessionId: ts.id });
 }

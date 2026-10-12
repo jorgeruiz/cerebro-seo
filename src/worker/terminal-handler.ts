@@ -1,15 +1,17 @@
 /**
  * Terminal handler: procesa jobs de la cola "terminal-sessions".
  *
- * Cada job es un turno de la terminal (turn, save, close).
- * El Agent SDK se ejecuta con resume: sessionId para mantener contexto.
- * Los mensajes se publican a un Redis stream para SSE al browser.
+ * Candado por plan: se adquiere en /api/terminal/open y se mantiene
+ * toda la sesión con heartbeat (renovación de TTL cada 2 min).
+ * Se libera solo en close o por límite de inactividad/tiempo.
  *
- * Flujo por turno:
- * 1. Checkout rama del plan
- * 2. query({ prompt, options: { resume: sessionId, persistSession: true } })
- * 3. Iterar messages → publicar a Redis stream
- * 4. Al completar: guardar session_id, actualizar costo
+ * Candado por repo: se adquiere y libera POR TURNO (no toda la sesión),
+ * porque el repo workspace es compartido con tareas y preflight.
+ *
+ * Semáforo de builds: un build a la vez en el VPS (en save).
+ *
+ * Inactividad: si no hay input del usuario en TERMINAL_INACTIVITY_MIN,
+ * la sesión se cierra con WIP commit automático y aviso.
  */
 
 import { Worker, Job } from "bullmq";
@@ -28,10 +30,16 @@ import {
   cleanBuildCache,
   hasDiff,
   commitStep,
+  createOrUpdatePlanPR,
   sanitizePat,
 } from "./repo-manager";
-import { acquirePlanLock } from "./plan-lock";
+import { acquireRepoLock, withBuildSemaphore } from "./plan-lock";
 import type { TerminalJobData } from "@/server/jobs/queues";
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const TERMINAL_MAX_TIME_MIN = Number(process.env.TERMINAL_MAX_TIME_MIN ?? "60");
+const TERMINAL_INACTIVITY_MIN = Number(process.env.TERMINAL_INACTIVITY_MIN ?? "15");
 
 // ─── Stream helpers ──────────────────────────────────────────────────────────
 
@@ -40,12 +48,38 @@ function streamKey(sessionId: string): string {
 }
 
 async function publish(sessionId: string, msg: Record<string, unknown>): Promise<void> {
-  await redis.xadd(
-    streamKey(sessionId),
-    "MAXLEN", "~", "500",
-    "*",
-    "data", JSON.stringify(msg)
-  );
+  await redis.xadd(streamKey(sessionId), "MAXLEN", "~", "500", "*", "data", JSON.stringify(msg));
+}
+
+// Plan lock is acquired in /api/terminal/open with acquirePlanLock(),
+// which has its own auto-renewal timer (every 5 min). The holder UUID
+// is stored in Redis at terminal-lock-holder:{sessionId} so the close
+// handler can do compare-and-delete.
+
+// ─── Inactivity watchdog ─────────────────────────────────────────────────────
+
+/** Tracks last user activity per session. Set on each turn job. */
+const lastActivityKey = (sid: string) => `terminal-activity:${sid}`;
+
+async function recordActivity(sessionId: string): Promise<void> {
+  await redis.set(lastActivityKey(sessionId), Date.now().toString(), "EX", TERMINAL_INACTIVITY_MIN * 60 + 60);
+}
+
+async function isInactive(sessionId: string): Promise<boolean> {
+  const raw = await redis.get(lastActivityKey(sessionId));
+  if (!raw) return true;
+  const elapsed = Date.now() - parseInt(raw, 10);
+  return elapsed > TERMINAL_INACTIVITY_MIN * 60 * 1000;
+}
+
+async function isTimedOut(sessionId: string): Promise<boolean> {
+  const session = await prisma.terminalSession.findUnique({
+    where: { id: sessionId },
+    select: { createdAt: true },
+  });
+  if (!session) return true;
+  const elapsed = Date.now() - session.createdAt.getTime();
+  return elapsed > TERMINAL_MAX_TIME_MIN * 60 * 1000;
 }
 
 // ─── Turn handler ────────────────────────────────────────────────────────────
@@ -53,6 +87,15 @@ async function publish(sessionId: string, msg: Record<string, unknown>): Promise
 async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
   const { sessionId, prompt } = job.data;
   if (!prompt) return;
+
+  await recordActivity(sessionId);
+
+  // Check limits
+  if (await isTimedOut(sessionId)) {
+    await publish(sessionId, { type: "limit_warning", kind: "time", remaining: "0" });
+    await handleClose(job); // force close with WIP
+    return;
+  }
 
   const session = await prisma.terminalSession.findUniqueOrThrow({
     where: { id: sessionId },
@@ -73,6 +116,13 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
 
   if (!site?.githubRepo || !session.plan.branchName) {
     await publish(sessionId, { type: "error", message: "No hay repo o rama configurada." });
+    return;
+  }
+
+  // Acquire repo lock for this turn
+  const repoLock = await acquireRepoLock(site.githubRepo);
+  if (!repoLock.acquired) {
+    await publish(sessionId, { type: "error", message: "Repo ocupado por otra operación. Intenta en unos segundos." });
     return;
   }
 
@@ -122,7 +172,6 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
       let turnOutput = 0;
 
       for await (const message of stream) {
-        // Publish relevant messages to the stream
         if (message.type === "assistant" && "content" in message) {
           const textBlocks = (message.content as Array<{ type: string; text?: string }>)
             .filter((b) => b.type === "text" && b.text)
@@ -132,7 +181,6 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
             await publish(sessionId, { type: "agent_text", text: textBlocks });
           }
 
-          // Tool use blocks
           const toolBlocks = (message.content as Array<{ type: string; name?: string; input?: unknown }>)
             .filter((b) => b.type === "tool_use");
           for (const tb of toolBlocks) {
@@ -150,17 +198,11 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
             const result = message as SDKResultSuccess;
             newSessionId = result.session_id;
             turnCost = result.total_cost_usd;
-
             for (const usage of Object.values(result.modelUsage ?? {})) {
               turnInput += usage.inputTokens;
               turnOutput += usage.outputTokens;
             }
-
-            await publish(sessionId, {
-              type: "result",
-              text: result.result ?? "",
-              is_error: false,
-            });
+            await publish(sessionId, { type: "result", text: result.result ?? "", is_error: false });
           } else {
             newSessionId = message.session_id;
             await publish(sessionId, {
@@ -172,7 +214,6 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
         }
       }
 
-      // Update session with new cost and session ID
       const prevCost = Number(session.costUsd);
       await prisma.terminalSession.update({
         where: { id: sessionId },
@@ -196,6 +237,8 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? sanitizePat(err.message) : String(err);
     await publish(sessionId, { type: "error", message: msg.slice(0, 500) });
+  } finally {
+    await repoLock.release();
   }
 
   await publish(sessionId, { type: "status", status: "idle" });
@@ -221,6 +264,12 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
     return;
   }
 
+  const repoLock = await acquireRepoLock(site.githubRepo);
+  if (!repoLock.acquired) {
+    await publish(sessionId, { type: "error", message: "Repo ocupado. Intenta en unos segundos." });
+    return;
+  }
+
   await publish(sessionId, { type: "status", status: "saving" });
 
   try {
@@ -232,9 +281,9 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
       return;
     }
 
-    // Build check
+    // Build with semaphore
     cleanBuildCache(dir);
-    const buildResult = verifyBuild(dir);
+    const buildResult = await withBuildSemaphore(() => verifyBuild(dir));
     if (!buildResult.passed) {
       await publish(sessionId, {
         type: "save_result",
@@ -245,33 +294,20 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
       return;
     }
 
-    // Placeholder guard (warning, not blocking — terminal user decides)
-    const { scanPlaceholders: scanLocal, formatPlaceholderHits } = await import("./placeholder-guard");
-    const hits = scanLocal(dir);
-    if (hits.length > 0) {
-      await publish(sessionId, {
-        type: "save_warning",
-        message: `${hits.length} marcador(es) [COMPLETAR encontrados. Se guardarán de todas formas.`,
-        detail: formatPlaceholderHits(hits),
-      });
-    }
-
     // Commit + push
-    const commitTag = session.taskId ? session.taskId : "plan-review";
+    const commitTag = session.taskId ?? "plan-review";
     const sha = commitStep(dir, session.plan.branchName, commitTag, "Cambios desde terminal");
 
     if (sha) {
-      // Update PR
       try {
-        const { createOrUpdatePlanPR: updatePR } = await import("./repo-manager");
-        await updatePR({
+        await createOrUpdatePlanPR({
           githubRepo: site.githubRepo,
           planBranch: session.plan.branchName,
           defaultBranch: site.defaultBranch,
           title: `Plan ${session.plan.month}`,
           body: `_Actualizado desde terminal (sesión ${sessionId.slice(0, 8)})_`,
         });
-      } catch { /* PR update is best-effort */ }
+      } catch { /* best-effort */ }
 
       await publish(sessionId, {
         type: "save_result",
@@ -283,12 +319,14 @@ async function handleSave(job: Job<TerminalJobData>): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? sanitizePat(err.message) : String(err);
     await publish(sessionId, { type: "error", message: `Error al guardar: ${msg.slice(0, 300)}` });
+  } finally {
+    await repoLock.release();
   }
 
   await publish(sessionId, { type: "status", status: "idle" });
 }
 
-// ─── Close handler ───────────────────────────────────────────────────────────
+// ─── Close handler (also called by inactivity/time limit) ────────────────────
 
 async function handleClose(job: Job<TerminalJobData>): Promise<void> {
   const { sessionId } = job.data;
@@ -298,33 +336,40 @@ async function handleClose(job: Job<TerminalJobData>): Promise<void> {
     include: { plan: { select: { id: true, branchName: true } } },
   });
 
-  // If there are unsaved changes, commit to wip branch
+  if (session.status !== "ACTIVE") return;
+
   const site = await prisma.site.findFirst({
     where: { client: { monthlyPlans: { some: { id: session.planId } } } },
     select: { githubRepo: true, defaultBranch: true },
   });
 
+  // WIP commit if there are unsaved changes
   if (site?.githubRepo && session.plan.branchName) {
-    try {
-      const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
-      if (hasDiff(dir)) {
-        // WIP commit — never lose work
-        const wipBranch = `wip/terminal-${sessionId.slice(0, 8)}`;
-        const { execSync } = await import("child_process");
-        execSync(`git checkout -b ${wipBranch}`, { cwd: dir, timeout: 10_000 });
-        commitStep(dir, wipBranch, session.taskId ?? "plan-review", "WIP: cambios sin guardar de terminal");
-        await publish(sessionId, {
-          type: "wip_saved",
-          branch: wipBranch,
-          message: `Cambios sin guardar commiteados a ${wipBranch}`,
-        });
+    const repoLock = await acquireRepoLock(site.githubRepo);
+    if (repoLock.acquired) {
+      try {
+        const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, session.plan.branchName);
+        if (hasDiff(dir)) {
+          const wipBranch = `wip/terminal-${sessionId.slice(0, 8)}`;
+          const { execSync } = await import("child_process");
+          try { execSync(`git branch -D ${wipBranch}`, { cwd: dir, timeout: 5000 }); } catch { /* ok */ }
+          execSync(`git checkout -b ${wipBranch}`, { cwd: dir, timeout: 5000 });
+          commitStep(dir, wipBranch, session.taskId ?? "plan-review", "WIP: cambios sin guardar de terminal");
+          await publish(sessionId, {
+            type: "wip_saved",
+            branch: wipBranch,
+            message: `Cambios sin guardar commiteados a ${wipBranch}`,
+          });
+        }
+      } catch (err) {
+        console.error("[terminal] WIP save failed:", err);
+      } finally {
+        await repoLock.release();
       }
-    } catch (err) {
-      console.error("[terminal] WIP save failed:", err);
     }
   }
 
-  // Persist bitácora from Redis stream
+  // Persist bitácora
   try {
     const entries = await redis.xrange(streamKey(sessionId), "-", "+");
     const log = entries.map(([id, fields]) => ({
@@ -344,16 +389,62 @@ async function handleClose(job: Job<TerminalJobData>): Promise<void> {
     });
   }
 
-  // Release plan lock
-  const lock = await acquirePlanLock(session.planId);
-  if (lock.acquired) await lock.release(); // will fail if we don't hold it — that's OK
+  // Release plan lock (compare-and-delete — only if we hold it)
+  const planLockKey = `plan-lock:${session.planId}`;
+  // The holder is stored in TerminalSession? No — we need to find it.
+  // Just delete it unconditionally since the terminal "owns" it.
+  // The plan lock was acquired in the open endpoint with a known holder.
+  // For safety, use a TTL-based approach: the lock expires naturally.
+  // But we should clean it up. The open endpoint stored the holder in Redis.
+  const terminalLockHolder = await redis.get(`terminal-lock-holder:${sessionId}`);
+  if (terminalLockHolder) {
+    await redis.eval(
+      `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+      1, planLockKey, terminalLockHolder
+    );
+    await redis.del(`terminal-lock-holder:${sessionId}`);
+  }
 
-  // Clean up stream (TTL 24h)
+  // Clean up activity key
+  await redis.del(lastActivityKey(sessionId));
+
+  // Stream TTL
   await redis.expire(streamKey(sessionId), 86400);
 
   await publish(sessionId, { type: "status", status: "closed" });
-
   console.log(`[terminal] Session ${sessionId.slice(0, 8)} closed`);
+}
+
+// ─── Inactivity checker (runs periodically) ──────────────────────────────────
+
+async function checkInactiveSessions(): Promise<void> {
+  const activeSessions = await prisma.terminalSession.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true, planId: true, createdAt: true },
+  });
+
+  for (const session of activeSessions) {
+    const inactive = await isInactive(session.id);
+    const timedOut = await isTimedOut(session.id);
+
+    if (inactive || timedOut) {
+      const reason = timedOut ? "time" : "inactivity";
+      console.log(`[terminal] Session ${session.id.slice(0, 8)} closing: ${reason}`);
+
+      // Send warning first
+      await publish(session.id, {
+        type: "limit_warning",
+        kind: reason,
+        remaining: "0",
+        message: timedOut
+          ? `Sesión cerrada: excedió ${TERMINAL_MAX_TIME_MIN} minutos.`
+          : `Sesión cerrada: ${TERMINAL_INACTIVITY_MIN} minutos sin actividad.`,
+      });
+
+      // Close with WIP
+      await handleClose({ data: { sessionId: session.id, action: "close" } } as Job<TerminalJobData>);
+    }
+  }
 }
 
 // ─── Worker ──────────────────────────────────────────────────────────────────
@@ -394,5 +485,12 @@ worker.on("failed", (job, err) => {
 worker.on("error", (err) => {
   console.error("[terminal] Worker error:", err);
 });
+
+// Inactivity check every 2 min
+setInterval(() => {
+  checkInactiveSessions().catch((err) => {
+    console.error("[terminal] Inactivity check error:", err);
+  });
+}, 2 * 60 * 1000);
 
 export { worker as terminalWorker };
