@@ -101,7 +101,6 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
     where: { id: sessionId },
     include: {
       plan: {
-        select: { id: true, branchName: true, month: true, clientId: true },
         include: { client: { select: { name: true } } },
       },
     },
