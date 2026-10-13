@@ -178,6 +178,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     preconditions,
     contentPlan,
     previousPlan,
+    currentPlan,
   ] = await Promise.all([
     // Ciclo actual
     prisma.monthlyCycle.findFirst({
@@ -245,6 +246,20 @@ async function gatherUnifiedContext(clientId: string): Promise<{
           tasks: {
             where: { status: { in: ["VOIDED", "FAILED"] } },
             select: { title: true, status: true, failureReason: true, voidReason: true, kind: true },
+          },
+        },
+      });
+    })(),
+    // Current month active plan tasks (to avoid proposing duplicates)
+    (async () => {
+      const now = new Date();
+      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      return prisma.monthlyPlan.findFirst({
+        where: { clientId, month: curMonth },
+        include: {
+          tasks: {
+            where: { status: { notIn: ["VOIDED", "FAILED"] } },
+            select: { title: true, status: true, kind: true, mode: true, category: true, sourceRef: true },
           },
         },
       });
@@ -381,6 +396,17 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       lines.push(`  - [${t.status}] "${t.title}" (${t.kind}) — ${reason ?? "sin motivo"}`);
     }
     lines.push("INSTRUCCIÓN: estas tareas deben reconsiderarse como candidatas con fuente 'pendiente-anterior' si siguen siendo relevantes.");
+    lines.push("");
+  }
+
+  // Tareas activas del plan actual (para no proponer duplicados)
+  if (currentPlan && currentPlan.tasks.length > 0) {
+    lines.push(`## Tareas YA EN EL PLAN de ${currentPlan.month} (NO proponer duplicados)`);
+    for (const t of currentPlan.tasks) {
+      const src = (t.sourceRef as { module?: string } | null)?.module;
+      lines.push(`  - [${t.status}] "${t.title}" (${t.kind}/${t.mode})${src ? ` origen: ${src}` : ""}`);
+    }
+    lines.push("INSTRUCCIÓN: NO generes candidatas que dupliquen estas tareas. Si una oportunidad ya está cubierta, omítela.");
     lines.push("");
   }
 

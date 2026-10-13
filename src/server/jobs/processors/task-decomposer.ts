@@ -142,6 +142,12 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Include sourceRef snapshot as additional context for module-sourced tasks
+  const sourceRef = task.sourceRef as { module?: string; snapshot?: Record<string, unknown> } | null;
+  const sourceContext = sourceRef?.snapshot
+    ? `\nDATOS DE ORIGEN (módulo ${sourceRef.module}):\n${JSON.stringify(sourceRef.snapshot, null, 2).slice(0, 1500)}\n\nGenera una JUSTIFICACIÓN (qué dato respalda esta tarea) y un IMPACTO ESPERADO (qué mejora se espera) basados en estos datos. Inclúyelos en el título o en los criterios de aceptación del primer paso.`
+    : "";
+
   const userPrompt = `Descompón esta tarea en pasos:
 
 TAREA: ${task.title}
@@ -150,7 +156,7 @@ KIND: ${task.kind}
 MODE: ${task.mode}
 PRIORIDAD: ${task.priority}
 ESFUERZO: ${task.effort}
-
+${sourceContext}
 CONTEXTO DEL SITIO:
 ${repoContext}
 

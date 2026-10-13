@@ -716,6 +716,7 @@ model PlanTask {
   effort             TaskEffort     @default(MEDIUM)
   category           String         // "meta" | "blog" | "schema" | "tecnico" | etc.
   sourceCandidateId  String?        // ID de la candidata en el Análisis
+  sourceRef          Json?          // { module, itemId, snapshot } — origen desde módulo (no Análisis)
   status             PlanTaskStatus @default(PLANNING)
   commitShas         String[]       @default([])
   resultUrls         String[]       @default([])
