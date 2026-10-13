@@ -166,9 +166,9 @@ function StepRow({
 
         {/* Human step instructions */}
         {step.type === "HUMAN" && isHumanPending && (
-          <div className="mt-1.5 bg-orange-500/5 border border-orange-500/20 rounded px-2.5 py-2 space-y-1.5">
+          <div className="mt-1.5 bg-orange-500/5 border border-orange-500/20 rounded px-2.5 py-2 space-y-2">
             <p className="font-mono text-[0.6rem] font-semibold text-orange-400">Que hacer:</p>
-            {step.acceptanceCriteria.length > 0 ? (
+            {step.acceptanceCriteria.length > 0 && (
               <ul className="space-y-0.5">
                 {step.acceptanceCriteria.map((c, i) => (
                   <li key={i} className="font-mono text-[0.6rem] text-muted-foreground pl-2 border-l border-orange-500/30">
@@ -176,13 +176,25 @@ function StepRow({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="font-mono text-[0.6rem] text-muted-foreground">
-                Resuelve este paso y marca como completado.
-              </p>
             )}
-            <p className="font-mono text-[0.55rem] text-muted-foreground/60 pt-0.5">
-              Usa la terminal para hacer los cambios, o trabaja fuera y marca como hecho.
+            {step.prompt && (
+              <div className="space-y-1">
+                <p className="font-mono text-[0.55rem] text-orange-400/70">Prompt para la terminal:</p>
+                <div className="bg-zinc-950 rounded px-2.5 py-2 relative group/prompt">
+                  <pre className="font-mono text-[0.6rem] text-zinc-300 whitespace-pre-wrap leading-relaxed">{step.prompt}</pre>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(step.prompt!)}
+                    className="absolute top-1 right-1 opacity-0 group-hover/prompt:opacity-100 transition-opacity font-mono text-[0.5rem] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded hover:text-zinc-200"
+                  >
+                    Copiar
+                  </button>
+                </div>
+              </div>
+            )}
+            <p className="font-mono text-[0.55rem] text-muted-foreground/60">
+              {step.prompt
+                ? "Copia el prompt y pégalo en la terminal. Cuando termines, marca como hecho."
+                : "Usa la terminal para hacer los cambios, o trabaja fuera y marca como hecho."}
             </p>
           </div>
         )}

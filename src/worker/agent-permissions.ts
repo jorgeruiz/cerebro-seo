@@ -9,12 +9,29 @@
 
 import { normalize, resolve, relative } from "path";
 
-/** Comandos Bash permitidos exactos (con o sin args de ruta) */
+/** Comandos Bash permitidos (prefijos — pueden tener args después) */
 const ALLOWED_BASH_PREFIXES = [
+  // Build & lint
   "npm run build",
   "npm run lint",
+  // Git (read-only)
   "git status",
   "git diff",
+  "git log",
+  // File inspection
+  "cat ",
+  "ls ",
+  "ls",
+  "find ",
+  "head ",
+  "tail ",
+  "wc ",
+  // Image optimization
+  "npx sharp",
+  "npx svgo",
+  // Node scripts in the repo
+  "npx tsx ",
+  "node ",
 ];
 
 /** Patrones prohibidos en rutas */
