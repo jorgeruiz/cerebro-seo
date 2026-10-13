@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-09-03 (v6)
+**Última actualización:** 2026-10-13 (v7 — Plan Mensual completo, Terminal Web, Add-to-Plan)
 
 ---
 
@@ -73,7 +73,7 @@ cerebro-seo/
 │   ├── server/
 │   │   └── jobs/                  # Sistema de multiagentes (ver sección 5)
 │   │       ├── init.ts            # Punto de entrada: importa workers + inicia schedulers
-│   │       ├── queues.ts          # 3 queues BullMQ + tipos TypeScript de job data
+│   │       ├── queues.ts          # 5 queues BullMQ + tipos TypeScript de job data
 │   │       ├── schedulers.ts      # Cron jobs por cliente (idempotentes con jobId)
 │   │       ├── processors/
 │   │       │   └── insights-processor.ts  # Lógica InsightsAgent (separada de BullMQ)
@@ -126,7 +126,7 @@ src/app/(admin)/clientes/[id]/
 ├── competencia/page.tsx        # CompetitorAgent: SoV, keyword gaps
 ├── ai-search/page.tsx          # AI Search Visibility semanal por LLM
 ├── analisis/page.tsx           # Análisis on-demand Claude Sonnet 4.6
-├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos GSC)
+├── oportunidades/page.tsx      # SEO Opportunities algorítmico (5 tipos)
 ├── reporte/page.tsx            # Reporte mensual Claude + PDF exportable
 ├── research/page.tsx           # Research hub (tabs: Oportunidades, Keyword Ideas, AEO)
 ├── keyword-ideas/page.tsx      # Keyword Ideas DataForSEO Labs (accesible via tab Research)
@@ -136,7 +136,38 @@ src/app/(admin)/clientes/[id]/
 ├── aeo-research/page.tsx       # AEO/GEO Research (clusters + Claude) (accesible via tab Research)
 ├── configuracion/page.tsx      # CRUD keywords/competidores/GSC/GA4
 ├── insights/page.tsx           # Historial insights (tabs: activos/resueltos/ignorados)
-└── insights/[insightId]/page.tsx # Detalle de insight
+├── insights/[insightId]/page.tsx # Detalle de insight
+├── AddToPlanButton.tsx         # ★ Modal "Agregar al Plan" (reutilizable desde cualquier módulo)
+├── add-to-plan-action.ts      # ★ Server action: crear PlanTask con sourceRef + dedup
+└── plan-mensual/               # ★ Plan Mensual completo
+    ├── page.tsx                # Página del plan (server component)
+    ├── PlanMensualPanel.tsx    # Panel principal: tareas, pasos, acciones, progreso
+    ├── TerminalPanel.tsx       # Terminal web interactiva (Agent SDK multi-turn)
+    └── actions.ts              # Server actions: execute, void, review, merge
+```
+
+**Terminal Web API:**
+```
+src/app/api/terminal/
+├── open/route.ts              # Abre sesión: adquiere locks plan+repo
+├── send/route.ts              # Enqueue turn job
+├── save/route.ts              # Enqueue save job (build + commit)
+├── close/route.ts             # Enqueue close job (WIP commit + release locks)
+├── preview/route.ts           # Enqueue diff preview job
+└── stream/[sessionId]/route.ts # SSE: Redis XREAD BLOCK + replay from Last-Event-ID
+```
+
+**Worker de Plan Mensual (servicio separado — Dockerfile.worker):**
+```
+src/worker/
+├── plan-runner.ts             # Entry point worker
+├── task-processor.ts          # Ejecución step-by-step con branch-per-plan
+├── terminal-handler.ts        # Worker terminal-sessions queue (Agent SDK multi-turn)
+├── repo-manager.ts            # Git ops: branch, merge, commit, revert, PR, build, preview
+├── plan-lock.ts               # Redis distributed locks: plan, repo, build semaphore
+├── memory-classifier.ts       # Clasifica docs del repo (FULL/TEMPLATE/ABSENT)
+├── agent-permissions.ts       # Allowed bash prefixes para Agent SDK
+└── placeholder-guard.ts       # Detecta [COMPLETAR markers en changed files
 ```
 
 **Lógica AEO/GEO y análisis:**
@@ -315,22 +346,32 @@ model AeoResearch {
   @@index([clientId, createdAt])
 }
 
-// ★ nuevo modelo: planes de próximos pasos (asesor SEO)
-model NextStepPlan {
+// ★ NextStepPlan: ELIMINADO en S2f (migración remove_nextstepplan). El asesor SEO
+// ahora genera PlanTasks directamente via claude-analysis.ts → add-to-plan-action.ts.
+
+// ★ nuevo modelo (S4a): sesiones de terminal web interactiva
+model TerminalSession {
   id           String   @id @default(cuid())
-  clientId     String
-  steps        Json                        // NextStep[]
-  generatedAt  DateTime @default(now())
-  model        String                      // "claude-sonnet-4-6" | "deterministic"
+  planId       String
+  taskId       String?
+  userId       String
+  agentSessionId String?                  // Agent SDK session ID para resume
+  status       String   @default("OPEN") // OPEN | CLOSED
+  messageCount Int      @default(0)
+  totalCost    Decimal  @db.Decimal(10, 6) @default(0)
   inputTokens  Int      @default(0)
   outputTokens Int      @default(0)
-  cost         Decimal  @db.Decimal(10, 6)
-  triggeredBy  String?
+  bitacora     String?  @db.Text          // Resumen generado al cerrar
+  createdAt    DateTime @default(now())
+  closedAt     DateTime?
 
-  client       Client   @relation(fields: [clientId], references: [id])
+  plan         MonthlyPlan @relation(fields: [planId], references: [id])
 
-  @@index([clientId, generatedAt])
+  @@index([planId, status])
 }
+
+// ★ PlanTask.sourceRef (S2f): JSON con {module, itemId?, snapshot} para trazabilidad
+// de origen (keywords, audit, competencia, etc.) y deduplicación en add-to-plan.
 
 // ★ Audit.aeoScore (Sesión 35): score 0-100 de legibilidad para IA, nullable para audits viejos
 model Audit {
@@ -604,40 +645,100 @@ Ver `integration_cerebro.md` para detalle de contratos de datos.
 
 ## Plan Mensual — Motor de ejecución con Agent SDK
 
-### Arquitectura
+### Arquitectura general
 
 El plan mensual ejecuta tareas SEO directamente sobre repos Next.js de clientes
 usando Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` → `query()`).
 
 ```
-Proceso web (Next.js)              Worker separado (plan-runner.ts)
-┌─────────────────────┐            ┌──────────────────────────────┐
-│ Encola PlanTaskJob   │ ──Redis──▶│ Consume cola plan-task       │
-│ en plan-task-exec    │           │ concurrency: 1               │
-│                      │           │                              │
-│ NO ejecuta agentes   │           │ 1. Clone/fetch repo          │
-│ NO importa Agent SDK │           │ 2. Clasificar memoria        │
-└─────────────────────┘           │ 3. npm ci (si lockfile)      │
-                                   │ 4. Agent SDK query()         │
-                                   │ 5. Verificar build           │
-                                   │ 6. Commit + Push + PR        │
-                                   │ 7. Task → PREVIEW            │
-                                   └──────────────────────────────┘
+Proceso web (Next.js)                   Worker separado (plan-runner.ts)
+┌──────────────────────────┐            ┌──────────────────────────────────┐
+│ PlanMensualPanel.tsx      │            │ Cola: plan-task-execution        │
+│  - Execute task           │ ──Redis──▶│  concurrency: 1                  │
+│  - Void task (git revert) │            │  1. Acquire plan+repo locks      │
+│  - Submit for Review      │            │  2. Checkout plan branch         │
+│  - Merge plan             │            │  3. Merge default into plan      │
+│                           │            │  4. Classify memory              │
+│ TerminalPanel.tsx         │            │  5. For each step:               │
+│  - SSE stream via Redis   │ ──Redis──▶│     AI: agent + build + guard    │
+│  - Send/Save/Preview/Close│            │     HUMAN: pause → WAITING      │
+│                           │            │  6. Commit + Push + Create PR    │
+│ AddToPlanButton.tsx       │            │  7. Task → DONE or WAITING       │
+│  - Agregar desde módulo   │            │                                  │
+│  - Dedup por sourceRef    │            │ Cola: terminal-sessions          │
+│  - Enqueue decomposition  │            │  concurrency: 1                  │
+└──────────────────────────┘            │  - Agent SDK multi-turn          │
+                                         │  - Save: build + commit          │
+                                         │  - Close: WIP commit + bitácora  │
+                                         └──────────────────────────────────┘
 ```
 
-### Modelos
+### Branch-per-plan
 
-- **MonthlyPlan**: plan mensual por cliente (@@unique clientId+month)
-- **PlanTask**: tarea individual con prompt, lane (AUTO/ASSISTED/MANUAL), status
-- **TaskRun**: cada ejecución de una tarea (sesión de agente, costo, tokens)
+Cada plan mensual trabaja en su propia rama: `plan/{slug}-{YYYY-MM}`.
+- Commits etiquetados `[task:<id>] <título>`
+- Merge default → plan antes de cada tarea (detecta conflictos)
+- PR automático al completar primera tarea, actualizado en cada tarea siguiente
+- Void = `git revert` de commits `[task:<id>]` (nunca force push)
+- Submit for Review: guard `[COMPLETAR` + audit de commits (todos [task:id] son DONE)
+- Merge: API GitHub merge commit → actualiza plan status
 
-### Carriles de ejecución
+### Locks distribuidos (Redis)
 
-| Lane | Quién ejecuta | Status flow |
-|------|--------------|-------------|
-| AUTO | Worker en background | PENDING → QUEUED → RUNNING → PREVIEW → MERGED |
-| ASSISTED | Terminal web (futuro) | Sesión interactiva |
-| MANUAL | Humano | Solo pasos documentados |
+| Lock | Key | Propósito | TTL |
+|------|-----|-----------|-----|
+| Plan Lock | `plan-lock:{planId}` | Solo una tarea o terminal por plan | 30min, auto-renew 5min |
+| Repo Lock | `repo-lock:{githubRepo}` | Evitar git ops concurrentes en mismo repo | 30min, auto-renew 5min |
+| Build Semaphore | `build-semaphore` | Una sola build a la vez en el VPS | 15min wait, throw BUILD_BUSY |
+
+### Memory classifier
+
+Clasifica 4 archivos del repo del cliente para determinar si tiene suficiente contexto:
+- `docs/site-spec.md` — especificación del sitio
+- `docs/site-map.md` — mapa de rutas
+- `docs/site-state.md` — estado actual
+- `docs/catalog-schemas.md` — catálogo de productos/servicios
+
+Estados: FULL (>200 chars útiles), TEMPLATE (solo headings), ABSENT.
+
+**Gate granular por tipo de tarea:**
+- CODE: requiere spec + map + state FULL
+- CONTENT (blog): requiere lo anterior + catalog-schemas con sección `## Blog`
+- CONTENT (landing): lo anterior + sección `## Landing Pages`
+
+### Placeholder guard
+
+Archivos modified/added que contienen `[COMPLETAR` bloquean:
+- Tareas AI: no pasan a DONE (el agente debe completar todo)
+- Submit for Review: rechazado si hay placeholders en la rama
+
+### Terminal Web
+
+Sesión interactiva con Agent SDK para tareas HYBRID/HUMAN.
+
+**Flujo:**
+1. `POST /api/terminal/open` — crea TerminalSession, adquiere locks plan+repo
+2. `POST /api/terminal/send` — enqueue turn job (Agent SDK `query()` con `resume: sessionId`)
+3. `GET /api/terminal/stream/[sessionId]` — SSE con Redis XREAD BLOCK
+4. `POST /api/terminal/preview` — git diff stat + per-file diff
+5. `POST /api/terminal/save` — build + commit + push + update PR
+6. `POST /api/terminal/close` — WIP commit si unsaved, bitácora a BD, release locks
+
+**Inactivity:** 60min inactividad, 120min máximo total. Checker cada 2min.
+
+### Add-to-Plan (S2f)
+
+Botón "Agregar al Plan" disponible en 9 módulos del cliente. Crea PlanTask con `sourceRef` (module + itemId + snapshot) para trazabilidad y deduplicación. Enqueue task-decompose job para que Claude genere los PlanSteps.
+
+### Colas BullMQ
+
+| Cola | Propósito |
+|------|-----------|
+| `plan-task-execution` | Ejecución de tareas del plan (worker) |
+| `terminal-sessions` | Turnos de terminal web (worker) |
+| `task-decompose` | Descomposición de tareas en pasos (proceso web, ai-analysis) |
+| `ai-analysis` | InsightsAgent + advisor + análisis (proceso web) |
+| `data-collection` | Rankings, backlinks, competitors, AI search (proceso web) |
 
 ### Variables de entorno (solo worker)
 

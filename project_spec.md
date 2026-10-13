@@ -1,8 +1,8 @@
 # Cerebro SEO — Project Spec
 
 **Owner:** Jorge Ruiz (Click Society)
-**Estado:** Post-Fase 4 — todos los módulos core activos, expansión AEO/GEO + integración Orquestador
-**Última actualización:** 2026-09-03 (v5)
+**Estado:** Plan Mensual operativo (S2e+S3+S4a+S4c), terminal web desplegada, Add-to-Plan en progreso (S2f)
+**Última actualización:** 2026-10-13 (v6)
 
 ---
 
@@ -92,6 +92,7 @@ La vista central del producto. Estructura jerárquica:
 | Plan de Contenido | Ideas de contenido SEO on-demand con Claude Sonnet 4.6. Cruza keyword gaps, oportunidades GSC, ciclo activo. 4 tipos (blog/landing/pilar/soporte), historial de planes. |
 | AEO Research | Recopila preguntas de búsqueda, clasifica en clusters AEO (featured snippets) y GEO (citación por LLMs). |
 | Next Steps (Asesor SEO) | Recomendaciones priorizadas del siguiente paso a tomar, generadas algorítmicamente o por Claude. |
+| Plan Mensual | Motor de ejecución: tareas SEO → Agent SDK → commits en repo del cliente → PR → merge. Terminal web interactiva para tareas HYBRID/HUMAN. |
 
 ---
 
@@ -246,6 +247,34 @@ Nuevas capacidades sobre la base ya construida:
 - ✅ Doble sidebar (main colapsable + client contextual)
 - ✅ Endpoints internos para Cerebro (diagnóstico, recommendations, constructor/metrics)
 
+**S2 — Plan Mensual: infraestructura y motor de ejecución**
+- ✅ S2a-S2c: Schema MonthlyPlan/PlanTask/PlanStep/TaskRun, generación de plan AI, task-decomposer
+- ✅ S2d: Watchdog, anti-invención, placeholder guard, memory classifier, decompose worker
+- ✅ S2e: Branch-per-plan, step-by-step execution, plan+repo locks, void con git revert, commit integrity, PR automático
+- 🔄 S2f: Add-to-Plan desde 9 módulos (infraestructura lista, colocación de botones pendiente)
+
+**S3 — Página Plan Mensual**
+- ✅ Página `/clientes/[id]/plan-mensual` con UI completa
+- ✅ Acciones: Execute, Complete Human Step, Void (git revert), Retry, Activate Plan
+- ✅ Submit for Review (guard [COMPLETAR + commit audit) y Merge (GitHub API)
+- ✅ Tracking de costo, PR link, preview link, logTail de pasos AI
+- ✅ Progreso en vivo con polling
+
+**S4 — Terminal Web interactiva**
+- ✅ S4a+S4c: Agent SDK multi-turn con session persistence, SSE streaming via Redis
+- ✅ Terminal panel integrada en página Plan Mensual
+- ✅ Save: build verification + commit + push + update PR
+- ✅ Diff preview antes de guardar, WIP commit al cerrar
+- ✅ Inactivity/max-time limits (60min/120min)
+- 🔲 S4b: Interactive tool approval (approve/reject en UI)
+- 🔲 S4d: Límites con save-now warning, bitácora visible en plan page
+- 🔲 S4e: Read-only terminal cuando tarea AI corriendo (stream en vivo)
+
+**WP1 — WordPress Plugin v1.5.0**
+- ✅ Endpoints: /capabilities, /pages, /elementor/{id}, /templates
+- ✅ Simplificación de árbol Elementor (textos, imágenes, links, headings)
+- ✅ Detección de global widgets y template insertions
+
 ---
 
 ## 10. Costos operativos estimados
@@ -280,7 +309,8 @@ Escala lineal: 30 clientes ≈ $105–150 USD/mes.
 
 ## 12. Próximo paso concreto
 
-1. Ejecutar `cleanup-and-resync` en producción (pendiente desde Sesión 41)
-2. Probar `trigger-aeo-probe.ts` contra un cliente real para validar AEO Readiness
-3. Probar desglose de acciones de Análisis Claude → Orquestador end-to-end (requiere que el intake de Cerebro acepte `sourceId` y `oppType` en payload)
-4. Persistir envíos al Orquestador para evitar duplicados (actualmente fire-and-forget)
+1. **S2f: Colocar AddToPlanButton** en los 9 módulos (keywords, audit, competencia, oportunidades, ai-search, backlinks, terminos-busqueda, insights, contenido)
+2. **S2f: Probar** desde 3 módulos distintos en Quicsa — verificar dedup, decomposition, y pasos generados
+3. **S4b: Interactive tool approval** — approve/reject de herramientas en la terminal web
+4. **S4d: Límites** con save-now warning y bitácora visible en plan page
+5. **WP plugin deploy**: rotación de keys de 9 sitios antes de deployer cerebro-web

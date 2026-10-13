@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-10 (S2c completa — retiro Advisor, S2d cerrada)
-**Fase actual:** S2c y S2d completas
-**Próximo hito:** S4 terminal en vivo (log streaming del worker)
+**Última actualización:** 2026-10-13 (S4a+S4c terminal web desplegada, S2f infraestructura, WP plugin v1.5.0)
+**Fase actual:** S2e+S3+S4a+S4c completas. S2f (agregar al plan desde módulos) en progreso. S4b/S4d/S4e pendientes.
+**Próximo hito:** S2f colocación del botón en módulos → prueba real. S4d límites y bitácora visible.
 
 ---
 
@@ -473,6 +473,121 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 **Archivos nuevos:** 3 (page.tsx, actions.ts, PlanMensualPanel.tsx)
 **Archivos modificados:** 1 (ClientSidebar.tsx)
 **Commits:** 2 (feat S3 + fix flujo)
+
+---
+
+### Sesión S2f — 2026-10-13 🔄 EN PROGRESO (Agregar al plan desde cualquier módulo)
+**Participantes:** Jorge + Claude Code
+**Resultado:** Infraestructura completa. Colocación del botón en módulos pendiente.
+
+**Implementado:**
+- Migración: PlanTask.sourceRef (Json?) — { module, itemId, snapshot }
+- actionAddToPlan: crea/reutiliza plan, dedup por module+itemId, encola decomposición
+- AddToPlanButton: modal prellenado, snapshot expandible, "En el plan" si ya existe
+- Análisis recibe tareas activas del plan actual para no proponer duplicados
+- Decomposer genera justificación+impacto cuando la tarea tiene sourceRef con snapshot
+
+**Pendiente:**
+- Colocar AddToPlanButton en 9 módulos (keywords, audit, competencia, oportunidades, ai-search, backlinks, terminos-busqueda, insights, contenido)
+- Prueba real en Quicsa desde 3 módulos
+
+---
+
+### Sesión WP1 — 2026-10-13 ✅ COMPLETA (Plugin WP v1.5.0 — lectura Elementor)
+**Participantes:** Jorge + Claude Code
+**Resultado:** Plugin v1.5.0 con 4 endpoints nuevos de lectura. Tag wp-plugin-v1.5.0.
+
+**Endpoints nuevos (solo lectura):**
+- GET /capabilities: manifiesto versionado de todas las capacidades del plugin
+- GET /pages: páginas con info Elementor y plantilla
+- GET /elementor/{id}: árbol simplificado del documento Elementor con posición legible, textos, imágenes, enlaces. Detecta global widgets y plantillas insertadas.
+- GET /templates: plantillas guardadas (elementor_library)
+
+**Ajustes:**
+- Proxy allowlist en cerebro-web actualizado con los 4 endpoints. 21 tests.
+- Global widgets marcados con template_source (id, título, nota "editar en la plantilla original")
+- Textos > 200 chars truncados con indicador de longitud total
+- GET /seo/{id} funciona con páginas — fix del mensaje de error
+
+**Pendiente:** Deploy de cerebro-web (esperando rotación de keys de 9 sitios)
+
+---
+
+### Sesión S4a+S4c — 2026-10-11/12 ✅ COMPLETA (Terminal web)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Terminal web funcional en producción.
+
+**Implementado:**
+- TerminalSession model + migración
+- Cola "terminal-sessions" separada de plan-task-execution (concurrency 1)
+- terminal-handler.ts: handleTurn (Agent SDK con resume), handleSave (build+commit+push), handleClose (WIP commit)
+- API endpoints: open, close, stream (SSE), send, save, preview
+- TerminalPanel.tsx: mensajes en vivo, tool_use/tool_result visibles, diff preview antes de save
+- Candado por plan: se adquiere en open, se mantiene toda la sesión con heartbeat, se libera en close
+- Candado por repo: se mantiene toda la sesión (previene reset --hard entre turnos)
+- Semáforo global de builds: un build a la vez en el VPS, BUILD_BUSY retriable
+- Cierre por inactividad (60 min) y tiempo máximo (120 min) con WIP commit automático
+- getRepoPlanDir: preserva working tree entre turnos (no reset --hard)
+- Pasos HUMAN con prompt copiable para la terminal
+- Resultado del paso AI como acordeón expandible en la card
+
+**Prueba E2E verificada:**
+- Turn 1: Edit → tool_use visible en stream
+- Turn 2: Read → confirma edit preservado entre turnos
+- Preview: diff_preview con stat + patches por archivo
+- Save: commit pushed a plan branch, PR actualizado
+- Costo acumulado en header
+
+**Tests:** 242 pasando. Build limpio.
+
+---
+
+### Sesión S2e — 2026-10-10/11 ✅ COMPLETA (Worker rama por plan + ejecución por pasos)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Motor de ejecución reescrito. Prueba real en Quicsa.
+
+**Implementado:**
+- Rama por plan (plan/{slug}-{YYYY-MM}), reutilizada, nunca --force
+- Merge default branch antes de cada tarea. Conflicto → WAITING_HUMAN
+- Ejecución por pasos: AI (agente→build→guard→commit [task:id]→push), HUMAN (pausa)
+- TaskRun por paso con costo y changedRoutes
+- PR único por plan (createOrUpdatePlanPR)
+- Anular tarea con git revert de commits [task:id]
+- Guard a nivel plan: [COMPLETAR en rama → bloquea revisión
+- Guard de integridad: cada commit [task:id] debe ser de tarea DONE
+- ensureRepoPlanBranch: borra local stale si remote fue borrado
+- Watchdog por TaskRun (no por tarea) + watchdog para jobs perdidos (RUNNING sin run)
+- Graceful shutdown del worker
+- Build retry ante errores de red (Google Fonts, ENOTFOUND)
+- maxTurns por complejidad del decomposer (low=20, medium=40, high=60)
+- Placeholder guard solo en tareas AI (no HYBRID)
+- Anti-canibalización + servicios verificados en Análisis y decomposer
+- Gate de memoria granular: CODE requiere spec/map/state, CONTENT además requiere catalog-schemas con sección
+- Sync de Notion lee "Sitio web" para Site.url + normalización
+- 8 sitios NEXTJS detectados (antes 3). Preflight v2 con install+build forzados.
+
+**Prueba Quicsa (PR #6):**
+- Interlinking: DONE, 4 commits, $1.05
+- Floculantes: DONE, 1 commit, $0.32
+- Landing análisis agua: VOIDED (servicio no ofrecido — regla servicios verificados aplicada)
+- Costo total: $2.01 USD
+
+---
+
+### Sesión S3 — 2026-10-10/11 ✅ COMPLETA (Página Plan Mensual)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Página Plan Mensual con acciones completas.
+
+**Implementado:**
+- Ruta /clientes/[id]/plan-mensual con encabezado, barra de ejecución, costo, links PR+preview
+- Acciones por tarea: Ejecutar, Marcar paso hecho, Anular (con git revert), Reintentar
+- Acciones de plan: Pasar a revisión (guard [COMPLETAR + integridad), Merge (GitHub API)
+- Estado IN_REVIEW con links PR+preview, botón Merge
+- Estado PUBLISHED con fecha de merge
+- Polling 15s cuando hay tareas RUNNING
+- actionMergePlan: merge commit via GitHub API, verifica URLs producción, resultUrls
+- Título sin truncar (wrap natural), paso HUMAN con instrucciones "Qué hacer:"
+- Resultado del paso AI como acordeón expandible
 
 ---
 
