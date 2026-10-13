@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-13 (S4a+S4c terminal web desplegada, S2f infraestructura, WP plugin v1.5.0)
-**Fase actual:** S2e+S3+S4a+S4c completas. S2f (agregar al plan desde módulos) en progreso. S4b/S4d/S4e pendientes.
-**Próximo hito:** S2f colocación del botón en módulos → prueba real. S4d límites y bitácora visible.
+**Última actualización:** 2026-10-13 (S2f completa — botón AddToPlan en 9 módulos, desplegado)
+**Fase actual:** S2e+S3+S4a+S4c+S2f completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Probar S2f en Quicsa desde 3 módulos. Luego S4d (límites + bitácora visible).
 
 ---
 
@@ -476,9 +476,9 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 
 ---
 
-### Sesión S2f — 2026-10-13 🔄 EN PROGRESO (Agregar al plan desde cualquier módulo)
+### Sesión S2f — 2026-10-13 ✅ COMPLETA (Agregar al plan desde cualquier módulo)
 **Participantes:** Jorge + Claude Code
-**Resultado:** Infraestructura completa. Colocación del botón en módulos pendiente.
+**Resultado:** Infraestructura + botón colocado en 9 módulos, desplegado.
 
 **Implementado:**
 - Migración: PlanTask.sourceRef (Json?) — { module, itemId, snapshot }
@@ -486,10 +486,17 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - AddToPlanButton: modal prellenado, snapshot expandible, "En el plan" si ya existe
 - Análisis recibe tareas activas del plan actual para no proponer duplicados
 - Decomposer genera justificación+impacto cuando la tarea tiene sourceRef con snapshot
+- Botón compacto en 9 módulos con defaults inteligentes:
+  - keywords (tabla, por keyword), audit (card, por issue), competencia (tabla, por gap)
+  - oportunidades (card header), ai-search (tabla, solo no mencionados), backlinks (card, solo perdidos)
+  - terminos-busqueda (tabla, por query GSC), insights (row action, solo activos), contenido (card header)
+- Documentación actualizada: architecture.md v7, project_spec.md v6
 
-**Pendiente:**
-- Colocar AddToPlanButton en 9 módulos (keywords, audit, competencia, oportunidades, ai-search, backlinks, terminos-busqueda, insights, contenido)
-- Prueba real en Quicsa desde 3 módulos
+**Pendiente (próxima sesión):**
+- Probar en Quicsa desde 3 módulos distintos y verificar tareas + pasos generados
+- S4b: interactive tool approval
+- S4d: límites + bitácora visible en plan page
+- S4e: terminal read-only cuando tarea AI corriendo
 
 ---
 
