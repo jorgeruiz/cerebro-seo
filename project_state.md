@@ -516,7 +516,7 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - Textos > 200 chars truncados con indicador de longitud total
 - GET /seo/{id} funciona con páginas — fix del mensaje de error
 
-**Pendiente:** Deploy de cerebro-web (esperando rotación de keys de 9 sitios)
+**Pendiente:** Deploy de cerebro-web (keys rotadas 2026-10-13 ✅ — listo para deploy)
 
 ---
 
