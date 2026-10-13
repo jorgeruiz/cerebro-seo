@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { SovChart } from "./SovChart";
 import { TriggerCompetitorButton } from "./TriggerCompetitorButton";
+import { AddToPlanButton } from "../AddToPlanButton";
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -330,6 +331,7 @@ export default async function CompetenciaPage({
                     <th className="text-center font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-3 py-3 w-16">
                       Pos.
                     </th>
+                    <th className="w-10" />
                   </tr>
                 </thead>
                 <tbody>
@@ -368,6 +370,26 @@ export default async function CompetenciaPage({
                       </td>
                       <td className="px-3 py-2.5 text-center font-mono text-xs text-foreground">
                         #{gap.competitorPosition}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <AddToPlanButton
+                          compact
+                          clientId={client.id}
+                          defaults={{
+                            title: `Cubrir gap: "${gap.keyword}"`,
+                            objective: `Crear contenido para "${gap.keyword}" (vol. ${gap.searchVolume ?? "?"}) donde ${gap.competitor.domain} está en #${gap.competitorPosition}.`,
+                            kind: "CONTENT",
+                            mode: "AI",
+                            priority: (gap.searchVolume ?? 0) > 500 ? 2 : 3,
+                            effort: (gap.keywordDifficulty ?? 0) > 60 ? "HIGH" : "MEDIUM",
+                            category: "blog",
+                          }}
+                          sourceRef={{
+                            module: "competencia",
+                            itemId: gap.id,
+                            snapshot: { keyword: gap.keyword, searchVolume: gap.searchVolume, keywordDifficulty: gap.keywordDifficulty, competitorDomain: gap.competitor.domain, competitorPosition: gap.competitorPosition },
+                          }}
+                        />
                       </td>
                     </tr>
                   ))}

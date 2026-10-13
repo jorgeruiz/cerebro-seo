@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { BacklinksEvolutionChart } from "./BacklinksEvolutionChart";
 import { TriggerCrawlButton } from "./TriggerCrawlButton";
+import { AddToPlanButton } from "../AddToPlanButton";
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -384,6 +385,24 @@ export default async function BacklinksPage({ params }: { params: { id: string }
                           <span className="font-mono text-[0.7rem] text-muted-foreground">
                             {bl.lostAt ? formatDate(bl.lostAt) : "—"}
                           </span>
+                          <AddToPlanButton
+                            compact
+                            clientId={client.id}
+                            defaults={{
+                              title: `Recuperar backlink: ${bl.sourceDomain}`,
+                              objective: `Recuperar el backlink de ${bl.sourceDomain} (DA ${bl.domainAuthority ?? "?"}, anchor: "${bl.anchorText ?? "sin anchor"}").`,
+                              kind: "SETUP",
+                              mode: "HUMAN",
+                              priority: (bl.domainAuthority ?? 0) >= 50 ? 1 : 2,
+                              effort: "MEDIUM",
+                              category: "backlinks",
+                            }}
+                            sourceRef={{
+                              module: "backlinks",
+                              itemId: bl.id,
+                              snapshot: { sourceDomain: bl.sourceDomain, domainAuthority: bl.domainAuthority, anchorText: bl.anchorText, lostAt: bl.lostAt?.toISOString() },
+                            }}
+                          />
                         </div>
                       </div>
                     ))}

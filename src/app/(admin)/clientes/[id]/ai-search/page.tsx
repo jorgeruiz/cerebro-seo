@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionHeader, KpiCard } from "@/components/ui-darkui";
 import { AiVisibilityChart } from "./AiVisibilityChart";
 import { TriggerAiSearchButton } from "./TriggerAiSearchButton";
+import { AddToPlanButton } from "../AddToPlanButton";
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -288,6 +289,7 @@ export default async function AiSearchPage({
                     <th className="text-left font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground px-4 py-3">
                       Contexto
                     </th>
+                    <th className="w-10" />
                   </tr>
                 </thead>
                 <tbody>
@@ -328,6 +330,28 @@ export default async function AiSearchPage({
                           </span>
                         ) : (
                           <span className="text-muted-foreground/30 text-xs italic">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-3">
+                        {!rec.mentioned && (
+                          <AddToPlanButton
+                            compact
+                            clientId={client.id}
+                            defaults={{
+                              title: `Mejorar visibilidad IA: "${rec.query}"`,
+                              objective: `No mencionado por ${rec.llmSource} para "${rec.query}". Mejorar presencia y autoridad para esta búsqueda.`,
+                              kind: "CONTENT",
+                              mode: "AI",
+                              priority: 3,
+                              effort: "MEDIUM",
+                              category: "aeo",
+                            }}
+                            sourceRef={{
+                              module: "ai-search",
+                              itemId: rec.id,
+                              snapshot: { query: rec.query, llmSource: rec.llmSource, mentioned: rec.mentioned, position: rec.position },
+                            }}
+                          />
                         )}
                       </td>
                     </tr>

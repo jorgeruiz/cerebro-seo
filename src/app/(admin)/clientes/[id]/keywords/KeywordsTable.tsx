@@ -5,6 +5,7 @@ import { ChevronUp, ChevronDown, Star, TrendingUp, TrendingDown, Minus, External
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { AddToPlanButton } from "../AddToPlanButton";
 import type { KeywordRow } from "./page";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,9 +86,9 @@ type FilterRange = "all" | "top3" | "top10" | "top30" | "out";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface Props { rows: KeywordRow[] }
+interface Props { rows: KeywordRow[]; clientId: string }
 
-export function KeywordsTable({ rows }: Props) {
+export function KeywordsTable({ rows, clientId }: Props) {
   const [sortField, setSortField] = useState<SortField>("currentPosition");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -228,12 +229,13 @@ export function KeywordsTable({ rows }: Props) {
                 Actualizado <SortIcon field="lastTracked" />
               </button>
             </TableHead>
+            <TableHead className="text-xs font-mono text-muted-foreground w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {pageData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+              <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                 Sin keywords que coincidan con los filtros seleccionados
               </TableCell>
             </TableRow>
@@ -268,6 +270,26 @@ export function KeywordsTable({ rows }: Props) {
                       ? new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" }).format(row.lastTracked)
                       : "—"}
                   </span>
+                </TableCell>
+                <TableCell>
+                  <AddToPlanButton
+                    compact
+                    clientId={clientId}
+                    defaults={{
+                      title: `Optimizar posición: "${row.term}"`,
+                      objective: `Mejorar el ranking de "${row.term}" (actualmente #${row.currentPosition ?? ">30"}) al top 10.`,
+                      kind: "CONTENT",
+                      mode: "AI",
+                      priority: row.isPriority ? 2 : 3,
+                      effort: "MEDIUM",
+                      category: "meta",
+                    }}
+                    sourceRef={{
+                      module: "keywords",
+                      itemId: row.id,
+                      snapshot: { term: row.term, currentPosition: row.currentPosition, delta7d: row.delta7d, delta30d: row.delta30d, country: row.country, rankingUrl: row.rankingUrl },
+                    }}
+                  />
                 </TableCell>
               </TableRow>
             ))

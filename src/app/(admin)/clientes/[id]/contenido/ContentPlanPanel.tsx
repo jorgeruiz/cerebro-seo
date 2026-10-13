@@ -6,6 +6,7 @@ import {
   FileText, Globe, BookOpen, Layers,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { AddToPlanButton } from "../AddToPlanButton";
 import { actionGenerateContentPlan, type ContentPlanRecord } from "./actions";
 import type { ContentIdea, ContentType, ContentPriority } from "@/lib/claude-content-plan";
 
@@ -33,7 +34,7 @@ function formatDate(d: Date) {
 
 // ─── IdeaCard ─────────────────────────────────────────────────────────────
 
-function IdeaCard({ idea, index, clientId: _clientId }: { idea: ContentIdea; index: number; clientId: string }) {
+function IdeaCard({ idea, index, clientId }: { idea: ContentIdea; index: number; clientId: string }) {
   const type = TYPE_CONFIG[idea.tipo] ?? TYPE_CONFIG.blog;
   const prio = PRIORITY_CONFIG[idea.prioridad] ?? PRIORITY_CONFIG.media;
   const Icon = type.icon;
@@ -61,6 +62,24 @@ function IdeaCard({ idea, index, clientId: _clientId }: { idea: ContentIdea; ind
           <span className={`font-mono text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border ${prio.color}`}>
             {prio.label}
           </span>
+          <AddToPlanButton
+            compact
+            clientId={clientId}
+            defaults={{
+              title: `Crear contenido: ${idea.titulo}`,
+              objective: `${idea.angulo}. ${idea.razon}`,
+              kind: "CONTENT",
+              mode: "AI",
+              priority: idea.prioridad === "alta" ? 2 : idea.prioridad === "media" ? 3 : 4,
+              effort: idea.tipo === "pilar" ? "HIGH" : "MEDIUM",
+              category: idea.tipo,
+            }}
+            sourceRef={{
+              module: "contenido",
+              itemId: idea.titulo.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60),
+              snapshot: { titulo: idea.titulo, tipo: idea.tipo, prioridad: idea.prioridad, keywords: idea.keywords, urlSugerida: idea.urlSugerida },
+            }}
+          />
         </div>
       </div>
 

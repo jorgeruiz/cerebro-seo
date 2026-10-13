@@ -24,6 +24,7 @@ import {
 import { SectionHeader, InfoTooltip, SectionIntro } from "@/components/ui-darkui";
 import { AuditScoreChart } from "./AuditScoreChart";
 import type { AuditHistoryPoint } from "./AuditScoreChart";
+import { AddToPlanButton } from "../AddToPlanButton";
 
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
@@ -546,6 +547,24 @@ export default async function AuditPage({
                                       ×{issue.count}
                                     </span>
                                   )}
+                                  <AddToPlanButton
+                                    compact
+                                    clientId={client.id}
+                                    defaults={{
+                                      title: `Fix: ${issue.title}`,
+                                      objective: issue.description ?? issue.title,
+                                      kind: issue.category === "content" ? "CONTENT" : "CODE",
+                                      mode: "AI",
+                                      priority: issue.severity === "critical" ? 1 : issue.severity === "high" ? 2 : 3,
+                                      effort: issue.count > 5 ? "HIGH" : "MEDIUM",
+                                      category: issue.category,
+                                    }}
+                                    sourceRef={{
+                                      module: "audit",
+                                      itemId: issue.id,
+                                      snapshot: { title: issue.title, severity: issue.severity, category: issue.category, count: issue.count, affectedUrl: issue.affectedUrl },
+                                    }}
+                                  />
                                 </div>
                               </div>
                             </div>

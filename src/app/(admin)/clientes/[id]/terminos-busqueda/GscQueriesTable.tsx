@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AddToPlanButton } from "../AddToPlanButton";
 import { getGscQueries } from "../actions";
 import type { GscQueryRow, GscQueriesSortBy, GscQueriesDevice, GscRange } from "../actions";
 
@@ -186,6 +187,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
                   </span>
                 </TableHead>
               ))}
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -204,7 +206,7 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
               ))
             ) : queries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-12 text-sm text-muted-foreground">
                   Sin queries para los filtros seleccionados
                 </TableCell>
               </TableRow>
@@ -225,6 +227,26 @@ export function GscQueriesTable({ clientId, initialData }: Props) {
                   </TableCell>
                   <TableCell className="pr-4 text-right text-sm text-foreground tabular-nums">
                     {row.position.toFixed(1)}
+                  </TableCell>
+                  <TableCell>
+                    <AddToPlanButton
+                      compact
+                      clientId={clientId}
+                      defaults={{
+                        title: `Optimizar CTR: "${row.query}"`,
+                        objective: `Mejorar el CTR de "${row.query}" (pos ${row.position.toFixed(1)}, ${fmt.format(row.impressions)} impresiones, CTR ${row.ctr.toFixed(1)}%).`,
+                        kind: row.position > 10 ? "CONTENT" : "CODE",
+                        mode: "AI",
+                        priority: row.impressions > 1000 ? 2 : 3,
+                        effort: "LOW",
+                        category: "meta",
+                      }}
+                      sourceRef={{
+                        module: "terminos-busqueda",
+                        itemId: encodeURIComponent(row.query),
+                        snapshot: { query: row.query, clicks: row.clicks, impressions: row.impressions, ctr: row.ctr, position: row.position },
+                      }}
+                    />
                   </TableCell>
                 </TableRow>
               ))

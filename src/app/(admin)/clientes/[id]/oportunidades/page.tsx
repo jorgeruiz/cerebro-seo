@@ -22,6 +22,7 @@ import {
   type SeoOpportunity,
   type OpportunityType,
 } from "@/lib/seo-opportunities";
+import { AddToPlanButton } from "../AddToPlanButton";
 
 
 // ─── Helpers visuales ─────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ function priorityBadge(p: string) {
   return "text-muted-foreground bg-muted border-border";
 }
 
-function OpportunityCard({ opp, clientId: _clientId }: { opp: SeoOpportunity; clientId: string }) {
+function OpportunityCard({ opp, clientId }: { opp: SeoOpportunity; clientId: string }) {
   const meta = TYPE_META[opp.type];
   const Icon = meta.icon;
 
@@ -68,6 +69,24 @@ function OpportunityCard({ opp, clientId: _clientId }: { opp: SeoOpportunity; cl
           >
             {opp.priority}
           </span>
+          <AddToPlanButton
+            compact
+            clientId={clientId}
+            defaults={{
+              title: `${TYPE_META[opp.type].label}: ${opp.keyword ?? opp.url ?? "oportunidad"}`,
+              objective: opp.action,
+              kind: opp.type === "ctr-issue-query" || opp.type === "ctr-issue-page" ? "CODE" : "CONTENT",
+              mode: "AI",
+              priority: opp.priority === "alta" ? 2 : opp.priority === "media" ? 3 : 4,
+              effort: "MEDIUM",
+              category: opp.type === "no-coverage" ? "blog" : "meta",
+            }}
+            sourceRef={{
+              module: "oportunidades",
+              itemId: encodeURIComponent(opp.keyword ?? opp.url ?? `opp-${opp.type}`),
+              snapshot: { type: opp.type, keyword: opp.keyword, url: opp.url, position: opp.position, impressions: opp.impressions, ctr: opp.ctr, action: opp.action },
+            }}
+          />
         </div>
       </div>
 

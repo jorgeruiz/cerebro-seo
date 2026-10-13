@@ -248,7 +248,7 @@ export default async function KeywordsPage({ params }: { params: { id: string } 
             {/* Tabla de keywords */}
             <section>
               <SectionHeader>Todas las keywords</SectionHeader>
-              <KeywordsTable rows={rows} />
+              <KeywordsTable rows={rows} clientId={client.id} />
             </section>
 
             {/* Gráfica de evolución */}

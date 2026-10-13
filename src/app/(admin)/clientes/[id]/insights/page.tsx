@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { ArrowLeft, AlertCircle, TrendingUp, Trophy, Info, ArrowRight } from "lucide-react";
 import { SectionIntro } from "@/components/ui-darkui";
+import { AddToPlanButton } from "../AddToPlanButton";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -149,13 +150,12 @@ export default async function InsightsListPage({
               const severityClass = SEVERITY_BADGE[insight.severity.toLowerCase()] ?? SEVERITY_BADGE.low;
 
               return (
-                <Link
+                <div
                   key={insight.id}
-                  href={`/clientes/${params.id}/insights/${insight.id}`}
                   className="group flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4 hover:border-primary/40 transition-all"
                 >
                   <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${config.color}`} />
-                  <div className="flex-1 min-w-0">
+                  <Link href={`/clientes/${params.id}/insights/${insight.id}`} className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
                         {insight.title}
@@ -174,9 +174,31 @@ export default async function InsightsListPage({
                       {format(insight.generatedAt, "d MMM yyyy, HH:mm", { locale: es })}
                       {insight.acknowledgedAt && ` · resuelto ${format(insight.acknowledgedAt, "d MMM", { locale: es })}`}
                     </p>
-                  </div>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground shrink-0 mt-0.5 transition-colors" />
-                </Link>
+                  </Link>
+                  {tab === "activos" && (
+                    <AddToPlanButton
+                      compact
+                      clientId={params.id}
+                      defaults={{
+                        title: insight.suggestedAction ?? insight.title,
+                        objective: insight.description ?? insight.title,
+                        kind: insight.type === "OPPORTUNITY" ? "CONTENT" : "CODE",
+                        mode: "AI",
+                        priority: insight.severity === "critical" ? 1 : insight.severity === "high" ? 2 : 3,
+                        effort: "MEDIUM",
+                        category: "insights",
+                      }}
+                      sourceRef={{
+                        module: "insights",
+                        itemId: insight.id,
+                        snapshot: { title: insight.title, type: insight.type, severity: insight.severity, suggestedAction: insight.suggestedAction },
+                      }}
+                    />
+                  )}
+                  <Link href={`/clientes/${params.id}/insights/${insight.id}`}>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground shrink-0 mt-0.5 transition-colors" />
+                  </Link>
+                </div>
               );
             })}
           </div>
