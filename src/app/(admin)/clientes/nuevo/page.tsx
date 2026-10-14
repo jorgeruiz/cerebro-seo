@@ -131,6 +131,8 @@ function PropertyPicker({
   loadFn,
   renderOption,
   placeholder,
+  manualPlaceholder,
+  manualHint,
 }: {
   label: string;
   icon: React.ElementType;
@@ -139,10 +141,13 @@ function PropertyPicker({
   loadFn: () => Promise<{ id: string; label: string }[]>;
   renderOption: (item: { id: string; label: string }) => string;
   placeholder: string;
+  manualPlaceholder: string;
+  manualHint: string;
 }) {
   const [options, setOptions] = useState<{ id: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [manual, setManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLoad() {
@@ -152,9 +157,13 @@ function PropertyPicker({
     setOptions(result);
     setLoaded(true);
     setLoading(false);
-    if (result.length === 0) {
-      setError("No se encontraron propiedades en la cuenta.");
-    }
+  }
+
+  function handleClear() {
+    onChange("");
+    setLoaded(false);
+    setOptions([]);
+    setManual(false);
   }
 
   return (
@@ -164,13 +173,31 @@ function PropertyPicker({
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-ds-green/30 bg-ds-green/5">
           <Icon className="h-3.5 w-3.5 text-ds-green flex-shrink-0" />
           <span className="text-xs font-mono text-foreground flex-1 truncate">{value}</span>
-          <button
-            type="button"
-            onClick={() => { onChange(""); setLoaded(false); setOptions([]); }}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button type="button" onClick={handleClear} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-3.5 w-3.5" />
           </button>
+        </div>
+      ) : manual ? (
+        <div className="space-y-1">
+          <input
+            type="text"
+            autoFocus
+            placeholder={manualPlaceholder}
+            className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/50"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = (e.currentTarget.value ?? "").trim();
+                if (v) onChange(v);
+              }
+              if (e.key === "Escape") setManual(false);
+            }}
+            onBlur={(e) => {
+              const v = (e.currentTarget.value ?? "").trim();
+              if (v) onChange(v);
+              else setManual(false);
+            }}
+          />
+          <p className="text-[10px] font-mono text-muted-foreground/60">{manualHint} · Enter para confirmar · Esc para cancelar</p>
         </div>
       ) : !loaded ? (
         <button
@@ -190,13 +217,20 @@ function PropertyPicker({
               onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
               className="w-full appearance-none border border-border rounded-lg px-3 py-2 pr-8 text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary bg-background"
             >
-              <option value="">{placeholder}</option>
+              <option value="">{options.length ? placeholder : "— Sin propiedades en esta cuenta —"}</option>
               {options.map((o) => (
                 <option key={o.id} value={o.id}>{renderOption(o)}</option>
               ))}
             </select>
             <ChevronDown className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
           </div>
+          <button
+            type="button"
+            onClick={() => setManual(true)}
+            className="text-[10px] font-mono text-muted-foreground/60 hover:text-primary transition-colors"
+          >
+            ¿No aparece la propiedad? Ingresar manualmente →
+          </button>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
       )}
@@ -229,6 +263,8 @@ function Step2({
         }}
         renderOption={(o) => o.label}
         placeholder="— Elige una propiedad GSC —"
+        manualPlaceholder="sc-domain:ejemplo.com"
+        manualHint="Formato: sc-domain:dominio.com o https://dominio.com"
       />
 
       <PropertyPicker
@@ -245,6 +281,8 @@ function Step2({
         }}
         renderOption={(o) => o.label}
         placeholder="— Elige una propiedad GA4 —"
+        manualPlaceholder="properties/123456789"
+        manualHint="Formato: properties/XXXXXXXXX"
       />
     </div>
   );
