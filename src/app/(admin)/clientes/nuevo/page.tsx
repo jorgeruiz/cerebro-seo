@@ -1,138 +1,158 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ChevronLeft, Check, Search, BarChart2, ChevronDown, Loader2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  ChevronRight, ChevronLeft, Check, Search, BarChart2,
+  ChevronDown, Loader2, X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { listGscSites, listGa4Properties } from "../[id]/actions";
 import type { GscSite, Ga4Property } from "../[id]/actions";
+import { listClientsForWizard, configureClientSeo } from "./actions";
+import type { WizardClient } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Tipos
 // ---------------------------------------------------------------------------
 
 interface WizardData {
-  // Paso 1: datos básicos
-  name: string;
-  domain: string;
-  plan: "BASIC" | "PRO" | "ENTERPRISE";
-  brandColor: string;
-  // Paso 2: propiedades
+  clientId: string;
   gscProperty: string;
   ga4Property: string;
-  // Paso 3: keywords y competidores iniciales
-  keywords: string; // separados por coma
-  competitors: string; // separados por coma
+  keywords: string;
+  competitors: string;
 }
 
 const STEPS = [
-  { label: "Datos básicos" },
+  { label: "Seleccionar cliente" },
   { label: "Propiedades" },
   { label: "Keywords iniciales" },
 ];
 
 // ---------------------------------------------------------------------------
-// Server action (se llama vía fetch)
-// ---------------------------------------------------------------------------
-
-async function createClient(data: WizardData): Promise<{ id: string }> {
-  const res = await fetch("/api/clientes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Error al crear cliente");
-  return res.json() as Promise<{ id: string }>;
-}
-
-// ---------------------------------------------------------------------------
-// Pasos del wizard
+// Step 1 — Picker de cliente
 // ---------------------------------------------------------------------------
 
 function Step1({
-  data,
-  onChange,
+  selected,
+  onSelect,
 }: {
-  data: WizardData;
-  onChange: (d: Partial<WizardData>) => void;
+  selected: string;
+  onSelect: (client: WizardClient) => void;
 }) {
+  const [clients, setClients] = useState<WizardClient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    listClientsForWizard().then((list) => {
+      setClients(list);
+      setLoading(false);
+    });
+  }, []);
+
+  const filtered = clients.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.domain.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Ordenar: SEO sin configurar primero, luego resto
+  const sorted = [...filtered].sort((a, b) => {
+    const aReady = a.services.includes("seo") && !a.gscProperty;
+    const bReady = b.services.includes("seo") && !b.gscProperty;
+    if (aReady && !bReady) return -1;
+    if (!aReady && bReady) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm font-mono">Cargando clientes…</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label htmlFor="name">Nombre del cliente *</Label>
-        <Input
-          id="name"
-          placeholder="Empresa S.A. de C.V."
-          value={data.name}
-          onChange={(e) => onChange({ name: e.target.value })}
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Buscar por nombre o dominio…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm font-mono bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="domain">Dominio principal *</Label>
-        <Input
-          id="domain"
-          placeholder="ejemplo.com"
-          value={data.domain}
-          onChange={(e) => onChange({ domain: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground/60 font-mono">Sin https:// ni slash final</p>
+      <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
+        {sorted.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8 font-mono">
+            Sin resultados para &ldquo;{search}&rdquo;
+          </p>
+        )}
+        {sorted.map((c) => {
+          const isSelected = c.id === selected;
+          const hasSeo = c.services.includes("seo");
+          const hasGsc = !!c.gscProperty;
+          const hasGa4 = !!c.ga4Property;
+
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onSelect(c)}
+              className={cn(
+                "w-full text-left p-3 rounded-lg border transition-colors",
+                isSelected
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:border-primary/40 hover:bg-muted/30"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                  <p className="text-[11px] font-mono text-muted-foreground truncate">{c.domain}</p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                  {hasSeo && (
+                    <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                      SEO
+                    </span>
+                  )}
+                  <span className={cn("text-[9px] font-mono", hasGsc ? "text-ds-green" : "text-muted-foreground/30")}>
+                    GSC
+                  </span>
+                  <span className={cn("text-[9px] font-mono", hasGa4 ? "text-ds-green" : "text-muted-foreground/30")}>
+                    GA4
+                  </span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="plan">Plan SEO *</Label>
-        <Select
-          value={data.plan}
-          onValueChange={(v) => onChange({ plan: v as WizardData["plan"] })}
-        >
-          <SelectTrigger id="plan">
-            <SelectValue placeholder="Selecciona un plan" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="BASIC">Basic</SelectItem>
-            <SelectItem value="PRO">Pro</SelectItem>
-            <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="color">Color de marca</Label>
-        <div className="flex items-center gap-3">
-          <input
-            type="color"
-            id="color"
-            value={data.brandColor || "#6366f1"}
-            onChange={(e) => onChange({ brandColor: e.target.value })}
-            className="h-9 w-14 rounded border border-border cursor-pointer bg-transparent"
-          />
-          <span className="text-xs font-mono text-muted-foreground">{data.brandColor || "#6366f1"}</span>
-        </div>
-      </div>
+      <p className="text-[10px] font-mono text-muted-foreground/50 text-center">
+        {clients.length} clientes activos · ✓ GSC · ✓ GA4
+      </p>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// PropertyPicker — reutilizable para GSC y GA4
+// ---------------------------------------------------------------------------
+
 function PropertyPicker({
-  label,
-  icon: Icon,
-  value,
-  onChange,
-  loadFn,
-  renderOption,
-  placeholder,
-  manualPlaceholder,
-  manualHint,
+  label, icon: Icon, value, onChange, loadFn, renderOption,
+  placeholder, manualPlaceholder, manualHint,
 }: {
   label: string;
   icon: React.ElementType;
@@ -148,11 +168,9 @@ function PropertyPicker({
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [manual, setManual] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleLoad() {
     setLoading(true);
-    setError(null);
     const result = await loadFn();
     setOptions(result);
     setLoaded(true);
@@ -197,7 +215,7 @@ function PropertyPicker({
               else setManual(false);
             }}
           />
-          <p className="text-[10px] font-mono text-muted-foreground/60">{manualHint} · Enter para confirmar · Esc para cancelar</p>
+          <p className="text-[10px] font-mono text-muted-foreground/60">{manualHint} · Enter para confirmar</p>
         </div>
       ) : !loaded ? (
         <button
@@ -231,12 +249,15 @@ function PropertyPicker({
           >
             ¿No aparece la propiedad? Ingresar manualmente →
           </button>
-          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
       )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Step 2 — Propiedades GSC / GA4
+// ---------------------------------------------------------------------------
 
 function Step2({
   data,
@@ -288,6 +309,10 @@ function Step2({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Step 3 — Keywords y competidores
+// ---------------------------------------------------------------------------
+
 function Step3({
   data,
   onChange,
@@ -306,7 +331,7 @@ function Step3({
           value={data.keywords}
           onChange={(e) => onChange({ keywords: e.target.value })}
         />
-        <p className="text-xs text-muted-foreground/60 font-mono">Separadas por coma. Estas se trackearán diariamente.</p>
+        <p className="text-xs text-muted-foreground/60 font-mono">Separadas por coma. Se trackearán diariamente.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -331,14 +356,12 @@ function Step3({
 export default function NuevoClientePage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<WizardClient | null>(null);
 
   const [data, setData] = useState<WizardData>({
-    name: "",
-    domain: "",
-    plan: "PRO",
-    brandColor: "#6366f1",
+    clientId: "",
     gscProperty: "",
     ga4Property: "",
     keywords: "",
@@ -349,21 +372,31 @@ export default function NuevoClientePage() {
     setData((prev) => ({ ...prev, ...partial }));
   }
 
+  function handleSelectClient(client: WizardClient) {
+    setSelectedClient(client);
+    setData((prev) => ({
+      ...prev,
+      clientId: client.id,
+      gscProperty: client.gscProperty ?? "",
+      ga4Property: client.ga4Property ?? "",
+    }));
+  }
+
   function canProceed() {
-    if (step === 0) return data.name.trim() !== "" && data.domain.trim() !== "";
+    if (step === 0) return !!data.clientId;
     return true;
   }
 
-  async function handleSubmit() {
-    setSubmitting(true);
+  function handleSubmit() {
     setError(null);
-    try {
-      const { id } = await createClient(data);
-      router.push(`/clientes/${id}`);
-    } catch {
-      setError("No se pudo crear el cliente. Intenta de nuevo.");
-      setSubmitting(false);
-    }
+    startTransition(async () => {
+      const res = await configureClientSeo(data);
+      if (res.ok && res.clientId) {
+        router.push(`/clientes/${res.clientId}`);
+      } else {
+        setError(res.error ?? "Error al guardar configuración.");
+      }
+    });
   }
 
   const isLast = step === STEPS.length - 1;
@@ -373,10 +406,13 @@ export default function NuevoClientePage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="font-display font-extrabold text-[clamp(1.8rem,3vw,2.8rem)] tracking-tight leading-[1.05] text-foreground">
-          Nuevo cliente
+          Configurar cliente SEO
         </h1>
         <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
           Paso {step + 1} de {STEPS.length} — {STEPS[step].label}
+          {selectedClient && step > 0 && (
+            <span className="text-primary"> · {selectedClient.name}</span>
+          )}
         </p>
       </div>
 
@@ -396,12 +432,7 @@ export default function NuevoClientePage() {
             >
               {i < step ? <Check className="h-3 w-3" /> : i + 1}
             </div>
-            <span
-              className={cn(
-                "font-mono text-[0.7rem] hidden sm:block",
-                i === step ? "text-foreground" : "text-muted-foreground/50"
-              )}
-            >
+            <span className={cn("font-mono text-[0.7rem] hidden sm:block", i === step ? "text-foreground" : "text-muted-foreground/50")}>
               {s.label}
             </span>
             {i < STEPS.length - 1 && (
@@ -411,23 +442,26 @@ export default function NuevoClientePage() {
         ))}
       </div>
 
-      {/* Contenido del paso */}
+      {/* Contenido */}
       <div className="bg-card rounded-xl border border-border p-6 mb-6">
-        {step === 0 && <Step1 data={data} onChange={update} />}
+        {step === 0 && (
+          <Step1
+            selected={data.clientId}
+            onSelect={handleSelectClient}
+          />
+        )}
         {step === 1 && <Step2 data={data} onChange={update} />}
         {step === 2 && <Step3 data={data} onChange={update} />}
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive mb-4 font-mono">{error}</p>
-      )}
+      {error && <p className="text-sm text-destructive mb-4 font-mono">{error}</p>}
 
       {/* Navegación */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
           onClick={() => (step > 0 ? setStep(step - 1) : router.back())}
-          disabled={submitting}
+          disabled={isPending}
           className="gap-2 font-mono text-xs"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -437,11 +471,11 @@ export default function NuevoClientePage() {
         {isLast ? (
           <Button
             onClick={handleSubmit}
-            disabled={!canProceed() || submitting}
+            disabled={!canProceed() || isPending}
             className="gap-2 font-mono text-xs"
           >
-            {submitting ? "Creando..." : "Crear cliente"}
-            <Check className="h-4 w-4" />
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {isPending ? "Guardando…" : "Guardar configuración"}
           </Button>
         ) : (
           <Button
