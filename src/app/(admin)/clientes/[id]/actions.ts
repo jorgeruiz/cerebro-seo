@@ -19,6 +19,12 @@ export interface GscSite {
   permissionLevel: string;
 }
 
+export interface Ga4Property {
+  propertyId: string;   // "properties/123456789"
+  displayName: string;  // "Mi sitio web"
+  accountName: string;  // "Mi cuenta"
+}
+
 export type GscRange = "28d" | "90d" | "12m";
 export type { GscQueryRow };
 
@@ -125,6 +131,39 @@ export async function listGscSites(): Promise<GscSite[]> {
 }
 
 /**
+ * Lista todas las propiedades GA4 accesibles por el usuario actual.
+ * Usa Analytics Admin API v1beta → accountSummaries.list()
+ * Devuelve [] si no hay OAuth token o si el scope analytics no fue otorgado.
+ */
+export async function listGa4Properties(): Promise<Ga4Property[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+
+  const oauth = await getServiceOAuth2Client();
+  if (!oauth) return [];
+
+  try {
+    const admin = google.analyticsadmin({ version: "v1beta", auth: oauth });
+    const { data } = await admin.accountSummaries.list({ pageSize: 200 });
+    const results: Ga4Property[] = [];
+    for (const account of data.accountSummaries ?? []) {
+      for (const prop of account.propertySummaries ?? []) {
+        if (prop.property && prop.displayName) {
+          results.push({
+            propertyId: prop.property,
+            displayName: prop.displayName,
+            accountName: account.displayName ?? "",
+          });
+        }
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Persiste la propiedad GSC elegida en el Site del cliente.
  * Requiere sesión activa.
  */
@@ -148,6 +187,36 @@ export async function setClientGscProperty(
   await prisma.site.update({
     where: { id: site.id },
     data: { gscProperty: siteUrl },
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Persiste la propiedad GA4 elegida en el Site del cliente.
+ * Requiere sesión activa.
+ */
+export async function setClientGa4Property(
+  clientId: string,
+  propertyId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session?.user?.id) return { ok: false, error: "No autenticado" };
+
+  if (!/^properties\/\d+$/.test(propertyId)) {
+    return { ok: false, error: "ID de propiedad GA4 inválido" };
+  }
+
+  let site;
+  try {
+    site = await resolveSite(clientId);
+  } catch {
+    return { ok: false, error: "Cliente sin sitio configurado" };
+  }
+
+  await prisma.site.update({
+    where: { id: site.id },
+    data: { ga4Property: propertyId },
   });
 
   return { ok: true };

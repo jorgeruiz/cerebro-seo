@@ -7,8 +7,8 @@ import { ArrowLeft, Settings, ExternalLink } from "lucide-react";
 import { SectionHeader } from "@/components/ui-darkui";
 import { KeywordsManager } from "./KeywordsManager";
 import { CompetitorsManager } from "./CompetitorsManager";
-import { actionUpdateGa4Property } from "./actions";
 import { GscConnectSection } from "../GscConnectSection";
+import { Ga4ConnectSection } from "../Ga4ConnectSection";
 
 export default async function ConfiguracionPage({ params }: { params: { id: string } }) {
   const client = await prisma.client.findUnique({
@@ -33,12 +33,6 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
   if (!client) notFound();
 
   const site = client.sites[0];
-
-  // Form-compatible wrappers (form action must return void)
-  async function updateGa4(formData: FormData) {
-    "use server";
-    await actionUpdateGa4Property(client!.id, formData);
-  }
 
   return (
     <div className="min-h-full">
@@ -119,23 +113,14 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
             {/* GA4 */}
             <div className="bg-card rounded-xl border border-border p-5 space-y-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Google Analytics 4</p>
-              <form action={updateGa4} className="space-y-2">
-                <input
-                  name="ga4Property"
-                  defaultValue={site?.ga4Property ?? ""}
-                  placeholder="properties/123456789"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-                <p className="text-[10px] font-mono text-muted-foreground/60">
-                  Formato: properties/123456789
-                </p>
-                <button
-                  type="submit"
-                  className="bg-primary text-primary-foreground text-xs font-mono rounded-lg px-3 py-1.5 hover:bg-primary/90 transition-colors"
-                >
-                  Guardar
-                </button>
-              </form>
+              {site?.ga4Property ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-mono text-foreground">{site.ga4Property}</p>
+                  <p className="text-[10px] font-mono text-ds-green">Conectado</p>
+                </div>
+              ) : (
+                <Ga4ConnectSection clientId={client.id} />
+              )}
             </div>
           </div>
         </section>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Search, BarChart2, ChevronDown, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { listGscSites, listGa4Properties } from "../[id]/actions";
+import type { GscSite, Ga4Property } from "../[id]/actions";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -121,6 +123,87 @@ function Step1({
   );
 }
 
+function PropertyPicker({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  loadFn,
+  renderOption,
+  placeholder,
+}: {
+  label: string;
+  icon: React.ElementType;
+  value: string;
+  onChange: (v: string) => void;
+  loadFn: () => Promise<{ id: string; label: string }[]>;
+  renderOption: (item: { id: string; label: string }) => string;
+  placeholder: string;
+}) {
+  const [options, setOptions] = useState<{ id: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleLoad() {
+    setLoading(true);
+    setError(null);
+    const result = await loadFn();
+    setOptions(result);
+    setLoaded(true);
+    setLoading(false);
+    if (result.length === 0) {
+      setError("No se encontraron propiedades en la cuenta.");
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {value ? (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-ds-green/30 bg-ds-green/5">
+          <Icon className="h-3.5 w-3.5 text-ds-green flex-shrink-0" />
+          <span className="text-xs font-mono text-foreground flex-1 truncate">{value}</span>
+          <button
+            type="button"
+            onClick={() => { onChange(""); setLoaded(false); setOptions([]); }}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : !loaded ? (
+        <button
+          type="button"
+          onClick={handleLoad}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 h-10 border border-dashed border-border rounded-lg text-xs font-mono text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
+          {loading ? "Cargando…" : `Cargar propiedades de ${label}`}
+        </button>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="relative">
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
+              className="w-full appearance-none border border-border rounded-lg px-3 py-2 pr-8 text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+            >
+              <option value="">{placeholder}</option>
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>{renderOption(o)}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Step2({
   data,
   onChange,
@@ -131,31 +214,38 @@ function Step2({
   return (
     <div className="space-y-5">
       <div className="rounded-lg bg-ds-blue/5 border border-ds-blue/20 p-4 text-xs font-mono text-ds-blue">
-        Estas propiedades se conectarán al cliente para obtener datos de Google Search Console y GA4.
+        Conecta las propiedades de Google para obtener datos de Search Console y Analytics 4.
         Puedes dejarlos vacíos y configurarlos después.
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="gsc">Google Search Console</Label>
-        <Input
-          id="gsc"
-          placeholder="sc-domain:ejemplo.com"
-          value={data.gscProperty}
-          onChange={(e) => onChange({ gscProperty: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground/60 font-mono">Property ID en formato sc-domain:dominio.com o https://dominio.com</p>
-      </div>
+      <PropertyPicker
+        label="Google Search Console"
+        icon={Search}
+        value={data.gscProperty}
+        onChange={(v) => onChange({ gscProperty: v })}
+        loadFn={async () => {
+          const sites = await listGscSites();
+          return sites.map((s: GscSite) => ({ id: s.siteUrl, label: s.siteUrl }));
+        }}
+        renderOption={(o) => o.label}
+        placeholder="— Elige una propiedad GSC —"
+      />
 
-      <div className="space-y-1.5">
-        <Label htmlFor="ga4">Google Analytics 4</Label>
-        <Input
-          id="ga4"
-          placeholder="properties/123456789"
-          value={data.ga4Property}
-          onChange={(e) => onChange({ ga4Property: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground/60 font-mono">Property ID en formato properties/XXXXXXXXX</p>
-      </div>
+      <PropertyPicker
+        label="Google Analytics 4"
+        icon={BarChart2}
+        value={data.ga4Property}
+        onChange={(v) => onChange({ ga4Property: v })}
+        loadFn={async () => {
+          const props = await listGa4Properties();
+          return props.map((p: Ga4Property) => ({
+            id: p.propertyId,
+            label: `${p.displayName} (${p.propertyId})`,
+          }));
+        }}
+        renderOption={(o) => o.label}
+        placeholder="— Elige una propiedad GA4 —"
+      />
     </div>
   );
 }
