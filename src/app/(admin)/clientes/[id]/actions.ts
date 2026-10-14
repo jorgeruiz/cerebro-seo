@@ -107,60 +107,112 @@ function today(): string {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 /**
- * Lista todas las propiedades de GSC accesibles por el usuario actual.
- * Devuelve [] si no hay OAuth token o si el scope webmasters no fue otorgado.
+ * Lista propiedades GSC disponibles para asignar a un cliente.
+ * Fuente 1 (siempre): propiedades ya configuradas en la BD.
+ * Fuente 2 (si funciona): Google Search Console API → sites.list().
+ * Devuelve lista deduplicada por siteUrl.
  */
 export async function listGscSites(): Promise<GscSite[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
 
-  const oauth = await getServiceOAuth2Client();
-  if (!oauth) return [];
-
-  try {
-    const wmt = google.webmasters({ version: "v3", auth: oauth });
-    const { data } = await wmt.sites.list();
-    return (data.siteEntry ?? []).map((s) => ({
-      siteUrl: s.siteUrl ?? "",
-      permissionLevel: s.permissionLevel ?? "siteUnverifiedUser",
+  // Fuente 1: propiedades ya en uso en la BD
+  const sites = await prisma.site.findMany({
+    where: { gscProperty: { not: null } },
+    select: { gscProperty: true },
+  });
+  const fromDb: GscSite[] = sites
+    .filter((s) => s.gscProperty)
+    .map((s) => ({
+      siteUrl: s.gscProperty!,
+      permissionLevel: "siteOwner",
     }));
+
+  // Fuente 2: GSC API
+  let fromApi: GscSite[] = [];
+  try {
+    const oauth = await getServiceOAuth2Client();
+    if (oauth) {
+      const wmt = google.webmasters({ version: "v3", auth: oauth });
+      const { data } = await wmt.sites.list();
+      fromApi = (data.siteEntry ?? []).map((s) => ({
+        siteUrl: s.siteUrl ?? "",
+        permissionLevel: s.permissionLevel ?? "siteUnverifiedUser",
+      }));
+    }
   } catch {
-    // Sin scope webmasters o sin sitios — devolver vacío
-    return [];
+    // Sin scope webmasters — usar solo BD
   }
+
+  // Fusionar deduplicando por siteUrl
+  const seen = new Set<string>();
+  const merged: GscSite[] = [];
+  for (const s of [...fromApi, ...fromDb]) {
+    if (s.siteUrl && !seen.has(s.siteUrl)) {
+      seen.add(s.siteUrl);
+      merged.push(s);
+    }
+  }
+  return merged;
 }
 
 /**
- * Lista todas las propiedades GA4 accesibles por el usuario actual.
- * Usa Analytics Admin API v1beta → accountSummaries.list()
- * Devuelve [] si no hay OAuth token o si el scope analytics no fue otorgado.
+ * Lista propiedades GA4 disponibles para asignar a un cliente.
+ * Fuente 1 (siempre): propiedades ya configuradas en la BD (otros clientes).
+ * Fuente 2 (si funciona): Analytics Admin API v1beta → accountSummaries.list().
+ * Devuelve lista deduplicada por propertyId.
  */
 export async function listGa4Properties(): Promise<Ga4Property[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
 
-  const oauth = await getServiceOAuth2Client();
-  if (!oauth) return [];
+  // Fuente 1: propiedades ya en uso en la BD
+  const sites = await prisma.site.findMany({
+    where: { ga4Property: { not: null } },
+    select: { ga4Property: true, client: { select: { name: true } } },
+  });
 
+  const fromDb: Ga4Property[] = sites
+    .filter((s) => s.ga4Property)
+    .map((s) => ({
+      propertyId: s.ga4Property!,
+      displayName: s.client.name,
+      accountName: "Configurado en sistema",
+    }));
+
+  // Fuente 2: Analytics Admin API (puede fallar si la API no está habilitada)
+  let fromApi: Ga4Property[] = [];
   try {
-    const admin = google.analyticsadmin({ version: "v1beta", auth: oauth });
-    const { data } = await admin.accountSummaries.list({ pageSize: 200 });
-    const results: Ga4Property[] = [];
-    for (const account of data.accountSummaries ?? []) {
-      for (const prop of account.propertySummaries ?? []) {
-        if (prop.property && prop.displayName) {
-          results.push({
-            propertyId: prop.property,
-            displayName: prop.displayName,
-            accountName: account.displayName ?? "",
-          });
+    const oauth = await getServiceOAuth2Client();
+    if (oauth) {
+      const admin = google.analyticsadmin({ version: "v1beta", auth: oauth });
+      const { data } = await admin.accountSummaries.list({ pageSize: 200 });
+      for (const account of data.accountSummaries ?? []) {
+        for (const prop of account.propertySummaries ?? []) {
+          if (prop.property && prop.displayName) {
+            fromApi.push({
+              propertyId: prop.property,
+              displayName: prop.displayName,
+              accountName: account.displayName ?? "",
+            });
+          }
         }
       }
     }
-    return results;
   } catch {
-    return [];
+    // Analytics Admin API no habilitada o sin acceso — usar solo BD
   }
+
+  // Fusionar: API primero, luego BD para los que no aparezcan en API
+  const seen = new Set<string>();
+  const merged: Ga4Property[] = [];
+  for (const p of [...fromApi, ...fromDb]) {
+    if (!seen.has(p.propertyId)) {
+      seen.add(p.propertyId);
+      merged.push(p);
+    }
+  }
+  return merged;
 }
 
 /**
