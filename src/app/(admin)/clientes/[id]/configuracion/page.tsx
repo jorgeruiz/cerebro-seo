@@ -100,27 +100,13 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
             {/* GSC */}
             <div className="bg-card rounded-xl border border-border p-5 space-y-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Google Search Console</p>
-              {site?.gscProperty ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-mono text-foreground">{site.gscProperty}</p>
-                  <p className="text-[10px] font-mono text-ds-green">Conectado</p>
-                </div>
-              ) : (
-                <GscConnectSection clientId={client.id} />
-              )}
+              <GscConnectSection clientId={client.id} initialValue={site?.gscProperty} />
             </div>
 
             {/* GA4 */}
             <div className="bg-card rounded-xl border border-border p-5 space-y-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Google Analytics 4</p>
-              {site?.ga4Property ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-mono text-foreground">{site.ga4Property}</p>
-                  <p className="text-[10px] font-mono text-ds-green">Conectado</p>
-                </div>
-              ) : (
-                <Ga4ConnectSection clientId={client.id} />
-              )}
+              <Ga4ConnectSection clientId={client.id} initialValue={site?.ga4Property} />
             </div>
           </div>
         </section>

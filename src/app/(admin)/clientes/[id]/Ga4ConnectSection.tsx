@@ -8,9 +8,10 @@ import type { Ga4Property } from "./actions";
 
 interface Props {
   clientId: string;
+  initialValue?: string | null;
 }
 
-export function Ga4ConnectSection({ clientId }: Props) {
+export function Ga4ConnectSection({ clientId, initialValue }: Props) {
   const router = useRouter();
   const [properties, setProperties] = useState<Ga4Property[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +21,7 @@ export function Ga4ConnectSection({ clientId }: Props) {
   const [manualValue, setManualValue] = useState("");
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
+  const [changing, setChanging] = useState(!initialValue);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLoad() {
@@ -47,9 +49,26 @@ export function Ga4ConnectSection({ clientId }: Props) {
 
   if (done) {
     return (
-      <div className="h-48 flex flex-col items-center justify-center gap-2">
+      <div className="flex flex-col items-center justify-center gap-2 py-4">
         <CheckCircle2 className="h-8 w-8 text-ds-green" />
         <p className="text-sm text-muted-foreground">Propiedad conectada. Cargando datos…</p>
+      </div>
+    );
+  }
+
+  if (!changing) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-mono text-foreground">{initialValue}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[10px] font-mono text-ds-green">Conectado</p>
+          <button
+            onClick={() => setChanging(true)}
+            className="text-[10px] font-mono text-muted-foreground/60 hover:text-primary transition-colors"
+          >
+            Cambiar →
+          </button>
+        </div>
       </div>
     );
   }
