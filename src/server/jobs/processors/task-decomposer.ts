@@ -78,21 +78,56 @@ async function gatherRepoContext(githubRepo: string): Promise<string> {
 
 // ─── Decomposition ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Eres un planificador de tareas SEO para sitios Next.js. Tu trabajo: descomponer una tarea en pasos concretos y accionables.
+const SYSTEM_PROMPT = `Eres un planificador de tareas SEO. Tu trabajo: descomponer una tarea en pasos concretos y accionables para el equipo de Click Society.
 
-REGLAS:
+REGLAS GENERALES:
 1. Cada paso AI debe tener un prompt AUTOSUFICIENTE que incluya qué archivos tocar, qué cambiar exactamente y criterios de aceptación verificables.
-2. Cada paso HUMAN TAMBIÉN debe tener un prompt: el texto que el usuario puede copiar y pegar en la terminal de Cerebro SEO (o en una terminal local si la actividad está fuera del alcance). Escríbelo en el campo "prompt" del paso, empezando con la instrucción y el comando o prompt listo para usar.
+2. Cada paso HUMAN debe tener un "prompt" con instrucciones claras y completas: texto numerado, paso a paso, listo para que el equipo lo ejecute sin tener que adivinar nada.
 3. Tareas mode=AI: solo pasos type=AI.
 4. Tareas mode=HYBRID: pasos AI y HUMAN intercalados. Los pasos AI van primero (código), luego los HUMAN (revisión/validación).
 5. Tareas mode=HUMAN o kind=SETUP: solo pasos type=HUMAN.
 6. Entre 1 y 5 pasos por tarea. Un paso = una acción atómica.
 7. Los prompts de pasos AI deben mencionar el CLAUDE.md y DESIGN.md del repo si existen.
 
-ALCANCE DE LA TERMINAL DE CEREBRO SEO:
+HERRAMIENTAS DISPONIBLES EN CEREBRO SEO (solo estas — no inventes otras):
+- PageSpeed Insights: https://pagespeed.web.dev/ — auditoría de velocidad y Core Web Vitals (web, gratuito)
+- Google Search Console: datos de clicks, impresiones, posiciones, páginas top, queries top
+- Google Analytics 4: sesiones, usuarios, tasa de rebote, conversiones
+- DataForSEO: rankings SERP, backlinks, auditoría técnica de sitio, keywords
+- Elementor: editor visual para sitios WordPress
+- Yoast SEO / Rank Math: meta tags, schema, sitemap en WordPress
+PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest, moz.com. Estas herramientas NO están disponibles en la agencia.
+
+─── PARA SITIOS PLATFORM=NEXTJS ────────────────────────────────────────────────
+
+TERMINAL DE CEREBRO SEO (solo plataforma Next.js):
 La terminal puede: leer/editar/crear archivos, npm run build, npm run lint, git status/diff/log, npx sharp (convertir imágenes), npx svgo (optimizar SVGs), cat, ls, find, head, tail.
-La terminal NO puede: instalar paquetes globales, correr Docker, acceder a URLs externas, abrir un navegador, correr Lighthouse/WebPageTest, acceder a cuentas de terceros (GSC, Analytics, Ahrefs).
-Si un paso necesita algo fuera del alcance de la terminal, debe ser HUMAN con instrucciones para hacerlo en una terminal local o en una herramienta externa, e incluir el comando o URL específica.
+La terminal NO puede: instalar paquetes globales, correr Docker, acceder a URLs externas, abrir un navegador.
+Para pasos HUMAN en Next.js que implican editar un archivo: incluye en el campo "prompt" el comando copy-paste listo para usar. Ejemplo: "Abre la terminal de Cerebro SEO y ejecuta: cat src/app/page.tsx | head -30" o "Edita docs/audits/log.md — reemplaza [SCORE] con el valor real".
+
+─── PARA SITIOS PLATFORM=WORDPRESS ─────────────────────────────────────────────
+
+IMPORTANTE: Los sitios WordPress NO tienen terminal en Cerebro SEO. NUNCA uses "usa la terminal" ni comandos de shell en pasos de sitios WordPress.
+
+El equipo puede hacer cambios en WordPress vía:
+- WordPress Admin (Dashboard): editar páginas, posts, menús, configuraciones
+- Elementor: editar layouts, textos, imágenes, botones de cualquier página
+- Yoast SEO / Rank Math: editar meta title, meta description, schema, robots
+- WP Admin > Personalizar > CSS Adicional: agregar estilos personalizados
+- Hosting file manager o FTP: modificar archivos PHP/CSS (para cambios de código)
+
+Cerebro WP Plugin instalado en el sitio (endpoints en https://{dominio}/wp-json/cerebro/v1/):
+- GET /capabilities — qué páginas y templates están disponibles
+- GET /pages — árbol de páginas del sitio
+- GET /elementor/{id} — árbol simplificado (textos, imágenes, links, headings) de una página Elementor
+- GET /templates — global widgets y template insertions
+
+Para pasos HUMAN en WordPress:
+- Especifica la ruta exacta en WP Admin (ej: "Ve a Dashboard > Páginas > [nombre página] > Editar con Elementor")
+- Para meta tags: "Ve a Dashboard > [post/página] > Yoast SEO (panel inferior) > Editar meta title y meta description"
+- Para optimización de imágenes: "Descarga la imagen → comprime en https://squoosh.app o https://tinypng.com → sube en WordPress > Media"
+- Para auditoría de velocidad: "Ve a https://pagespeed.web.dev/ y analiza la URL del cliente en modo Móvil"
+- Los pasos HUMAN deben ser tan específicos que el equipo pueda ejecutarlos sin preguntar qué hacer
 
 ANTI-CANIBALIZACIÓN:
 - Revisa el site-map del contexto antes de crear una página nueva. Si ya existe una ruta que cubra el mismo tema o keyword, el paso debe OPTIMIZAR la página existente en vez de crear una nueva.
@@ -119,7 +154,7 @@ RESPONDE ÚNICAMENTE con un JSON array:
     "title": "Título corto del paso (max 120 chars)",
     "type": "AI|HUMAN",
     "complexity": "low|medium|high",
-    "prompt": "Prompt completo autosuficiente para el agente (solo AI, null para HUMAN)",
+    "prompt": "Para AI: prompt autosuficiente. Para HUMAN: instrucciones detalladas paso a paso (NO null — siempre completo).",
     "acceptanceCriteria": ["Criterio 1 verificable", "Criterio 2"]
   }
 ]
@@ -148,6 +183,9 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     ? `\nDATOS DE ORIGEN (módulo ${sourceRef.module}):\n${JSON.stringify(sourceRef.snapshot, null, 2).slice(0, 1500)}\n\nGenera una JUSTIFICACIÓN (qué dato respalda esta tarea) y un IMPACTO ESPERADO (qué mejora se espera) basados en estos datos. Inclúyelos en el título o en los criterios de aceptación del primer paso.`
     : "";
 
+  const platform = task.site?.platform ?? "OTRO";
+  const siteUrl = task.site?.url ?? "";
+
   const userPrompt = `Descompón esta tarea en pasos:
 
 TAREA: ${task.title}
@@ -156,11 +194,13 @@ KIND: ${task.kind}
 MODE: ${task.mode}
 PRIORIDAD: ${task.priority}
 ESFUERZO: ${task.effort}
+PLATFORM: ${platform}
+SITE_URL: ${siteUrl}
 ${sourceContext}
 CONTEXTO DEL SITIO:
 ${repoContext}
 
-Genera los pasos como JSON array.`;
+Genera los pasos como JSON array. Recuerda aplicar las reglas de la sección correcta según PLATFORM=${platform}.`;
 
   try {
     const response = await anthropic.messages.create({

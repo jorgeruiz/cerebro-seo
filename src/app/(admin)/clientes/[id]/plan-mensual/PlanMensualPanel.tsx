@@ -254,6 +254,7 @@ function StepRow({
 
 function TaskCard({
   task,
+  planPreviewUrl,
   onExecute,
   onVoid,
   onRetry,
@@ -261,6 +262,7 @@ function TaskCard({
   isActing,
 }: {
   task: PlanTaskFullView;
+  planPreviewUrl?: string | null;
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
@@ -402,7 +404,23 @@ function TaskCard({
                     </span>
                   )}
                   {run.changedRoutes.length > 0 && (
-                    <span>Rutas: {run.changedRoutes.join(", ")}</span>
+                    <span className="flex items-center gap-1 flex-wrap">
+                      {run.changedRoutes.map((route) =>
+                        planPreviewUrl ? (
+                          <a
+                            key={route}
+                            href={`${planPreviewUrl.replace(/\/$/, "")}${route}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-500 hover:underline flex items-center gap-0.5"
+                          >
+                            <ExternalLink className="h-2.5 w-2.5" />{route}
+                          </a>
+                        ) : (
+                          <span key={route}>{route}</span>
+                        )
+                      )}
+                    </span>
                   )}
                 </div>
               ))}
@@ -458,6 +476,7 @@ function TaskCard({
 function TaskGroup({
   mode,
   tasks,
+  planPreviewUrl,
   onExecute,
   onVoid,
   onRetry,
@@ -466,6 +485,7 @@ function TaskGroup({
 }: {
   mode: string;
   tasks: PlanTaskFullView[];
+  planPreviewUrl?: string | null;
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
@@ -490,6 +510,7 @@ function TaskGroup({
           <TaskCard
             key={task.id}
             task={task}
+            planPreviewUrl={planPreviewUrl}
             onExecute={onExecute}
             onVoid={onVoid}
             onRetry={onRetry}
@@ -823,6 +844,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
                   key={g.mode}
                   mode={g.mode}
                   tasks={g.tasks}
+                  planPreviewUrl={plan.previewUrl}
                   onExecute={handleExecute}
                   onVoid={handleVoid}
                   onRetry={handleRetry}
