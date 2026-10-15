@@ -67,16 +67,17 @@ export async function actionAddToPlan(
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const slug = client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30);
 
+  const planBranchName = `plan/${slug}-${month}`;
   const plan = await prisma.monthlyPlan.upsert({
     where: { clientId_month: { clientId, month } },
     create: {
       clientId,
       month,
       status: "PLANNING",
-      branchName: `plan/${slug}-${month}`,
+      branchName: planBranchName,
       createdById: session.user.email ?? null,
     },
-    update: {},
+    update: { branchName: planBranchName },
   });
 
   // Deduplication: check if a task with the same sourceRef already exists in this plan

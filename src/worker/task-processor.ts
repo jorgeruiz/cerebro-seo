@@ -72,9 +72,21 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
     await failTask(taskId, "Site no tiene githubRepo configurado.");
     return;
   }
-  if (!plan.branchName) {
-    await failTask(taskId, "Plan no tiene branchName configurado.");
-    return;
+  let branchName = plan.branchName;
+  if (!branchName) {
+    // Auto-heal: plan creado antes de que branchName existiera en el schema
+    const client = await prisma.client.findUnique({
+      where: { id: plan.clientId },
+      select: { name: true },
+    });
+    const slug = (client?.name ?? "cliente")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 30);
+    branchName = `plan/${slug}-${plan.month}`;
+    await prisma.monthlyPlan.update({ where: { id: plan.id }, data: { branchName } });
+    console.log(`[plan-task] branchName auto-healed → ${branchName}`);
   }
 
   // ── 2. Adquirir candados (plan + repo) ─────────────────────────────
@@ -99,11 +111,11 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
 
   try {
     // ── 3. Checkout rama del plan ───────────────────────────────────────
-    console.log(`[plan-task] Ensuring plan branch ${plan.branchName} for ${site.githubRepo}...`);
-    const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, plan.branchName);
+    console.log(`[plan-task] Ensuring plan branch ${branchName} for ${site.githubRepo}...`);
+    const dir = await ensureRepoPlanBranch(site.githubRepo, site.defaultBranch, branchName);
 
     // ── 4. Merge default → plan branch ─────────────────────────────────
-    console.log(`[plan-task] Merging ${site.defaultBranch} into ${plan.branchName}...`);
+    console.log(`[plan-task] Merging ${site.defaultBranch} into ${branchName}...`);
     const mergeResult = mergeDefaultIntoPlan(dir, site.defaultBranch);
 
     if (!mergeResult.ok) {
@@ -238,7 +250,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         // Commit if there are changes
         let sha: string | null = null;
         if (hasDiff(dir)) {
-          sha = commitStep(dir, plan.branchName, taskId, step.title);
+          sha = commitStep(dir, branchName, taskId, step.title);
           if (sha) allShas.push(sha);
         } else if (!structured.noChangeReason) {
           throw new Error("NO_CHANGES: el agente no hizo cambios sin justificación");
@@ -312,7 +324,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         const prBody = await buildPlanPRBody(plan.id);
         const pr = await createOrUpdatePlanPR({
           githubRepo: site.githubRepo,
-          planBranch: plan.branchName,
+          planBranch: branchName,
           defaultBranch: site.defaultBranch,
           title: `Plan ${plan.month}`,
           body: prBody,

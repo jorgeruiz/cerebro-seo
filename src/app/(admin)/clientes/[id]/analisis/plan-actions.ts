@@ -131,6 +131,7 @@ export async function actionSendToPlan(
     update: {
       // Don't overwrite existing plan fields, just update analysisId if newer
       analysisId,
+      branchName: `plan/${clientSlug(client.name)}-${month}`,
     },
   });
 
