@@ -105,6 +105,9 @@ export async function actionAddToPlan(
   // Create task
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
+  // Plataformas no-NEXTJS: forzar HUMAN — el decomposer generará instrucciones manuales
+  const effectiveMode = site.platform !== "NEXTJS" && site.platform !== null ? "HUMAN" : mode;
+
   const task = await prisma.planTask.create({
     data: {
       planId: plan.id,
@@ -114,7 +117,7 @@ export async function actionAddToPlan(
       objective,
       prompt: "", // filled by decomposition
       acceptanceCriteria: [],
-      mode: mode as "AI" | "HYBRID" | "HUMAN",
+      mode: effectiveMode as "AI" | "HYBRID" | "HUMAN",
       kind: kind as "CONTENT" | "CODE" | "SETUP",
       priority,
       effort: effort as "LOW" | "MEDIUM" | "HIGH",

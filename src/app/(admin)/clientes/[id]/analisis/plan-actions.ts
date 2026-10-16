@@ -159,7 +159,9 @@ export async function actionSendToPlan(
 
     // Map candidate kind to Prisma enum
     const kind = candidate.kind === "SETUP" ? "SETUP" : candidate.kind === "CONTENT" ? "CONTENT" : "CODE";
-    const mode = candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
+    // Plataformas no-NEXTJS: forzar HUMAN — el decomposer generará instrucciones manuales (WP Admin, etc.)
+    const isNonNextJs = eligibility.platform !== "NEXTJS";
+    const mode = isNonNextJs ? "HUMAN" : candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
     const effort = candidate.effort === "LOW" ? "LOW" : candidate.effort === "HIGH" ? "HIGH" : "MEDIUM";
 
     const task = await prisma.planTask.create({

@@ -16,7 +16,10 @@ export interface EligibilityResult {
 
 /**
  * Determina si una candidata se puede enviar al plan dado el estado de elegibilidad.
- * SETUP y HUMAN siempre se pueden enviar. AI y HYBRID requieren NEXTJS + repo.
+ * SETUP y HUMAN siempre se pueden enviar.
+ * Para plataformas no-NEXTJS (WordPress, OTRO): se permite enviar pero el modo
+ * se forzará a HUMAN en el servidor — el decomposer generará instrucciones manuales.
+ * AI y HYBRID en Next.js requieren repo configurado.
  * Memory is checked at execution time by the worker — not blocked here,
  * but the UI shows what's missing.
  */
@@ -24,11 +27,9 @@ export function canSendCandidate(
   candidate: { mode: string; kind: string },
   eligibility: EligibilityResult
 ): { allowed: boolean; reason?: string } {
-  if (candidate.kind === "SETUP" || candidate.mode === "HUMAN") {
-    return { allowed: true };
-  }
+  // WordPress y otras plataformas: siempre permitido, el mode se fuerza a HUMAN al enviar
   if (eligibility.platform !== "NEXTJS") {
-    return { allowed: false, reason: eligibility.reason ?? "Plataforma no es Next.js" };
+    return { allowed: true };
   }
   if (!eligibility.hasRepo) {
     return { allowed: false, reason: "No hay repositorio GitHub configurado." };

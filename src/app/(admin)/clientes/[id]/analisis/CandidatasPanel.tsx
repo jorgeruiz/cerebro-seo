@@ -277,7 +277,7 @@ export function CandidatasPanel({ clientId, analysisId, candidates }: Props) {
       {eligibility?.reason && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
           <p className="text-xs text-yellow-600">
-            ⚠ {eligibility.reason} Las tareas SETUP y HUMAN se pueden enviar de todas formas.
+            ⚠ {eligibility.reason} Todas las tareas se enviarán como tareas manuales (HUMAN) con instrucciones para WordPress Admin / PageSpeed Insights.
           </p>
         </div>
       )}
