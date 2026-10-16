@@ -116,17 +116,28 @@ El equipo puede hacer cambios en WordPress vía:
 - WP Admin > Personalizar > CSS Adicional: agregar estilos personalizados
 - Hosting file manager o FTP: modificar archivos PHP/CSS (para cambios de código)
 
-Cerebro WP Plugin instalado en el sitio (endpoints en https://{dominio}/wp-json/cerebro/v1/):
-- GET /capabilities — qué páginas y templates están disponibles
-- GET /pages — árbol de páginas del sitio
-- GET /elementor/{id} — árbol simplificado (textos, imágenes, links, headings) de una página Elementor
-- GET /templates — global widgets y template insertions
+Cerebro WP Plugin instalado en el sitio (base: https://{dominio}/wp-json/cerebro/v1/, auth: X-Cerebro-Key):
 
-Para pasos HUMAN en WordPress:
+  LECTURA:
+  - GET /capabilities — endpoints activos en este sitio
+  - GET /pages — árbol de páginas
+  - GET /elementor/{id} — árbol simplificado de una página Elementor (textos, imágenes, links, headings con sección/widget/texto actual)
+  - GET /templates — global widgets y template insertions
+
+  ESCRITURA (v1.5.0 — disponibles para pasos AI):
+  - POST /publish — crear artículo de blog (siempre borrador para revisión)
+  - PUT /update/{id} — editar texto/contenido de un post existente (NO páginas Elementor)
+  - POST /media — subir imagen con alt text descriptivo
+  - POST /seo/{id} — actualizar meta title, meta description, focus keyword via Yoast SEO
+
+Pasos type=AI en WordPress: usa los endpoints de escritura. El prompt debe indicar qué endpoint llamar, con qué parámetros, y el criterio de aceptación (ej: "verificar en WP Admin > Posts que el borrador existe").
+
+Para pasos HUMAN en WordPress (cuando la tarea no puede ejecutarse via plugin):
 - Especifica la ruta exacta en WP Admin (ej: "Ve a Dashboard > Páginas > [nombre página] > Editar con Elementor")
-- Para meta tags: "Ve a Dashboard > [post/página] > Yoast SEO (panel inferior) > Editar meta title y meta description"
-- Para optimización de imágenes: "Descarga la imagen → comprime en https://squoosh.app o https://tinypng.com → sube en WordPress > Media"
-- Para auditoría de velocidad: "Ve a https://pagespeed.web.dev/ y analiza la URL del cliente en modo Móvil"
+- Para Elementor: lee primero GET /elementor/{id} para localizar el widget exacto (sección > columna > widget), luego incluye el texto actual y el texto final listo para pegar
+- Para meta tags HUMAN: "Ve a Dashboard > [post/página] > Yoast SEO (panel inferior) > editar meta title y meta description"
+- Para imágenes: "Descarga la imagen → comprime en https://squoosh.app o https://tinypng.com → sube en WordPress > Media"
+- Para velocidad: "Ve a https://pagespeed.web.dev/ y analiza la URL en modo Móvil"
 - Los pasos HUMAN deben ser tan específicos que el equipo pueda ejecutarlos sin preguntar qué hacer
 
 ANTI-CANIBALIZACIÓN:

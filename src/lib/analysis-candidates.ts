@@ -72,39 +72,85 @@ export const analysisResultSchema = z.object({
   candidatas: z.array(candidateSchema),
 });
 
-/**
- * Enforce mode rules post-Claude:
- * - Performance, refactors, layout, JS loading changes → HYBRID (never AI)
- */
-const HYBRID_FORCE_PATTERNS = [
+// ─── Patrones por plataforma ─────────────────────────────────────────────────
+
+/** Next.js: performance/bundle → forzar HYBRID (nunca AI) */
+const NEXTJS_HYBRID_PATTERNS = [
   /performance/i, /speed\s*index/i, /tbt/i, /fcp/i, /lcp/i, /cls/i,
   /core\s*web\s*vitals/i, /lighthouse/i, /bundle/i, /lazy.?load/i,
   /code.?split/i, /refactor/i, /layout/i, /js\s*(sin\s*usar|unused)/i,
   /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
 ];
 
+/**
+ * WordPress: actividades que el plugin NO puede hacer → forzar HUMAN.
+ * Cubre Elementor (edición visual), landings, templates, diseño, performance, plugins.
+ * Catálogo completo en docs/catalogo-tareas.md.
+ */
+const WP_FORCE_HUMAN_PATTERNS = [
+  /elementor/i, /landing/i, /plantilla/i, /template/i,
+  /performance/i, /velocidad/i, /pagespeed/i, /lcp/i, /fcp/i, /tbt/i, /cls/i,
+  /plugin/i, /tema\b/i, /theme/i, /header/i, /footer/i,
+  /diseño/i, /layout/i, /cta\b/i, /button/i, /botón/i,
+  /slider/i, /carousel/i, /galería/i, /gallery/i,
+  /css\b/i, /estilo/i, /tipograf/i,
+];
+
+/**
+ * WordPress: actividades que el plugin SÍ puede hacer → permitir AI.
+ * v1.5.0: blog (POST /publish), meta Yoast (POST /seo/{id}),
+ *         imágenes con alt (POST /media), editar post (PUT /update/{id}).
+ */
+const WP_ALLOW_AI_PATTERNS = [
+  /blog/i, /artículo/i, /articulo/i, /post\b/i, /publicar/i,
+  /meta\s*(title|description|tag)/i, /yoast/i, /seo.*título/i, /título.*seo/i,
+  /\balt\b/i, /imagen.*alt/i, /alt.*imagen/i,
+  /focus\s*keyword/i, /keyword.*yoast/i,
+];
+
+/**
+ * Aplica reglas de modo post-Claude según el catálogo oficial (docs/catalogo-tareas.md).
+ *
+ * WordPress:
+ *  - HYBRID nunca permitido → HUMAN
+ *  - AI permitido solo para: blog, meta Yoast, alt de imágenes (plugin v1.5.0)
+ *  - Todo lo demás (Elementor, landing, performance, plugins) → HUMAN
+ *
+ * Next.js:
+ *  - Performance/bundle/refactor → HYBRID (nunca AI)
+ */
 export function enforceModeRules(candidate: AnalysisCandidate, platform?: string | null): AnalysisCandidate {
-  // Hard override: plataformas no-NEXTJS → siempre HUMAN sin excepción
-  if (platform && platform !== "NEXTJS") {
-    if (candidate.mode !== "HUMAN") {
-      return {
-        ...candidate,
-        mode: "HUMAN",
-        modeReason: `Plataforma ${platform}: todas las tareas son manuales (WP Admin / Elementor / Yoast)`,
-      };
+  if (platform === "WORDPRESS" || platform === "MIGRACION") {
+    // HYBRID nunca existe en WordPress
+    if (candidate.mode === "HYBRID") {
+      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no HYBRID — convierte a HUMAN guiado" };
+    }
+
+    if (candidate.mode === "AI") {
+      const text = `${candidate.titulo} ${candidate.descripcion}`;
+      const isManualActivity = WP_FORCE_HUMAN_PATTERNS.some((p) => p.test(text));
+      const isPluginActivity = WP_ALLOW_AI_PATTERNS.some((p) => p.test(text));
+
+      if (isManualActivity && !isPluginActivity) {
+        return {
+          ...candidate,
+          mode: "HUMAN",
+          modeReason: "WordPress: actividad requiere Elementor/diseño/performance — HUMAN guiado con instrucciones exactas",
+        };
+      }
+      // isPluginActivity → AI permitido (blog, meta, alt)
     }
     return candidate;
   }
 
-  // NEXTJS: performance tasks → HYBRID (never AI)
+  // Next.js: performance/bundle → HYBRID (nunca AI)
   if (candidate.mode === "AI") {
     const text = `${candidate.titulo} ${candidate.descripcion}`;
-    const isPerformance = HYBRID_FORCE_PATTERNS.some((p) => p.test(text));
-    if (isPerformance) {
+    if (NEXTJS_HYBRID_PATTERNS.some((p) => p.test(text))) {
       return {
         ...candidate,
         mode: "HYBRID",
-        modeReason: `${candidate.modeReason} [Forzado a HYBRID: cambios de performance/bundle requieren verificación Lighthouse antes/después]`,
+        modeReason: `${candidate.modeReason} [Auto: performance/bundle → HYBRID, requiere verificación visual]`,
       };
     }
   }

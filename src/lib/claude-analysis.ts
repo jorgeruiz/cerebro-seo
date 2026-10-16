@@ -76,18 +76,32 @@ PRINCIPIOS:
 CANDIDATAS — PLATAFORMA (LEE ESTO PRIMERO, ES OBLIGATORIO):
 El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OTRO".
 
-▶ Si Platform = WORDPRESS, MIGRACION o OTRO (cualquier valor distinto de NEXTJS):
-  - TODOS los candidatos DEBEN ser mode=HUMAN. Sin excepciones. Ni una sola candidata AI o HYBRID.
-  - Las tareas de WordPress son ejecutadas manualmente por el equipo via:
-    • Meta titles/descriptions → WP Admin > Posts/Páginas > editar > Yoast SEO / Rank Math
-    • Contenido nuevo (blog, landing) → WP Admin > Posts/Páginas > Añadir nuevo > Gutenberg o Elementor
-    • Optimización de contenido existente → WP Admin > editar página/post > Elementor
-    • Imágenes → descargar, optimizar en squoosh.app, subir en WP Admin > Medios
-    • Schema JSON-LD → Yoast SEO / Rank Math / plugin Schema Pro
-    • Velocidad → revisar en pagespeed.web.dev, corregir con WP Rocket / Autoptimize / Smush
-    • CSS/estilos → WP Admin > Apariencia > Personalizar > CSS Adicional
-    • Enlazado interno → editar posts en Gutenberg/Elementor y agregar links manualmente
-  - kind=CODE está permitido (ej: "Actualizar meta titles via Yoast") pero mode siempre HUMAN.
+▶ Si Platform = WORDPRESS o MIGRACION:
+  El Plugin Cerebro v1.5.0 está instalado en el sitio. Tiene endpoints de ESCRITURA reales.
+  Usa esto para determinar el mode de cada candidata:
+
+  MODE = AI (el plugin puede ejecutarlo sin intervención humana):
+    • Crear artículo de blog → POST /publish (siempre como borrador para revisión)
+    • Meta title + meta description → POST /seo/{id} via Yoast SEO
+    • Focus keyword Yoast → POST /seo/{id}
+    • Subir imagen con alt text → POST /media
+    • Editar texto/H1 de un POST existente (no páginas Elementor) → PUT /update/{id}
+
+  MODE = HUMAN (el plugin NO puede hacerlo — requiere intervención humana):
+    • H1, H2, textos dentro de páginas Elementor → WP Admin > Elementor
+    • Imágenes dentro de páginas → Elementor > Widget Image
+    • CTAs, botones → Elementor > Widget Button
+    • Landings nuevas, headers, footers → Elementor Theme Builder
+    • Performance, velocidad, Core Web Vitals → pagespeed.web.dev + WP Rocket/Autoptimize
+    • Plugins (instalar, configurar) → WP Admin > Plugins
+    • Tema, CSS personalizado → WP Admin > Apariencia > Personalizar
+    • Schema JSON-LD → Yoast SEO / plugin Schema Pro
+
+  MODE = HYBRID: NO EXISTE en WordPress. Si dudas entre AI y HUMAN, usa HUMAN.
+  Criterio práctico: si el plugin v1.5.0 tiene endpoint de escritura para esa acción → AI. Si no → HUMAN.
+
+▶ Si Platform = OTRO (cualquier valor distinto de NEXTJS, WORDPRESS, MIGRACION):
+  - TODOS los candidatos DEBEN ser mode=HUMAN. Sin excepciones.
 
 ▶ Si Platform = NEXTJS:
   - Usa el criterio normal de AI/HYBRID/HUMAN:
