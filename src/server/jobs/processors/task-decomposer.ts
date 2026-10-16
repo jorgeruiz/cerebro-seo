@@ -11,6 +11,7 @@ import { z } from "zod";
 import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
+import { getWpCapabilities } from "@/lib/wp-proxy-client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -177,13 +178,25 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
 
   const task = await prisma.planTask.findUniqueOrThrow({
     where: { id: taskId },
-    include: { site: true },
+    include: { site: { include: { client: { select: { cerebroClientId: true } } } } },
   });
 
-  // Gather repo context
+  // Gather repo context (Next.js only)
   let repoContext = "No hay repositorio configurado.";
   if (task.site?.githubRepo) {
     repoContext = await gatherRepoContext(task.site.githubRepo);
+  }
+
+  // Gather WP capabilities via Cerebro web proxy (WordPress only)
+  let wpCapabilitiesContext = "";
+  const platform = task.site?.platform ?? "OTRO";
+  if ((platform === "WORDPRESS" || platform === "MIGRACION") && task.site?.client?.cerebroClientId) {
+    const caps = await getWpCapabilities(task.site.client.cerebroClientId);
+    if (caps && caps.endpoints.length > 0) {
+      wpCapabilitiesContext = `\nWP CAPABILITIES (en vivo desde GET /capabilities):\nEndpoints activos: ${caps.endpoints.join(", ")}\nNota: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;
+    } else {
+      wpCapabilitiesContext = `\nWP CAPABILITIES: no disponibles (proxy Cerebro web no responde o cliente sin credenciales).\nUsando catálogo estático v1.5.0 como respaldo.\n`;
+    }
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -194,7 +207,6 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     ? `\nDATOS DE ORIGEN (módulo ${sourceRef.module}):\n${JSON.stringify(sourceRef.snapshot, null, 2).slice(0, 1500)}\n\nGenera una JUSTIFICACIÓN (qué dato respalda esta tarea) y un IMPACTO ESPERADO (qué mejora se espera) basados en estos datos. Inclúyelos en el título o en los criterios de aceptación del primer paso.`
     : "";
 
-  const platform = task.site?.platform ?? "OTRO";
   const siteUrl = task.site?.url ?? "";
 
   const userPrompt = `Descompón esta tarea en pasos:
@@ -207,7 +219,7 @@ PRIORIDAD: ${task.priority}
 ESFUERZO: ${task.effort}
 PLATFORM: ${platform}
 SITE_URL: ${siteUrl}
-${sourceContext}
+${wpCapabilitiesContext}${sourceContext}
 CONTEXTO DEL SITIO:
 ${repoContext}
 

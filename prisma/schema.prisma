@@ -114,7 +114,6 @@ model Site {
   defaultBranch      String        @default("main")
   gscProperty        String?
   ga4Property        String?
-  wpApiKey           String?       // Clave del plugin cerebro-wp (header X-Cerebro-Key)
 
   audits          Audit[]
   pageMetrics     PageMetric[]

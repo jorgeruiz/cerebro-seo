@@ -176,6 +176,38 @@ Cerebro puede notificar al equipo en chat o disparar acciones.
 
 ---
 
+## 5b. Credenciales WordPress — regla de seguridad
+
+**Cerebro SEO nunca almacena credenciales de WordPress.**
+
+Las API keys del plugin Cerebro WP (`X-Cerebro-Key`) viven **únicamente** en Cerebro web, cifradas en la tabla `WpSiteCredential`. Cerebro SEO no tiene acceso directo al plugin WP ni almacena las keys en ningún campo de la base de datos.
+
+**Flujo de acceso al plugin WP desde Cerebro SEO:**
+```
+Cerebro SEO (decomposer/worker)
+    │  POST /api/wp-plugin/proxy
+    │  Authorization: Bearer {CEREBRO_INTERNAL_SECRET}
+    │  Body: { cerebroClientId, endpoint }
+    ▼
+Cerebro web (proxy)
+    │  Lee WpSiteCredential para cerebroClientId
+    │  GET/POST https://{dominio}/wp-json/cerebro/v1/{endpoint}
+    │  X-Cerebro-Key: {key cifrada}
+    ▼
+Plugin WP en el sitio del cliente
+```
+
+**Implementación en Cerebro SEO:** `src/lib/wp-proxy-client.ts`
+- `getWpCapabilities(cerebroClientId)` — con caché 24 h en Redis
+- `getWpPages(cerebroClientId)`
+- `getWpElementorPage(cerebroClientId, pageId)`
+
+**Fallback:** si el proxy no responde, el decomposer usa el catálogo estático de `docs/catalogo-tareas.md` y lo indica en el contexto de la tarea.
+
+**Pendiente de implementar en Cerebro web:** `POST /api/wp-plugin/proxy` (actualmente retorna null en silencio).
+
+---
+
 ## 6. Branding y experiencia visual
 
 Cerebro SEO debe sentirse como una extensión natural de Cerebro:
