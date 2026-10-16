@@ -83,7 +83,20 @@ const HYBRID_FORCE_PATTERNS = [
   /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
 ];
 
-export function enforceModeRules(candidate: AnalysisCandidate): AnalysisCandidate {
+export function enforceModeRules(candidate: AnalysisCandidate, platform?: string | null): AnalysisCandidate {
+  // Hard override: plataformas no-NEXTJS → siempre HUMAN sin excepción
+  if (platform && platform !== "NEXTJS") {
+    if (candidate.mode !== "HUMAN") {
+      return {
+        ...candidate,
+        mode: "HUMAN",
+        modeReason: `Plataforma ${platform}: todas las tareas son manuales (WP Admin / Elementor / Yoast)`,
+      };
+    }
+    return candidate;
+  }
+
+  // NEXTJS: performance tasks → HYBRID (never AI)
   if (candidate.mode === "AI") {
     const text = `${candidate.titulo} ${candidate.descripcion}`;
     const isPerformance = HYBRID_FORCE_PATTERNS.some((p) => p.test(text));

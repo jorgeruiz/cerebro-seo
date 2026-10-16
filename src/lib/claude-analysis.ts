@@ -73,10 +73,27 @@ PRINCIPIOS:
 - Prioriza por impacto real en tráfico y negocio
 - Si un MonthlyCycle NO es del mes actual, trátalo como vencido: no uses sus deadlines, solo como antecedente histórico
 
-CANDIDATAS — CRITERIO DE MODE:
-- AI: blog en sitio con bootstrap, meta tags, H1, inserción de keywords, schema JSON-LD, enlazado interno. Solo cambios puramente de texto/código que NO requieran verificación visual.
-- HYBRID: landings con plantilla, performance (Speed Index, TBT, FCP, LCP, CLS, bundle size, lazy loading, code splitting, CSS/JS sin usar), refactors, cambios de layout o de carga de JS. Criterio: "Lighthouse antes/después sin regresiones". NUNCA usar AI para performance.
-- HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), sitios no NEXTJS, configuración de plataformas, verificación de datos sospechosos (0 rankings con sitio publicado, GSC sin datos).
+CANDIDATAS — PLATAFORMA (LEE ESTO PRIMERO, ES OBLIGATORIO):
+El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OTRO".
+
+▶ Si Platform = WORDPRESS, MIGRACION o OTRO (cualquier valor distinto de NEXTJS):
+  - TODOS los candidatos DEBEN ser mode=HUMAN. Sin excepciones. Ni una sola candidata AI o HYBRID.
+  - Las tareas de WordPress son ejecutadas manualmente por el equipo via:
+    • Meta titles/descriptions → WP Admin > Posts/Páginas > editar > Yoast SEO / Rank Math
+    • Contenido nuevo (blog, landing) → WP Admin > Posts/Páginas > Añadir nuevo > Gutenberg o Elementor
+    • Optimización de contenido existente → WP Admin > editar página/post > Elementor
+    • Imágenes → descargar, optimizar en squoosh.app, subir en WP Admin > Medios
+    • Schema JSON-LD → Yoast SEO / Rank Math / plugin Schema Pro
+    • Velocidad → revisar en pagespeed.web.dev, corregir con WP Rocket / Autoptimize / Smush
+    • CSS/estilos → WP Admin > Apariencia > Personalizar > CSS Adicional
+    • Enlazado interno → editar posts en Gutenberg/Elementor y agregar links manualmente
+  - kind=CODE está permitido (ej: "Actualizar meta titles via Yoast") pero mode siempre HUMAN.
+
+▶ Si Platform = NEXTJS:
+  - Usa el criterio normal de AI/HYBRID/HUMAN:
+    • AI: blog, meta tags, H1, inserción de keywords, schema JSON-LD, enlazado interno. Solo texto/código sin verificación visual.
+    • HYBRID: performance (Speed Index, TBT, FCP, LCP, CLS, bundle, lazy loading, refactors, layout). Criterio: "antes/después sin regresiones". NUNCA AI para performance.
+    • HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), configuración de plataformas, verificación de datos sospechosos.
 
 CANDIDATAS — KIND:
 - CONTENT: blog, landing, página nueva, optimización de contenido existente
@@ -155,6 +172,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   context: string;
   preconditions: Awaited<ReturnType<typeof checkPreconditions>>;
   hasGsc: boolean;
+  platform: string | null;
 }> {
   // Datos base del cliente
   const client = await prisma.client.findUniqueOrThrow({
@@ -424,6 +442,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     context: lines.join("\n"),
     preconditions,
     hasGsc: !!site?.gscProperty,
+    platform: site?.platform ?? null,
   };
 }
 
@@ -435,7 +454,7 @@ export async function generateClientAnalysis(
 ): Promise<{ analysis: AnalysisResult; analysisId: string }> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const { context, preconditions, hasGsc } = await gatherUnifiedContext(clientId);
+  const { context, preconditions, hasGsc, platform } = await gatherUnifiedContext(clientId);
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -444,7 +463,15 @@ export async function generateClientAnalysis(
       { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
     ],
     messages: [
-      { role: "user", content: `Analiza el siguiente contexto SEO y genera el diagnóstico ejecutivo + candidatas para el Plan mensual:\n\n${context}` },
+      {
+        role: "user",
+        content: [
+          platform && platform !== "NEXTJS"
+            ? `⚠ PLATAFORMA: ${platform}. TODOS los candidatos deben ser mode=HUMAN sin excepción. No uses AI ni HYBRID.\n\n`
+            : `PLATAFORMA: ${platform ?? "no detectada"} (Next.js — puedes usar AI/HYBRID/HUMAN según corresponda).\n\n`,
+          `Analiza el siguiente contexto SEO y genera el diagnóstico ejecutivo + candidatas para el Plan mensual:\n\n${context}`,
+        ].join(""),
+      },
     ],
   });
 
@@ -519,9 +546,9 @@ export async function generateClientAnalysis(
     };
   }
 
-  // Enforce mode rules (performance → HYBRID, never AI)
+  // Enforce mode rules: plataforma no-NEXTJS → HUMAN; performance en NEXTJS → HYBRID
   if (analysis.candidatas) {
-    analysis.candidatas = analysis.candidatas.map(enforceModeRules);
+    analysis.candidatas = analysis.candidatas.map((c) => enforceModeRules(c, platform));
   }
 
   // Add setup candidates if preconditions are missing
