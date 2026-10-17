@@ -14,6 +14,7 @@
  * 8. Liberar candado.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
@@ -21,6 +22,8 @@ import { createCanUseTool } from "./agent-permissions";
 import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
+import { CLAUDE_MODEL } from "@/lib/anthropic-config";
+import { publishWpPost, updateWpSeo } from "@/lib/wp-proxy-client";
 import {
   classifyMemory,
   detectCatalogSections,
@@ -59,7 +62,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
   const task = await prisma.planTask.findUniqueOrThrow({
     where: { id: taskId },
     include: {
-      site: true,
+      site: { include: { client: { select: { cerebroClientId: true } } } },
       plan: { select: { id: true, clientId: true, branchName: true, month: true } },
       steps: { orderBy: { order: "asc" } },
     },
@@ -67,6 +70,12 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
 
   const site = task.site;
   const plan = task.plan;
+
+  // ── WordPress path — no repo needed, executes via WP plugin proxy ──────
+  if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
+    await processWpTask(taskId, task, plan);
+    return;
+  }
 
   if (!site.githubRepo) {
     await failTask(taskId, "Site no tiene githubRepo configurado.");
@@ -665,6 +674,333 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
     await failRun(run.id, errMsg);
     await failTask(taskId, errMsg);
   }
+}
+
+// ─── WordPress execution engine ──────────────────────────────────────────────
+
+interface WpStepAction {
+  action: "publish" | "seo" | "update" | "media";
+  endpoint: string;
+  payload: Record<string, unknown>;
+  content_brief?: string;
+}
+
+/**
+ * Procesador de tareas para sitios WordPress.
+ * No clona repositorios — ejecuta vía plugin Cerebro WP a través del proxy de Cerebro web.
+ */
+async function processWpTask(
+  taskId: string,
+  task: {
+    title: string;
+    kind: string;
+    category: string;
+    mode: string;
+    resultUrls: string[];
+    steps: Array<{
+      id: string;
+      order: number;
+      title: string;
+      type: string;
+      status: string;
+      prompt: string | null;
+      acceptanceCriteria: string[];
+      notes: string | null;
+    }>;
+    site: {
+      platform: string | null;
+      client: { cerebroClientId: string | null } | null;
+    };
+    objective: string;
+  },
+  plan: { id: string; clientId: string },
+): Promise<void> {
+  const cerebroClientId = task.site.client?.cerebroClientId ?? null;
+
+  const lock = await acquirePlanLock(plan.id);
+  if (!lock.acquired) {
+    console.log(`[wp-task] Plan ${plan.id} locked — re-queuing`);
+    throw new Error("PLAN_LOCKED");
+  }
+
+  await prisma.planTask.update({ where: { id: taskId }, data: { status: "RUNNING" } });
+
+  const resultUrls = [...task.resultUrls];
+
+  try {
+    for (const step of task.steps) {
+      if (step.status === "DONE" || step.status === "SKIPPED") continue;
+
+      if (step.type === "HUMAN") {
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: { status: "WAITING_HUMAN" },
+        });
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: { status: "WAITING_HUMAN", resultUrls },
+        });
+        return;
+      }
+
+      // type=AI — execute via WP proxy
+      await prisma.planStep.update({ where: { id: step.id }, data: { status: "RUNNING" } });
+
+      const run = await prisma.taskRun.create({
+        data: { taskId, stepId: step.id, kind: "AUTO", status: "RUNNING" },
+      });
+
+      try {
+        if (!cerebroClientId) {
+          throw new Error("Site no tiene cerebroClientId — necesario para llamar al plugin WP via proxy");
+        }
+
+        const stepResult = await executeWpAiStep(cerebroClientId, task, step, taskId);
+
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: {
+            status: "DONE",
+            notes: step.notes ? `${step.notes}\n---\n${stepResult.notes}` : stepResult.notes,
+          },
+        });
+
+        if (stepResult.previewUrl) {
+          resultUrls.push(stepResult.previewUrl);
+        }
+
+        await prisma.taskRun.update({
+          where: { id: run.id },
+          data: {
+            status: "SUCCEEDED",
+            logTail: stepResult.notes.slice(0, 2000),
+            finishedAt: new Date(),
+          },
+        });
+
+        console.log(`[wp-task] Step ${step.order} ✓ ${stepResult.notes.slice(0, 80)}`);
+      } catch (stepErr) {
+        const errMsg = stepErr instanceof Error ? stepErr.message : String(stepErr);
+        console.error(`[wp-task] Step ${step.order} ✗: ${errMsg}`);
+
+        await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+        await failRun(run.id, errMsg);
+        await failTask(taskId, `Paso WP ${step.order} falló: ${errMsg}`);
+        await prisma.planTask.update({ where: { id: taskId }, data: { resultUrls } });
+        return;
+      }
+    }
+
+    // All steps done
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "DONE", completedAt: new Date(), resultUrls },
+    });
+    console.log(`[wp-task] ✓ Task "${task.title}" → DONE (${resultUrls.length} URLs)`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg === "PLAN_LOCKED") throw err;
+    console.error(`[wp-task] ✗ Task "${task.title}" failed:`, errMsg);
+    await failTask(taskId, errMsg);
+  } finally {
+    await lock.release();
+  }
+}
+
+/**
+ * Ejecuta un step AI de WordPress: parsea la acción estructurada del prompt
+ * y llama al endpoint correcto del plugin WP via proxy.
+ */
+async function executeWpAiStep(
+  cerebroClientId: string,
+  task: { title: string; objective: string; kind: string; category: string },
+  step: { title: string; prompt: string | null; acceptanceCriteria: string[]; notes: string | null },
+  taskId: string,
+): Promise<{ notes: string; previewUrl?: string }> {
+  // Parse structured action from step.prompt (decomposer sets JSON for WP AI steps)
+  let action: WpStepAction | null = null;
+  if (step.prompt) {
+    try {
+      const cleaned = step.prompt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+      action = JSON.parse(cleaned) as WpStepAction;
+    } catch {
+      // Not structured JSON — fall through to heuristic
+    }
+  }
+
+  // Fallback: infer action from task kind/category
+  if (!action?.action) {
+    const isContent = task.kind === "CONTENT" || task.category === "blog";
+    const isMeta = task.category === "meta" || task.category === "seo";
+    if (isContent) {
+      action = {
+        action: "publish",
+        endpoint: "POST /publish",
+        payload: {},
+        content_brief: step.prompt ?? task.objective,
+      };
+    } else if (isMeta) {
+      action = {
+        action: "seo",
+        endpoint: "POST /seo/0",
+        payload: { page_id: 0 },
+        content_brief: step.prompt ?? task.objective,
+      };
+    } else {
+      // Stage as proposal — don't fail the step
+      return {
+        notes: `wp:staged — acción no reconocida para categoria "${task.category}". Prompt: ${(step.prompt ?? "").slice(0, 400)}`,
+      };
+    }
+  }
+
+  if (action.action === "publish") {
+    return executeWpPublish(cerebroClientId, task, action, taskId);
+  }
+  if (action.action === "seo") {
+    return executeWpSeo(cerebroClientId, task, action, taskId);
+  }
+
+  // update / media — stage as proposal for motor mínimo
+  return {
+    notes: `wp:staged — acción "${action.action}" (${action.endpoint}) pendiente de implementar. Payload: ${JSON.stringify(action.payload).slice(0, 400)}`,
+  };
+}
+
+/** Genera artículo de blog con Claude y lo publica como borrador en WP. */
+async function executeWpPublish(
+  cerebroClientId: string,
+  task: { title: string; objective: string },
+  action: WpStepAction,
+  taskId: string,
+): Promise<{ notes: string; previewUrl?: string }> {
+  const title = String(action.payload?.title ?? task.title);
+  const brief = action.content_brief ?? task.objective;
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const contentResponse = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 8000,
+    messages: [{
+      role: "user",
+      content: [
+        "Escribe el artículo completo de blog según este brief.",
+        "Formato: HTML semántico sin <html>/<body>/<head>.",
+        "Usa <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>.",
+        "Entre 1500 y 2500 palabras.",
+        "PROHIBIDO inventar datos del cliente: precios, casos de éxito, certificaciones, números específicos.",
+        "Solo contenido informativo del sector que no requiera verificación con el cliente.",
+        "",
+        `TÍTULO: ${title}`,
+        "",
+        "BRIEF:",
+        brief,
+      ].join("\n"),
+    }],
+  });
+
+  const content = contentResponse.content[0]?.type === "text" ? contentResponse.content[0].text : "";
+  if (!content) {
+    throw new Error("Claude no generó contenido para el artículo");
+  }
+
+  const result = await publishWpPost(cerebroClientId, {
+    title,
+    content,
+    status: "draft",
+    slug: action.payload?.slug as string | undefined,
+    focus_keyword: action.payload?.focus_keyword as string | undefined,
+    categories: action.payload?.categories as string[] | undefined,
+  }, taskId);
+
+  if (!result.ok) {
+    throw new Error(`WP /publish falló: ${result.error}`);
+  }
+
+  const { post_id, draft_url, edit_url } = result.data;
+  const previewUrl = draft_url ?? edit_url;
+  const notes = `wp:publish OK — post_id=${post_id}${previewUrl ? ` draft_url=${previewUrl}` : ""}`;
+
+  const costUsd = Number(contentResponse.usage.input_tokens) * 0.000003 + Number(contentResponse.usage.output_tokens) * 0.000015;
+  await logApiUsage({ provider: "anthropic", endpoint: "wp-publish-content", cost: costUsd, clientId: "" });
+
+  return { notes, previewUrl };
+}
+
+/** Genera meta title/description con Claude y los aplica via Yoast SEO. */
+async function executeWpSeo(
+  cerebroClientId: string,
+  task: { title: string; objective: string },
+  action: WpStepAction,
+  taskId: string,
+): Promise<{ notes: string }> {
+  const pageId = Number(action.payload?.page_id ?? 0);
+  let metaTitle = action.payload?.meta_title as string | undefined;
+  let metaDescription = action.payload?.meta_description as string | undefined;
+  const focusKeyword = action.payload?.focus_keyword as string | undefined;
+
+  // Generate with Claude if not already in the payload
+  if (!metaTitle || !metaDescription) {
+    const brief = action.content_brief ?? `${task.title}: ${task.objective}`;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const metaResponse = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 500,
+      messages: [{
+        role: "user",
+        content: [
+          "Genera meta title y meta description para SEO según este contexto.",
+          "meta_title: 50-60 caracteres exactos, incluye keyword principal, evita mayúsculas innecesarias.",
+          "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
+          "PROHIBIDO inventar datos del cliente.",
+          "Responde SOLO con JSON: {\"meta_title\": \"...\", \"meta_description\": \"...\"}",
+          "",
+          "CONTEXTO:",
+          brief,
+        ].join("\n"),
+      }],
+    });
+
+    const rawMeta = metaResponse.content[0]?.type === "text" ? metaResponse.content[0].text : "{}";
+    try {
+      const cleaned = rawMeta.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed = JSON.parse(cleaned) as { meta_title?: string; meta_description?: string };
+      metaTitle = metaTitle ?? parsed.meta_title;
+      metaDescription = metaDescription ?? parsed.meta_description;
+    } catch {
+      // Use whatever we have
+    }
+  }
+
+  if (!metaTitle || !metaDescription) {
+    return {
+      notes: `wp:seo STAGED — no se pudo generar meta. Objetivo: ${task.objective.slice(0, 200)}`,
+    };
+  }
+
+  // If page_id is unknown (0): stage the proposal for manual application
+  if (pageId === 0) {
+    const proposal = JSON.stringify({ meta_title: metaTitle, meta_description: metaDescription, focus_keyword: focusKeyword });
+    return {
+      notes: `wp:seo STAGED — page_id desconocido. Propuesta lista para aplicar:\n${proposal}`,
+    };
+  }
+
+  const result = await updateWpSeo(cerebroClientId, pageId, {
+    meta_title: metaTitle,
+    meta_description: metaDescription,
+    focus_keyword: focusKeyword,
+  }, taskId);
+
+  if (!result.ok) {
+    throw new Error(`WP /seo/${pageId} falló: ${result.error}`);
+  }
+
+  return {
+    notes: `wp:seo OK — page_id=${pageId} meta_title="${metaTitle}" (${metaTitle.length} chars) meta_description="${metaDescription.slice(0, 60)}..." (${metaDescription.length} chars)`,
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

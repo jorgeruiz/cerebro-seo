@@ -131,7 +131,19 @@ Cerebro WP Plugin instalado en el sitio (base: https://{dominio}/wp-json/clickso
   - POST /media — subir imagen con alt text descriptivo
   - POST /seo/{id} — actualizar meta title, meta description, focus keyword via Yoast SEO
 
-Pasos type=AI en WordPress: usa los endpoints de escritura. El prompt debe indicar qué endpoint llamar, con qué parámetros, y el criterio de aceptación (ej: "verificar en WP Admin > Posts que el borrador existe").
+Pasos type=AI en WordPress: el campo "prompt" DEBE ser un JSON (no texto libre) con este schema exacto:
+{
+  "action": "publish" | "seo" | "update" | "media",
+  "endpoint": "POST /publish" | "POST /seo/{page_id}" | "PUT /update/{post_id}",
+  "payload": {
+    // Para publish: "title" (string), "slug" (string, opcional), "focus_keyword" (string, opcional), "categories" (string[], opcional)
+    // Para seo: "page_id" (number, usa 0 si no conoces el ID), "meta_title" (string, 50-60 chars), "meta_description" (string, 140-160 chars), "focus_keyword" (string)
+    // Para update: "post_id" (number), "title" (string, opcional)
+  },
+  "content_brief": "Solo para action=publish: brief DETALLADO de 200-400 palabras con: estructura del artículo, secciones principales, keyword objetivo, tono del cliente, CTAs, qué NO inventar. El motor generará el HTML completo a partir de este brief."
+}
+El campo "acceptanceCriteria" del paso sigue siendo un array de strings normal.
+IMPORTANTE: el campo "prompt" del paso AI debe ser SOLO el JSON — nada de texto antes ni después.
 
 Para pasos HUMAN en WordPress (cuando la tarea no puede ejecutarse via plugin):
 - Especifica la ruta exacta en WP Admin (ej: "Ve a Dashboard > Páginas > [nombre página] > Editar con Elementor")

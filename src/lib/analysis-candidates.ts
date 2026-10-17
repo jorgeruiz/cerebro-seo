@@ -126,11 +126,11 @@ export function enforceModeRules(candidate: AnalysisCandidate, platform?: string
       return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no HYBRID — convierte a HUMAN guiado" };
     }
 
-    if (candidate.mode === "AI") {
-      const text = `${candidate.titulo} ${candidate.descripcion}`;
-      const isManualActivity = WP_FORCE_HUMAN_PATTERNS.some((p) => p.test(text));
-      const isPluginActivity = WP_ALLOW_AI_PATTERNS.some((p) => p.test(text));
+    const text = `${candidate.titulo} ${candidate.descripcion}`;
+    const isManualActivity = WP_FORCE_HUMAN_PATTERNS.some((p) => p.test(text));
+    const isPluginActivity = WP_ALLOW_AI_PATTERNS.some((p) => p.test(text));
 
+    if (candidate.mode === "AI") {
       if (isManualActivity && !isPluginActivity) {
         return {
           ...candidate,
@@ -139,7 +139,19 @@ export function enforceModeRules(candidate: AnalysisCandidate, platform?: string
         };
       }
       // isPluginActivity → AI permitido (blog, meta, alt)
+      return candidate;
     }
+
+    // HUMAN → upgrade a AI si es claramente actividad del plugin
+    // (Claude tiende a ser conservador en WP — corregir aquí)
+    if (candidate.mode === "HUMAN" && isPluginActivity && !isManualActivity) {
+      return {
+        ...candidate,
+        mode: "AI",
+        modeReason: "WordPress: plugin v1.5.0 puede ejecutar esta tarea (blog/meta/alt) — AI via POST /publish o POST /seo/{id}",
+      };
+    }
+
     return candidate;
   }
 

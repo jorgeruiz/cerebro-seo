@@ -136,20 +136,28 @@ async function gatherSignals(siteUrl: string): Promise<DetectionSignals> {
 }
 
 /**
- * Determina si un sitio es elegible para ejecución de tareas IA.
- * Requiere: platform=NEXTJS (no WORDPRESS, no MIGRACION, no OTRO).
+ * Determina si un sitio es elegible para ejecución de tareas IA vía repo (Next.js).
  */
 export function isEligibleForExecution(platform: SitePlatform | null): boolean {
   return platform === "NEXTJS";
 }
 
 /**
- * Motivo por el cual un sitio no es elegible.
+ * Determina si un sitio es elegible para ejecución de tareas IA vía plugin WP.
+ * Requiere: platform=WORDPRESS o MIGRACION (plugin v1.5.0 instalado).
+ */
+export function isEligibleForWpExecution(platform: SitePlatform | null): boolean {
+  return platform === "WORDPRESS" || platform === "MIGRACION";
+}
+
+/**
+ * Motivo de restricción por plataforma, o null si no hay restricción.
+ * Para WordPress, el plan sí puede ejecutar tareas AI vía plugin — no hay bloqueo.
  */
 export function ineligibilityReason(platform: SitePlatform | null): string | null {
   if (platform === "NEXTJS") return null;
-  if (platform === "WORDPRESS") return "Sitio en WordPress — el Plan mensual solo opera sobre repos Next.js.";
-  if (platform === "MIGRACION") return "Sitio en migración — producción aún en WordPress. El plan se habilitará cuando producción sea Next.js.";
-  if (platform === "OTRO") return "Plataforma no reconocida — el Plan mensual requiere Next.js.";
+  if (platform === "WORDPRESS") return null; // Plugin v1.5.0 soporta blog, meta, alt — sin bloqueo
+  if (platform === "MIGRACION") return "Sitio en migración — producción aún en WordPress. Tareas AI usan el plugin WP; tareas de código esperan a que producción sea Next.js.";
+  if (platform === "OTRO") return "Plataforma no reconocida — el Plan mensual requiere Next.js o WordPress con plugin Cerebro.";
   return "Plataforma no detectada — ejecuta la detección de plataforma primero.";
 }

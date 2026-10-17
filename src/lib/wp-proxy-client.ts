@@ -206,3 +206,99 @@ export async function getWpElementorPage(
   }
   return { ok: true, data: result.data as WpElementorPage };
 }
+
+// ─── Write API (v1.5.0) ───────────────────────────────────────────────────────
+
+export interface WpPublishResult {
+  post_id: number;
+  draft_url?: string;
+  edit_url?: string;
+  status?: string;
+}
+
+export interface WpSeoResult {
+  success: boolean;
+  page_id: number;
+}
+
+export interface WpUpdateResult {
+  success: boolean;
+  post_id: number;
+}
+
+/**
+ * Crea un nuevo artículo de blog como borrador.
+ * Plugin v1.5.0: POST /wp-json/clicksociety/v1/publish
+ * Siempre crea como status="draft" — se publica desde WP Admin o "Publicar Plan".
+ */
+export async function publishWpPost(
+  clienteId: string,
+  post: {
+    title: string;
+    content: string;
+    status?: "draft" | "publish";
+    slug?: string;
+    categories?: string[];
+    focus_keyword?: string;
+  },
+  taskId?: string
+): Promise<WpProxyResult<WpPublishResult>> {
+  const result = await proxyCall(clienteId, "/publish", {
+    method: "POST",
+    body: { ...post, status: post.status ?? "draft" },
+    taskId,
+  });
+  if (!result.ok) {
+    console.warn(`[wp-proxy] publishPost cliente=${clienteId}: ${result.error}`);
+    return result;
+  }
+  return { ok: true, data: result.data as WpPublishResult };
+}
+
+/**
+ * Actualiza meta title, meta description y focus keyword de una página/post via Yoast SEO.
+ * Plugin v1.5.0: POST /wp-json/clicksociety/v1/seo/{id}
+ */
+export async function updateWpSeo(
+  clienteId: string,
+  pageId: number,
+  meta: {
+    meta_title?: string;
+    meta_description?: string;
+    focus_keyword?: string;
+  },
+  taskId?: string
+): Promise<WpProxyResult<WpSeoResult>> {
+  const result = await proxyCall(clienteId, `/seo/${pageId}`, {
+    method: "POST",
+    body: meta,
+    taskId,
+  });
+  if (!result.ok) {
+    console.warn(`[wp-proxy] updateSeo cliente=${clienteId} page=${pageId}: ${result.error}`);
+    return result;
+  }
+  return { ok: true, data: result.data as WpSeoResult };
+}
+
+/**
+ * Edita el contenido/título de un post existente (NO páginas Elementor).
+ * Plugin v1.5.0: PUT /wp-json/clicksociety/v1/update/{id}
+ */
+export async function updateWpPost(
+  clienteId: string,
+  postId: number,
+  update: { title?: string; content?: string },
+  taskId?: string
+): Promise<WpProxyResult<WpUpdateResult>> {
+  const result = await proxyCall(clienteId, `/update/${postId}`, {
+    method: "PUT",
+    body: update,
+    taskId,
+  });
+  if (!result.ok) {
+    console.warn(`[wp-proxy] updatePost cliente=${clienteId} post=${postId}: ${result.error}`);
+    return result;
+  }
+  return { ok: true, data: result.data as WpUpdateResult };
+}
