@@ -159,9 +159,19 @@ export async function actionSendToPlan(
 
     // Map candidate kind to Prisma enum
     const kind = candidate.kind === "SETUP" ? "SETUP" : candidate.kind === "CONTENT" ? "CONTENT" : "CODE";
-    // Plataformas no-NEXTJS: forzar HUMAN — el decomposer generará instrucciones manuales (WP Admin, etc.)
-    const isNonNextJs = eligibility.platform !== "NEXTJS";
-    const mode = isNonNextJs ? "HUMAN" : candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
+    // Modo según plataforma:
+    // - NEXTJS: respetar el modo del análisis (AI/HYBRID/HUMAN)
+    // - WORDPRESS/MIGRACION: HYBRID no existe → HUMAN; AI y HUMAN se respetan (el plugin tiene endpoints de escritura)
+    // - OTRO: todo HUMAN (sin capacidades de ejecución remota)
+    const platform = eligibility.platform;
+    let mode: "AI" | "HYBRID" | "HUMAN";
+    if (platform === "NEXTJS") {
+      mode = candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
+    } else if (platform === "WORDPRESS" || platform === "MIGRACION") {
+      mode = candidate.mode === "HYBRID" ? "HUMAN" : candidate.mode === "AI" ? "AI" : "HUMAN";
+    } else {
+      mode = "HUMAN";
+    }
     const effort = candidate.effort === "LOW" ? "LOW" : candidate.effort === "HIGH" ? "HIGH" : "MEDIUM";
 
     const task = await prisma.planTask.create({

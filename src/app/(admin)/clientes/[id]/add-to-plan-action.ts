@@ -105,8 +105,18 @@ export async function actionAddToPlan(
   // Create task
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
-  // Plataformas no-NEXTJS: forzar HUMAN — el decomposer generará instrucciones manuales
-  const effectiveMode = site.platform !== "NEXTJS" && site.platform !== null ? "HUMAN" : mode;
+  // Modo según plataforma:
+  // - NEXTJS: respetar el modo que pasó el módulo
+  // - WORDPRESS/MIGRACION: HYBRID no existe → HUMAN; AI y HUMAN se respetan (plugin tiene endpoints de escritura)
+  // - OTRO/null: todo HUMAN
+  let effectiveMode: "AI" | "HYBRID" | "HUMAN";
+  if (site.platform === "NEXTJS") {
+    effectiveMode = mode;
+  } else if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
+    effectiveMode = mode === "HYBRID" ? "HUMAN" : mode;
+  } else {
+    effectiveMode = "HUMAN";
+  }
 
   const task = await prisma.planTask.create({
     data: {
