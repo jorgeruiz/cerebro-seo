@@ -2,31 +2,45 @@
  * Cliente para el proxy WP plugin de Cerebro web.
  *
  * Cerebro SEO NUNCA almacena credenciales de WordPress.
- * Las keys del plugin viven en Cerebro web (WpSiteCredential, cifradas).
+ * Las keys del plugin viven en Cerebro web (WpSiteCredential, AES-256-GCM).
  * Cerebro SEO accede al plugin WP únicamente a través de este proxy,
- * autenticando con CEREBRO_INTERNAL_SECRET.
+ * autenticando con SEO_INTERNAL_SECRET (bearer token M2M).
  *
- * Endpoint proxy (pendiente de implementar en Cerebro web):
+ * ─── REQUISITO EN CEREBRO WEB ────────────────────────────────────────────────
+ * El proxy actualmente usa getServerSession (NextAuth). Para llamadas M2M desde
+ * el worker de Cerebro SEO (sin sesión de usuario), el proxy debe aceptar:
+ *   Authorization: Bearer ${SEO_INTERNAL_SECRET}
+ * como alternativa a la sesión. Hasta que se implemente, todas las funciones
+ * retornan error "auth-m2m-not-supported" y el decomposer usa catálogo estático.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Contrato del proxy (app/api/wp-plugin/proxy/route.ts en Cerebro web):
  *   POST {CEREBRO_API_URL}/api/wp-plugin/proxy
- *   Authorization: Bearer {CEREBRO_INTERNAL_SECRET}
- *   Body: { cerebroClientId: string, endpoint: string }
- *   Response: el JSON devuelto por el plugin WP
+ *   Authorization: Bearer {SEO_INTERNAL_SECRET}
+ *   Body: { clienteId: string, endpoint: string, method?: "GET"|"POST", body?: object }
+ *   Response: { ok: true, status: number, data: unknown }
+ *           | { ok: false, error: string, status?: number }
  *
- * Mientras el endpoint no exista en Cerebro web, todas las funciones retornan
- * null en silencio. El decomposer usa el catálogo estático como fallback.
+ * Plugin WP namespace (desde v1.5.0): /wp-json/clicksociety/v1/
+ *
+ * Allowlist activa en el proxy:
+ *   GET:  /ping, /categories, /system-info, /capabilities, /pages, /templates,
+ *         /seo/{id}, /elementor/{id}
+ *   POST: /publish, /media, /seo/{id}
+ *   PUT:  /update/{id}
  */
 
 import { redis } from "@/lib/redis";
 
-const CEREBRO_BASE = process.env.CEREBRO_API_URL ?? "";
-const CEREBRO_SECRET = process.env.CEREBRO_INTERNAL_SECRET ?? "";
+const CEREBRO_BASE = (process.env.CEREBRO_API_URL ?? "").replace(/\/$/, "");
+const SEO_SECRET = process.env.SEO_INTERNAL_SECRET ?? "";
 
 const CAPABILITIES_TTL_SECONDS = 24 * 60 * 60; // 24 h
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface WpCapabilities {
-  /** Lista de endpoints activos en el plugin (sin slash inicial). Ej: ["publish","update","media","seo","pages","elementor","capabilities"] */
+  /** Endpoints activos en el plugin (sin slash inicial). Ej: ["publish","update","media","seo","pages","elementor","capabilities"] */
   endpoints: string[];
 }
 
@@ -58,37 +72,76 @@ export interface WpElementorPage {
   sections: WpElementorSection[];
 }
 
+/** Resultado tipado: o bien los datos, o bien un error con razón (sin secretos). */
+export type WpProxyResult<T> =
+  | { ok: true; data: T; fromCache?: boolean }
+  | { ok: false; error: string };
+
 // ─── Proxy call ──────────────────────────────────────────────────────────────
 
-async function proxyGet(cerebroClientId: string, endpoint: string): Promise<unknown | null> {
-  if (!CEREBRO_BASE || !CEREBRO_SECRET) {
-    // Proxy no configurado (CEREBRO_API_URL o CEREBRO_INTERNAL_SECRET ausente).
-    // Silent fallback — el caller usa catálogo estático.
-    return null;
+interface ProxyOptions {
+  method?: "GET" | "POST" | "PUT";
+  body?: unknown;
+}
+
+async function proxyCall(
+  clienteId: string,
+  endpoint: string,
+  opts: ProxyOptions = {}
+): Promise<WpProxyResult<unknown>> {
+  if (!CEREBRO_BASE) {
+    return { ok: false, error: "CEREBRO_API_URL no configurado" };
   }
+  if (!SEO_SECRET) {
+    return { ok: false, error: "SEO_INTERNAL_SECRET no configurado" };
+  }
+
+  const method = opts.method ?? "GET";
 
   try {
     const res = await fetch(`${CEREBRO_BASE}/api/wp-plugin/proxy`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${CEREBRO_SECRET}`,
+        Authorization: `Bearer ${SEO_SECRET}`,
       },
-      body: JSON.stringify({ cerebroClientId, endpoint }),
-      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        clienteId,
+        endpoint,
+        method,
+        ...(opts.body !== undefined ? { body: opts.body } : {}),
+      }),
+      signal: AbortSignal.timeout(35_000), // 5 s más que el timeout del proxy (30 s)
     });
 
-    if (!res.ok) {
-      console.warn(
-        `[wp-proxy] HTTP ${res.status} — cliente=${cerebroClientId} endpoint=${endpoint}`
-      );
-      return null;
+    // El proxy siempre devuelve 200 con ok:false en errores de aplicación,
+    // pero puede devolver 401/403/502 en errores de red o auth.
+    if (res.status === 401) {
+      return {
+        ok: false,
+        error: "auth-m2m-not-supported: el proxy requiere M2M bearer token (ver requisito en wp-proxy-client.ts)",
+      };
+    }
+    if (res.status === 403) {
+      return { ok: false, error: `endpoint-blocked: ${method} ${endpoint} no está en la allowlist del proxy` };
     }
 
-    return res.json() as unknown;
+    let payload: { ok: boolean; status?: number; data?: unknown; error?: string };
+    try {
+      payload = await res.json() as typeof payload;
+    } catch {
+      return { ok: false, error: `respuesta no-JSON del proxy (HTTP ${res.status})` };
+    }
+
+    if (!payload.ok) {
+      return { ok: false, error: payload.error ?? `proxy error HTTP ${payload.status ?? res.status}` };
+    }
+
+    return { ok: true, data: payload.data };
   } catch (err) {
-    console.warn("[wp-proxy] Error de conexión:", (err as Error).message);
-    return null;
+    const msg = (err as Error).message ?? String(err);
+    // No loguear secretos ni URLs con keys — solo el mensaje de error.
+    return { ok: false, error: `conexión fallida: ${msg}` };
   }
 }
 
@@ -96,53 +149,63 @@ async function proxyGet(cerebroClientId: string, endpoint: string): Promise<unkn
 
 /**
  * Obtiene las capacidades del plugin WP para un cliente.
- * Resultado cacheado 24 h en Redis para no golpear el proxy en cada descomposición.
+ * Cacheado 24 h en Redis para no golpear el proxy en cada descomposición.
  *
- * Retorna null si:
- * - el proxy no está configurado
- * - el cliente no tiene WpSiteCredential en Cerebro web
- * - el plugin no responde
+ * clienteId = cerebroClientId del cliente en Cerebro SEO (= Notion page ID sin dashes).
  */
 export async function getWpCapabilities(
-  cerebroClientId: string
-): Promise<WpCapabilities | null> {
-  const cacheKey = `wp:caps:${cerebroClientId}`;
+  clienteId: string
+): Promise<WpProxyResult<WpCapabilities>> {
+  const cacheKey = `wp:caps:${clienteId}`;
 
   const cached = await redis.get(cacheKey).catch(() => null);
   if (cached) {
     try {
-      return JSON.parse(cached) as WpCapabilities;
+      const data = JSON.parse(cached) as WpCapabilities;
+      return { ok: true, data, fromCache: true };
     } catch {
       // cache corrupto — continuar y refrescar
     }
   }
 
-  const data = await proxyGet(cerebroClientId, "/capabilities");
-  if (!data) return null;
+  const result = await proxyCall(clienteId, "/capabilities");
+  if (!result.ok) {
+    console.warn(`[wp-proxy] getCapabilities cliente=${clienteId}: ${result.error}`);
+    return result;
+  }
 
-  const caps = data as WpCapabilities;
+  const caps = result.data as WpCapabilities;
   await redis.setex(cacheKey, CAPABILITIES_TTL_SECONDS, JSON.stringify(caps)).catch(() => {});
-  return caps;
+  return { ok: true, data: caps };
 }
 
 /**
  * Obtiene el árbol de páginas del sitio WP.
- * Sin caché (cambia con frecuencia).
  */
-export async function getWpPages(cerebroClientId: string): Promise<WpPage[] | null> {
-  const data = await proxyGet(cerebroClientId, "/pages");
-  return data ? (data as WpPage[]) : null;
+export async function getWpPages(
+  clienteId: string
+): Promise<WpProxyResult<WpPage[]>> {
+  const result = await proxyCall(clienteId, "/pages");
+  if (!result.ok) {
+    console.warn(`[wp-proxy] getPages cliente=${clienteId}: ${result.error}`);
+    return result;
+  }
+  return { ok: true, data: result.data as WpPage[] };
 }
 
 /**
  * Obtiene el árbol simplificado de una página Elementor.
- * Útil en pasos HUMAN para localizar el widget exacto (sección > columna > widget)
+ * Útil en pasos HUMAN: localiza el widget exacto (sección > columna > widget)
  * con el texto/alt actual listo para mostrar al equipo.
  */
 export async function getWpElementorPage(
-  cerebroClientId: string,
+  clienteId: string,
   pageId: number
-): Promise<WpElementorPage | null> {
-  const data = await proxyGet(cerebroClientId, `/elementor/${pageId}`);
-  return data ? (data as WpElementorPage) : null;
+): Promise<WpProxyResult<WpElementorPage>> {
+  const result = await proxyCall(clienteId, `/elementor/${pageId}`);
+  if (!result.ok) {
+    console.warn(`[wp-proxy] getElementorPage cliente=${clienteId} page=${pageId}: ${result.error}`);
+    return result;
+  }
+  return { ok: true, data: result.data as WpElementorPage };
 }

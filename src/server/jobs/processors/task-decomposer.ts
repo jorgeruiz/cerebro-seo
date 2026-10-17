@@ -117,7 +117,7 @@ El equipo puede hacer cambios en WordPress vía:
 - WP Admin > Personalizar > CSS Adicional: agregar estilos personalizados
 - Hosting file manager o FTP: modificar archivos PHP/CSS (para cambios de código)
 
-Cerebro WP Plugin instalado en el sitio (base: https://{dominio}/wp-json/cerebro/v1/, auth: X-Cerebro-Key):
+Cerebro WP Plugin instalado en el sitio (base: https://{dominio}/wp-json/clicksociety/v1/, auth: X-Cerebro-Key):
 
   LECTURA:
   - GET /capabilities — endpoints activos en este sitio
@@ -191,11 +191,13 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   let wpCapabilitiesContext = "";
   const platform = task.site?.platform ?? "OTRO";
   if ((platform === "WORDPRESS" || platform === "MIGRACION") && task.site?.client?.cerebroClientId) {
-    const caps = await getWpCapabilities(task.site.client.cerebroClientId);
-    if (caps && caps.endpoints.length > 0) {
-      wpCapabilitiesContext = `\nWP CAPABILITIES (en vivo desde GET /capabilities):\nEndpoints activos: ${caps.endpoints.join(", ")}\nNota: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;
+    const capsResult = await getWpCapabilities(task.site.client.cerebroClientId);
+    if (capsResult.ok && capsResult.data.endpoints.length > 0) {
+      const src = capsResult.fromCache ? "caché 24h" : "en vivo";
+      wpCapabilitiesContext = `\nWP CAPABILITIES (${src} via GET /capabilities):\nEndpoints activos: ${capsResult.data.endpoints.join(", ")}\nNota: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;
     } else {
-      wpCapabilitiesContext = `\nWP CAPABILITIES: no disponibles (proxy Cerebro web no responde o cliente sin credenciales).\nUsando catálogo estático v1.5.0 como respaldo.\n`;
+      const reason = capsResult.ok ? "lista vacía" : capsResult.error;
+      wpCapabilitiesContext = `\nWP CAPABILITIES: catálogo estático v1.5.0 (proxy no disponible: ${reason}).\n`;
     }
   }
 

@@ -12,7 +12,7 @@
 ## WordPress — Plugin Cerebro v1.5.0
 
 ### Endpoints del plugin
-Base: `https://{dominio}/wp-json/cerebro/v1/`
+Base: `https://{dominio}/wp-json/clicksociety/v1/`
 Auth: header `X-Cerebro-Key: {wpApiKey}` (guardado en Site.wpApiKey)
 
 **Lectura (disponibles en v1.5.0):**
