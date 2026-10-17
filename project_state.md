@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-13 (S2f completa — botón AddToPlan en 9 módulos, desplegado)
+**Última actualización:** 2026-10-16 (S3a — motor WordPress completo)
 **Fase actual:** S2e+S3+S4a+S4c+S2f completas. S4b/S4d/S4e pendientes.
 **Próximo hito:** Probar S2f en Quicsa desde 3 módulos. Luego S4d (límites + bitácora visible).
 
@@ -497,6 +497,41 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - S4b: interactive tool approval
 - S4d: límites + bitácora visible en plan page
 - S4e: terminal read-only cuando tarea AI corriendo
+
+---
+
+### Sesión S3a — 2026-10-16 ✅ COMPLETA (Motor WordPress — ejecución por plugin)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ El worker ya no falla para tareas WordPress. Path de ejecución WP completo.
+
+**Diagnóstico previo (trazado antes de cambiar nada):**
+- `Site.platform=WORDPRESS` correcto en producción para Navalsa
+- Claude generaba HUMAN para todas las candidatas WP (conservador) — enforceModeRules solo bajaba, nunca subía
+- `task-processor.ts:71` mataba toda tarea WP con `"Site no tiene githubRepo"` — no existía path WP
+
+**Cambios:**
+- `analysis-candidates.ts`: `enforceModeRules` ahora SUBE HUMAN→AI cuando título/desc match WP_ALLOW_AI_PATTERNS y no hay WP_FORCE_HUMAN_PATTERNS (blog, meta, alt → AI)
+- `site-platform.ts`: `ineligibilityReason` actualizado (WP sin bloqueo, agrega `isEligibleForWpExecution`)
+- `plan-eligibility.ts`: `canSendCandidate` correcto — WP siempre permitido, NX bloquea solo si no hay repo
+- `wp-proxy-client.ts`: agrega `publishWpPost`, `updateWpSeo`, `updateWpPost` (write API v1.5.0)
+- `task-decomposer.ts`: steps AI en WP generan JSON estructurado `{action, endpoint, payload, content_brief}`
+- `task-processor.ts`: motor WP mínimo completo:
+  - Routing antes del guard `!githubRepo`: si platform=WP → `processWpTask()`
+  - `processWpTask`: loop de pasos, HUMAN=pause, AI=ejecutar via proxy
+  - `executeWpAiStep`: parsea JSON estructurado del step.prompt
+  - `executeWpPublish`: Claude genera HTML 1500-2500w → `POST /publish` borrador → guarda draft_url
+  - `executeWpSeo`: Claude genera meta → `POST /seo/{id}` (si page_id>0) o STAGED (si page_id=0)
+  - update/media: STAGED (motor mínimo)
+
+**Bloqueadores activos:**
+- Proxy M2M (WP_PROXY_SECRET) no desplegado en Cerebro web → `GET /capabilities` retorna 401 → decomposer usa catálogo estático v1.5.0 → steps AI sin page_ids reales
+- Cuando se despliegue el proxy en cerebro-web, los steps de meta usarán page_id real y se aplicarán via `POST /seo/{id}`
+
+**Env vars necesarias en worker (Easypanel):**
+- `CEREBRO_API_URL`: ya existe (cerebro.clicksociety.com.mx o equivalente)
+- `WP_PROXY_SECRET`: pendiente de agregar cuando cerebro-web despliegue el auth M2M
+
+**Commit:** `f15167c`
 
 ---
 
