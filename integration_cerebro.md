@@ -197,6 +197,8 @@ Cerebro web (proxy)
 Plugin WP en el sitio del cliente
 ```
 
+**Auth M2M:** `Authorization: Bearer ${WP_PROXY_SECRET}` + `X-Task-Id: {taskId}` (para audit log).
+
 **Implementación en Cerebro SEO:** `src/lib/wp-proxy-client.ts`
 - `getWpCapabilities(cerebroClientId)` — con caché 24 h en Redis
 - `getWpPages(cerebroClientId)`

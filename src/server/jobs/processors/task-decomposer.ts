@@ -191,7 +191,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   let wpCapabilitiesContext = "";
   const platform = task.site?.platform ?? "OTRO";
   if ((platform === "WORDPRESS" || platform === "MIGRACION") && task.site?.client?.cerebroClientId) {
-    const capsResult = await getWpCapabilities(task.site.client.cerebroClientId);
+    const capsResult = await getWpCapabilities(task.site.client.cerebroClientId, taskId);
     if (capsResult.ok && capsResult.data.endpoints.length > 0) {
       const src = capsResult.fromCache ? "caché 24h" : "en vivo";
       wpCapabilitiesContext = `\nWP CAPABILITIES (${src} via GET /capabilities):\nEndpoints activos: ${capsResult.data.endpoints.join(", ")}\nNota: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;

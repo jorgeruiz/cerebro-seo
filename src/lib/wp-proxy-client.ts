@@ -4,19 +4,12 @@
  * Cerebro SEO NUNCA almacena credenciales de WordPress.
  * Las keys del plugin viven en Cerebro web (WpSiteCredential, AES-256-GCM).
  * Cerebro SEO accede al plugin WP únicamente a través de este proxy,
- * autenticando con SEO_INTERNAL_SECRET (bearer token M2M).
- *
- * ─── REQUISITO EN CEREBRO WEB ────────────────────────────────────────────────
- * El proxy actualmente usa getServerSession (NextAuth). Para llamadas M2M desde
- * el worker de Cerebro SEO (sin sesión de usuario), el proxy debe aceptar:
- *   Authorization: Bearer ${SEO_INTERNAL_SECRET}
- * como alternativa a la sesión. Hasta que se implemente, todas las funciones
- * retornan error "auth-m2m-not-supported" y el decomposer usa catálogo estático.
- * ─────────────────────────────────────────────────────────────────────────────
+ * autenticando con WP_PROXY_SECRET (bearer token M2M).
  *
  * Contrato del proxy (app/api/wp-plugin/proxy/route.ts en Cerebro web):
  *   POST {CEREBRO_API_URL}/api/wp-plugin/proxy
- *   Authorization: Bearer {SEO_INTERNAL_SECRET}
+ *   Authorization: Bearer {WP_PROXY_SECRET}
+ *   X-Task-Id: {taskId}   (opcional — para audit logs)
  *   Body: { clienteId: string, endpoint: string, method?: "GET"|"POST", body?: object }
  *   Response: { ok: true, status: number, data: unknown }
  *           | { ok: false, error: string, status?: number }
@@ -33,7 +26,7 @@
 import { redis } from "@/lib/redis";
 
 const CEREBRO_BASE = (process.env.CEREBRO_API_URL ?? "").replace(/\/$/, "");
-const SEO_SECRET = process.env.SEO_INTERNAL_SECRET ?? "";
+const WP_PROXY_SECRET = process.env.WP_PROXY_SECRET ?? "";
 
 const CAPABILITIES_TTL_SECONDS = 24 * 60 * 60; // 24 h
 
@@ -82,6 +75,7 @@ export type WpProxyResult<T> =
 interface ProxyOptions {
   method?: "GET" | "POST" | "PUT";
   body?: unknown;
+  taskId?: string;
 }
 
 async function proxyCall(
@@ -92,19 +86,21 @@ async function proxyCall(
   if (!CEREBRO_BASE) {
     return { ok: false, error: "CEREBRO_API_URL no configurado" };
   }
-  if (!SEO_SECRET) {
-    return { ok: false, error: "SEO_INTERNAL_SECRET no configurado" };
+  if (!WP_PROXY_SECRET) {
+    return { ok: false, error: "WP_PROXY_SECRET no configurado" };
   }
 
   const method = opts.method ?? "GET";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${WP_PROXY_SECRET}`,
+  };
+  if (opts.taskId) headers["X-Task-Id"] = opts.taskId;
 
   try {
     const res = await fetch(`${CEREBRO_BASE}/api/wp-plugin/proxy`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SEO_SECRET}`,
-      },
+      headers,
       body: JSON.stringify({
         clienteId,
         endpoint,
@@ -117,10 +113,7 @@ async function proxyCall(
     // El proxy siempre devuelve 200 con ok:false en errores de aplicación,
     // pero puede devolver 401/403/502 en errores de red o auth.
     if (res.status === 401) {
-      return {
-        ok: false,
-        error: "auth-m2m-not-supported: el proxy requiere M2M bearer token (ver requisito en wp-proxy-client.ts)",
-      };
+      return { ok: false, error: "WP_PROXY_SECRET inválido o M2M auth no habilitado en el proxy" };
     }
     if (res.status === 403) {
       return { ok: false, error: `endpoint-blocked: ${method} ${endpoint} no está en la allowlist del proxy` };
@@ -151,10 +144,12 @@ async function proxyCall(
  * Obtiene las capacidades del plugin WP para un cliente.
  * Cacheado 24 h en Redis para no golpear el proxy en cada descomposición.
  *
- * clienteId = cerebroClientId del cliente en Cerebro SEO (= Notion page ID sin dashes).
+ * clienteId = cerebroClientId del cliente (= Notion page ID sin dashes).
+ * taskId    = PlanTask.id (opcional, para audit log en el proxy).
  */
 export async function getWpCapabilities(
-  clienteId: string
+  clienteId: string,
+  taskId?: string
 ): Promise<WpProxyResult<WpCapabilities>> {
   const cacheKey = `wp:caps:${clienteId}`;
 
@@ -168,7 +163,7 @@ export async function getWpCapabilities(
     }
   }
 
-  const result = await proxyCall(clienteId, "/capabilities");
+  const result = await proxyCall(clienteId, "/capabilities", { taskId });
   if (!result.ok) {
     console.warn(`[wp-proxy] getCapabilities cliente=${clienteId}: ${result.error}`);
     return result;
@@ -183,9 +178,10 @@ export async function getWpCapabilities(
  * Obtiene el árbol de páginas del sitio WP.
  */
 export async function getWpPages(
-  clienteId: string
+  clienteId: string,
+  taskId?: string
 ): Promise<WpProxyResult<WpPage[]>> {
-  const result = await proxyCall(clienteId, "/pages");
+  const result = await proxyCall(clienteId, "/pages", { taskId });
   if (!result.ok) {
     console.warn(`[wp-proxy] getPages cliente=${clienteId}: ${result.error}`);
     return result;
@@ -200,9 +196,10 @@ export async function getWpPages(
  */
 export async function getWpElementorPage(
   clienteId: string,
-  pageId: number
+  pageId: number,
+  taskId?: string
 ): Promise<WpProxyResult<WpElementorPage>> {
-  const result = await proxyCall(clienteId, `/elementor/${pageId}`);
+  const result = await proxyCall(clienteId, `/elementor/${pageId}`, { taskId });
   if (!result.ok) {
     console.warn(`[wp-proxy] getElementorPage cliente=${clienteId} page=${pageId}: ${result.error}`);
     return result;
