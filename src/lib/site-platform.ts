@@ -136,6 +136,15 @@ async function gatherSignals(siteUrl: string): Promise<DetectionSignals> {
 }
 
 /**
+ * Fuente única de plataforma de un sitio.
+ * Usar esta función — nunca leer site.platform directamente en lógica de negocio.
+ * site.framework se ignora para decisiones de modo (es dato declarativo de Notion, puede estar desactualizado).
+ */
+export function getSitePlatform(site: { platform: SitePlatform | null }): SitePlatform {
+  return site.platform ?? "OTRO";
+}
+
+/**
  * Determina si un sitio es elegible para ejecución de tareas IA vía repo (Next.js).
  */
 export function isEligibleForExecution(platform: SitePlatform | null): boolean {

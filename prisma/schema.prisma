@@ -720,6 +720,7 @@ model PlanTask {
   status             PlanTaskStatus @default(PLANNING)
   commitShas         String[]       @default([])
   resultUrls         String[]       @default([])
+  previewUrl         String?        // borrador WP (POST /publish draft_url) o preview Vercel de tarea
   failureReason      String?        @db.Text
   voidReason         String?        @db.Text
   completedById      String?
@@ -746,6 +747,7 @@ model PlanStep {
   status             PlanStepStatus @default(PENDING)
   completedById      String?
   notes              String?        @db.Text
+  stagedChange       Json?          // WpStagedChange (blog | seo) — ver src/lib/wp-staged-change.ts
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
