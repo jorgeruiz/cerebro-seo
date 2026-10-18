@@ -21,6 +21,26 @@ export type CandidateSource =
   | "pendiente-anterior"  // VOIDED/FAILED del MonthlyPlan anterior
   | "ciclo-anterior";     // tareas del MonthlyCycle anterior
 
+/**
+ * action_type — clasificación semántica de la acción para cruzar con /capabilities.
+ *
+ * Cada action_type mapea a un conjunto de endpoint IDs del plugin WP.
+ * Si TODOS los endpoints requeridos aparecen en /capabilities → AI.
+ * Si al menos uno falta → HUMAN (con razón explícita).
+ *
+ * Al actualizar el plugin (ej: v1.6.0 agrega elementor), las tareas con action_type
+ * edit_page_widgets pasan automáticamente a AI sin cambiar código aquí.
+ */
+export type WpActionType =
+  | "create_blog"
+  | "update_meta"
+  | "upload_media"
+  | "update_post"
+  | "edit_page_widgets"
+  | "create_landing_from_template"
+  | "generate_image"
+  | "other";
+
 export interface AnalysisCandidate {
   id: string; // UUID estable para selección
   titulo: string;
@@ -35,6 +55,8 @@ export interface AnalysisCandidate {
   keywordObjetivo?: string | null;
   urlObjetivo?: string | null;
   fuente: CandidateSource;
+  /** Tipo de acción para cruzar con /capabilities del plugin WP. Generado por Claude. */
+  actionType?: WpActionType | null;
 }
 
 // ─── Zod schema ──────────────────────────────────────────────────────────────
@@ -52,6 +74,10 @@ const candidateSchema = z.object({
   keywordObjetivo: z.string().nullable().optional(),
   urlObjetivo: z.string().nullable().optional(),
   fuente: z.enum(["signal", "contentplan", "analisis", "setup", "pendiente-anterior", "ciclo-anterior"]),
+  actionType: z.enum([
+    "create_blog", "update_meta", "upload_media", "update_post",
+    "edit_page_widgets", "create_landing_from_template", "generate_image", "other",
+  ]).nullable().optional(),
 });
 
 export const analysisResultSchema = z.object({
@@ -86,90 +112,140 @@ const NEXTJS_HYBRID_PATTERNS = [
   /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
 ];
 
+// ─── Capability-based mode resolution for WordPress ─────────────────────────
+
 /**
- * WordPress: acciones ejecutables por el plugin vía proxy Cerebro web.
+ * Mapeo: action_type → endpoint IDs requeridos en GET /capabilities.
  *
- * Lista explícita de lo que SÍ puede hacer:
- *   v1.5.0 CONTENT (POST /publish):         crear artículo de blog o post
- *   v1.5.0 META    (POST /seo/{id}):         actualizar meta title/description/keyword
- *   v1.5.0 ALT     (POST /media):            subir imagen con alt text
- *   v1.6.0 ELEMENTOR (duplicate+widgets):    editar página Elementor existente
- *   v1.6.0 LANDING (from-template/import):   crear landing desde plantilla o JSON
+ * Si TODOS los endpoints de un action_type aparecen en /capabilities → AI.
+ * Si al menos uno falta → HUMAN.
  *
- * Categorías implícitamente HUMAN (sin lista negra — todo lo que no está aquí):
- *   Performance, CSS global, tema, plugins, header/footer, diseño desde cero, etc.
- *
- * El decomposer valida en tiempo real contra GET /capabilities antes de generar steps AI.
+ * Al actualizar el plugin (ej: v1.6.0 agrega elementor endpoints),
+ * edit_page_widgets y create_landing_from_template pasan automáticamente
+ * a AI sin cambiar código — solo necesitan aparecer en /capabilities.
  */
-const WP_PLUGIN_ACTION_PATTERNS = [
-  // CONTENT — crear blog/post
-  /\bblog\b/i, /artículo/i, /articulo/i, /\bpost\b/i, /publicar\s*(artículo|post|blog)/i,
-  /crear\s*(artículo|post|contenido)/i, /redactar/i, /escribir\s*(artículo|post|blog)/i,
-  /contenido.*blog/i, /blog.*contenido/i,
-  // META — actualizar meta tags via Yoast
-  /meta\s*(title|description|tag)/i, /yoast/i, /\bseo.*título/i, /título.*seo\b/i,
-  /reescribir.*meta/i, /optimizar.*meta/i, /actualizar.*meta/i, /meta.*seo/i,
-  /focus\s*keyword/i,
-  // ALT — imágenes con texto alternativo
-  /\balt\b.*imagen/i, /imagen.*\balt\b/i, /texto\s*alternativo/i, /alt\s*text/i,
-  // ELEMENTOR EDITING — v1.6.0: duplicate + widget updates
-  /landing\s*(page|de\s*aterrizaje)?/i, /\baterrizaje\b/i,
-  /duplicar.*página/i, /página.*duplicar/i,
-  /editar.*(?:página|sección|hero).*elementor/i, /elementor.*(?:editar|actualizar|modificar)/i,
-  /actualizar.*(?:h[1-6]|heading|encabezado|título\s*principal)/i,
-  /(?:h[1-6]|heading|encabezado).*(?:actualizar|cambiar|reescribir)/i,
-  /modificar.*(?:imagen|texto|botón|cta).*(?:página|sección)/i,
-  /cambiar.*(?:texto|imagen|botón).*(?:página|hero|banner)/i,
-  // LANDING CREATION — v1.6.0: from-template / import
-  /crear.*(?:landing|página\s*de\s*(?:servicio|producto|contacto|venta))/i,
-  /nueva.*(?:landing|página\s*web)/i, /landing.*(?:crear|construir|generar)/i,
+const ACTION_TYPE_CAPABILITIES: Record<WpActionType, string[]> = {
+  create_blog:                    ["publish"],
+  update_meta:                    ["seo"],
+  upload_media:                   ["media"],
+  update_post:                    ["update"],
+  edit_page_widgets:              ["elementor", "elementor/duplicate", "elementor/widgets"],
+  create_landing_from_template:   ["elementor", "elementor/from-template"],
+  generate_image:                 ["media"],
+  other:                          [], // never matches → always HUMAN
+};
+
+/**
+ * Regex fallback — SOLO cuando /capabilities no está disponible.
+ * Inferior a la detección por action_type; usada como safety net.
+ */
+const WP_REGEX_FALLBACK: Array<{ pattern: RegExp; actionType: WpActionType }> = [
+  { pattern: /\b(?:blog|artículo|articulo|post|redactar|escribir)\b/i, actionType: "create_blog" },
+  { pattern: /meta\s*(?:title|description|tag)|yoast|focus.?keyword/i, actionType: "update_meta" },
+  { pattern: /\balt\b.*imagen|imagen.*\balt\b|texto\s*alternativo/i, actionType: "upload_media" },
+  { pattern: /editar.*(?:página|sección|hero).*elementor|elementor.*(?:editar|actualizar)/i, actionType: "edit_page_widgets" },
+  { pattern: /crear.*(?:landing|página\s*de\s*(?:servicio|producto|venta))/i, actionType: "create_landing_from_template" },
 ];
+
+/**
+ * Determina si un action_type es ejecutable dado un set de capabilities.
+ */
+function isActionExecutable(actionType: WpActionType, capabilities: string[]): boolean {
+  const required = ACTION_TYPE_CAPABILITIES[actionType];
+  if (required.length === 0) return false;
+  return required.every((cap) => capabilities.some((c) => c === cap || c.startsWith(`${cap}/`)));
+}
+
+/**
+ * Intenta inferir action_type desde título/descripción (regex fallback).
+ */
+function inferActionTypeFromText(text: string): WpActionType {
+  for (const { pattern, actionType } of WP_REGEX_FALLBACK) {
+    if (pattern.test(text)) return actionType;
+  }
+  return "other";
+}
 
 /**
  * Aplica reglas de modo deterministas tras la generación por Claude.
  *
- * Reemplaza clasificación por palabras clave con reglas por tipo de acción:
- * - WordPress/Migración: modo basado en si la acción es ejecutable por el plugin v1.5.0
- *   (blog/meta/alt → AI; todo lo demás → HUMAN). HYBRID no existe en WP.
- * - Next.js: performance/bundle → HYBRID (requiere revisión visual).
+ * WordPress/Migración:
+ * - Si capabilities disponibles: cruza action_type con endpoints activos.
+ * - Si capabilities no disponibles: regex como fallback (modeReason lo indica).
+ * - HYBRID no existe en WP.
  *
- * La validación final contra GET /capabilities ocurre en el decomposer,
- * que ajusta el tipo de cada step según los endpoints activos en el sitio.
+ * Next.js:
+ * - performance/bundle → HYBRID (requiere revisión visual).
+ *
+ * @param capabilities  Endpoint IDs de GET /capabilities (ej: ["publish","seo","media","elementor"]).
+ *                      null = proxy no disponible, usar regex fallback.
  */
-export function enforceModeRules(candidate: AnalysisCandidate, platform?: string | null): AnalysisCandidate {
+export function enforceModeRules(
+  candidate: AnalysisCandidate,
+  platform?: string | null,
+  capabilities?: string[] | null,
+): AnalysisCandidate {
   if (platform === "WORDPRESS" || platform === "MIGRACION") {
-    // HYBRID no existe en WordPress — el plugin no tiene operaciones de revisión intermedia
+    // HYBRID no existe en WordPress
     if (candidate.mode === "HYBRID") {
-      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no existe modo HYBRID — convierte a HUMAN guiado" };
+      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no existe modo HYBRID — HUMAN guiado" };
     }
 
+    // Determinar action_type: primero el campo explícito de Claude, luego regex fallback
     const text = `${candidate.titulo} ${candidate.descripcion}`;
-    const isPluginAction = WP_PLUGIN_ACTION_PATTERNS.some((p) => p.test(text));
+    const actionType = candidate.actionType ?? inferActionTypeFromText(text);
+    const usingFallback = !candidate.actionType;
 
-    if (isPluginAction) {
-      // La acción pertenece al catálogo del plugin (blog, meta, alt) → AI
+    if (capabilities) {
+      // ── Capability-based (authoritative) ─────────────────────────
+      const executable = isActionExecutable(actionType, capabilities);
+
+      if (executable) {
+        const reason = `WordPress: ${actionType} ejecutable (endpoints verificados via /capabilities)`;
+        if (candidate.mode !== "AI") {
+          return { ...candidate, mode: "AI", modeReason: reason, actionType };
+        }
+        return { ...candidate, actionType };
+      }
+
+      // Not executable — missing endpoints
+      const required = ACTION_TYPE_CAPABILITIES[actionType];
+      const missing = required.filter((cap) => !capabilities.some((c) => c === cap || c.startsWith(`${cap}/`)));
+      const reason = `WordPress: ${actionType} no ejecutable (faltan endpoints: ${missing.join(", ")}) — HUMAN`;
+      if (candidate.mode !== "HUMAN") {
+        return { ...candidate, mode: "HUMAN", modeReason: reason, actionType };
+      }
+      return { ...candidate, actionType };
+    }
+
+    // ── Regex fallback (capabilities not available) ────────────────
+    if (actionType !== "other") {
+      const fallbackNote = usingFallback ? " [regex fallback — /capabilities no disponible]" : " [/capabilities no disponible]";
       if (candidate.mode !== "AI") {
         return {
           ...candidate,
           mode: "AI",
-          modeReason: "WordPress: acción ejecutable por plugin v1.6.0 (blog/meta/alt/elementor/landing) — AI via proxy Cerebro web",
+          modeReason: `WordPress: ${actionType} (probable — sin verificación de endpoints)${fallbackNote}`,
+          actionType,
         };
       }
-      return candidate;
+      return { ...candidate, actionType };
     }
 
-    // No está en el catálogo del plugin → HUMAN guiado con instrucciones exactas
+    // Unrecognized action → HUMAN
     if (candidate.mode !== "HUMAN") {
+      const fallbackNote = usingFallback ? " [regex fallback]" : "";
       return {
         ...candidate,
         mode: "HUMAN",
-        modeReason: "WordPress: acción fuera del catálogo del plugin (Elementor/diseño/performance) — HUMAN con pasos WP Admin",
+        modeReason: `WordPress: acción no reconocida — HUMAN con pasos WP Admin${fallbackNote}`,
+        actionType: "other",
       };
     }
-    return candidate;
+    return { ...candidate, actionType: "other" };
   }
 
-  // Next.js: performance/bundle → HYBRID (el agente lo hace pero necesita revisión visual)
+  // Next.js: performance/bundle → HYBRID
   if (platform === "NEXTJS" && candidate.mode === "AI") {
     const text = `${candidate.titulo} ${candidate.descripcion}`;
     if (NEXTJS_HYBRID_PATTERNS.some((p) => p.test(text))) {
@@ -206,6 +282,7 @@ export function validateCandidates(
         id: randomUUID(),
         keywordObjetivo: result.data.keywordObjetivo ?? null,
         urlObjetivo: result.data.urlObjetivo ?? null,
+        actionType: result.data.actionType ?? null,
       });
     } else {
       dropped++;

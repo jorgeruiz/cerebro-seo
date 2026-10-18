@@ -169,12 +169,25 @@ RESPONDE ÚNICAMENTE con un JSON válido:
       "justificacion": "qué dato la respalda, máx 300 chars",
       "keywordObjetivo": "keyword principal o null",
       "urlObjetivo": "URL existente o slug sugerido o null",
-      "fuente": "signal|contentplan|analisis|setup|pendiente-anterior|ciclo-anterior"
+      "fuente": "signal|contentplan|analisis|setup|pendiente-anterior|ciclo-anterior",
+      "actionType": "create_blog|update_meta|upload_media|update_post|edit_page_widgets|create_landing_from_template|generate_image|other|null"
     }
   ]
 }
 
 }
+
+REGLA actionType (OBLIGATORIA para sitios WordPress/Migración):
+- Cada candidata DEBE incluir "actionType" que clasifique la acción principal.
+- create_blog: crear artículo de blog/post nuevo.
+- update_meta: actualizar meta title/description/focus keyword (Yoast).
+- upload_media: subir imagen con alt text.
+- update_post: editar contenido de un post existente.
+- edit_page_widgets: editar textos/imágenes/CTAs en una página Elementor existente.
+- create_landing_from_template: crear landing o página de servicio nueva.
+- generate_image: generar imagen AI para blog.
+- other: acciones que no encajan (performance, CSS, tema, plugins, etc.).
+- Para sitios Next.js: actionType puede ser null.
 
 Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones.
 Candidatas: tantas como se justifiquen con datos (idealmente 4+ CONTENT y 4+ CODE, máximo 16).
@@ -187,6 +200,8 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   preconditions: Awaited<ReturnType<typeof checkPreconditions>>;
   hasGsc: boolean;
   platform: string | null;
+  /** Endpoint IDs from GET /capabilities for WP sites (null if not WP or proxy failed) */
+  wpCapabilities: string[] | null;
 }> {
   // Datos base del cliente
   const client = await prisma.client.findUniqueOrThrow({
@@ -452,11 +467,33 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     lines.push("");
   }
 
+  // Fetch WP capabilities for capability-based mode resolution
+  let wpCapabilities: string[] | null = null;
+  const siteplatform = site?.platform ?? null;
+  if (site && (siteplatform === "WORDPRESS" || siteplatform === "MIGRACION")) {
+    const siteClient = await prisma.client.findUnique({
+      where: { id: site.clientId },
+      select: { cerebroClientId: true },
+    });
+    if (siteClient?.cerebroClientId) {
+      try {
+        const { getWpCapabilities } = await import("@/lib/wp-proxy-client");
+        const capsResult = await getWpCapabilities(siteClient.cerebroClientId);
+        if (capsResult.ok) {
+          wpCapabilities = capsResult.data.endpoints;
+        }
+      } catch {
+        // Proxy not available — will use regex fallback
+      }
+    }
+  }
+
   return {
     context: lines.join("\n"),
     preconditions,
     hasGsc: !!site?.gscProperty,
-    platform: site?.platform ?? null,
+    platform: siteplatform,
+    wpCapabilities,
   };
 }
 
@@ -468,7 +505,7 @@ export async function generateClientAnalysis(
 ): Promise<{ analysis: AnalysisResult; analysisId: string }> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const { context, preconditions, hasGsc, platform } = await gatherUnifiedContext(clientId);
+  const { context, preconditions, hasGsc, platform, wpCapabilities } = await gatherUnifiedContext(clientId);
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -562,7 +599,7 @@ export async function generateClientAnalysis(
 
   // Enforce mode rules: plataforma no-NEXTJS → HUMAN; performance en NEXTJS → HYBRID
   if (analysis.candidatas) {
-    analysis.candidatas = analysis.candidatas.map((c) => enforceModeRules(c, platform));
+    analysis.candidatas = analysis.candidatas.map((c) => enforceModeRules(c, platform, wpCapabilities));
   }
 
   // Add setup candidates if preconditions are missing

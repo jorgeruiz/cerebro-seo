@@ -68,6 +68,7 @@ El agente llama directamente al plugin. Criterio: el plugin tiene endpoint de es
 | Meta title + meta description | `POST /seo/{id}` | Posts y páginas via Yoast |
 | Focus keyword Yoast | `POST /seo/{id}` | |
 | Subir imagen nueva con alt | `POST /media` | El alt debe ser descriptivo y con keyword |
+| Generar imagen AI para blog | Higgsfield API + `POST /media` | Solo portada/inline en blogs. Landings/servicios → HUMAN. Max 2 por tarea. QA con Claude Vision. |
 | Actualizar post existente (texto, H1-H2) | `PUT /update/{id}` | Solo posts, no páginas Elementor |
 
 ### Tareas WordPress — modo HUMAN (guiado)
@@ -136,6 +137,7 @@ El agente (Claude Agent SDK + terminal de Cerebro SEO) puede:
 | Schema JSON-LD (Article, LocalBusiness, FAQ) | Componente schema en `page.tsx` |
 | Interlinking — agregar enlaces internos | Artículos MDX existentes |
 | Alt de imágenes en componentes | `<Image alt="...">` en TSX |
+| Generar imagen AI para blog | `public/images/blog/{slug}-featured_image.webp` + frontmatter MDX. Solo blogs. Max 2/tarea. QA con Claude Vision. |
 | Breadcrumbs schema | Componente de layout |
 | Open Graph tags | `metadata.openGraph` en `page.tsx` |
 

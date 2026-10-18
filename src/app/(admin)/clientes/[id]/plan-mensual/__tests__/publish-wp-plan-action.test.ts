@@ -393,6 +393,6 @@ describe("publishWpPlanAction — casos de error", () => {
     mockMonthlyPlanFindUnique.mockResolvedValue(makePlan({ tasks: [] }));
     const result = await publishWpPlanAction(PLAN_ID);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.published + result.metaApplied).toBe(0);
+    if (result.ok) expect(result.metaApplied + result.elementorApplied).toBe(0);
   });
 });

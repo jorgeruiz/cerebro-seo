@@ -159,20 +159,18 @@ describe("analysis-candidates", () => {
   });
 
   describe("enforceModeRules", () => {
-    it("forces performance tasks to HYBRID", () => {
-      // enforceModeRules imported at top
+    it("forces performance tasks to HYBRID on Next.js", () => {
       const candidate = {
         id: "test", titulo: "Reducir TBT de 1,270ms a 200ms", descripcion: "Bundle optimization and lazy loading",
         kind: "CODE" as const, mode: "AI" as const, modeReason: "Code change", priority: 1, effort: "HIGH" as const,
         impactoEsperado: "Better CWV", justificacion: "TBT too high", fuente: "signal" as const,
       };
-      const result = enforceModeRules(candidate);
+      const result = enforceModeRules(candidate, "NEXTJS");
       expect(result.mode).toBe("HYBRID");
-      expect(result.modeReason).toContain("Lighthouse");
+      expect(result.modeReason).toContain("performance");
     });
 
     it("does not change AI mode for non-performance tasks", () => {
-      // enforceModeRules imported at top
       const candidate = {
         id: "test", titulo: "Agregar meta description a /servicios", descripcion: "Update metadata",
         kind: "CODE" as const, mode: "AI" as const, modeReason: "Simple text change", priority: 2, effort: "LOW" as const,
@@ -180,6 +178,73 @@ describe("analysis-candidates", () => {
       };
       const result = enforceModeRules(candidate);
       expect(result.mode).toBe("AI");
+    });
+
+    // ── WordPress: capability-based mode ───────────────────────────────
+
+    it("WP: sets AI when actionType matches capabilities", () => {
+      const candidate = {
+        id: "test", titulo: "Crear artículo de blog SEO", descripcion: "Blog sobre servicios",
+        kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 1, effort: "MEDIUM" as const,
+        impactoEsperado: "Tráfico orgánico", justificacion: "Gap de contenido", fuente: "analisis" as const,
+        actionType: "create_blog" as const,
+      };
+      const caps = ["publish", "seo", "media", "capabilities", "pages"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("AI");
+      expect(result.modeReason).toContain("create_blog");
+      expect(result.modeReason).toContain("/capabilities");
+    });
+
+    it("WP: sets HUMAN when actionType requires missing endpoint", () => {
+      const candidate = {
+        id: "test", titulo: "Editar sección hero en Elementor", descripcion: "Cambiar H1 y CTA",
+        kind: "CODE" as const, mode: "AI" as const, modeReason: "AI", priority: 2, effort: "MEDIUM" as const,
+        impactoEsperado: "Mejor UX", justificacion: "CTA débil", fuente: "signal" as const,
+        actionType: "edit_page_widgets" as const,
+      };
+      // Plugin v1.5.0 — no elementor endpoints
+      const caps = ["publish", "seo", "media"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("HUMAN");
+      expect(result.modeReason).toContain("elementor");
+    });
+
+    it("WP: edit_page_widgets becomes AI when plugin has elementor endpoints", () => {
+      const candidate = {
+        id: "test", titulo: "Actualizar textos en página de servicios", descripcion: "Editar via Elementor",
+        kind: "CODE" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 2, effort: "MEDIUM" as const,
+        impactoEsperado: "Mejores conversiones", justificacion: "Textos desactualizados", fuente: "signal" as const,
+        actionType: "edit_page_widgets" as const,
+      };
+      // Plugin v1.6.0 — elementor endpoints present
+      const caps = ["publish", "seo", "media", "elementor", "elementor/duplicate", "elementor/widgets"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("AI");
+    });
+
+    it("WP: uses regex fallback when capabilities are null", () => {
+      const candidate = {
+        id: "test", titulo: "Escribir artículo de blog sobre válvulas", descripcion: "Crear post",
+        kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 1, effort: "MEDIUM" as const,
+        impactoEsperado: "Tráfico", justificacion: "Gap", fuente: "analisis" as const,
+        // No actionType — will infer from text
+      };
+      const result = enforceModeRules(candidate, "WORDPRESS", null);
+      expect(result.mode).toBe("AI");
+      expect(result.modeReason).toContain("regex fallback");
+    });
+
+    it("WP: unrecognized action stays HUMAN", () => {
+      const candidate = {
+        id: "test", titulo: "Configurar WP Rocket", descripcion: "Optimizar velocidad con caché",
+        kind: "CODE" as const, mode: "AI" as const, modeReason: "AI", priority: 3, effort: "MEDIUM" as const,
+        impactoEsperado: "Performance", justificacion: "Slow", fuente: "signal" as const,
+        actionType: "other" as const,
+      };
+      const caps = ["publish", "seo", "media"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("HUMAN");
     });
   });
 

@@ -127,6 +127,8 @@ export async function executeWpAiStep(
       taskId,
       brandColors,
       imageCount,
+      taskKind: task.kind,
+      taskCategory: task.category,
     });
     return {
       notes: imgResult.notes,

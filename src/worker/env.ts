@@ -24,6 +24,10 @@ const workerEnvSchema = z.object({
   AGENT_TIMEOUT_MIN: z.coerce.number().positive().default(10),
   AGENT_MAX_BUDGET_USD: z.coerce.number().positive().default(2.0),
 
+  // Higgsfield image generation (optional — tasks degrade to HUMAN if missing)
+  HIGGSFIELD_KEY_ID: z.string().optional(),
+  HIGGSFIELD_KEY_SECRET: z.string().optional(),
+
   // Vercel token for fetching preview URLs (read-only scope)
   VERCEL_TOKEN: z.string().optional(),
 

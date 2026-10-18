@@ -23,7 +23,8 @@ import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
 import { CLAUDE_MODEL } from "@/lib/anthropic-config";
-import { publishWpPost, updateWpSeo } from "@/lib/wp-proxy-client";
+import { executeWpAiStep } from "./wp-executor";
+import { getWpSiteProfile } from "@/lib/wp-site-profile";
 import {
   classifyMemory,
   detectCatalogSections,
@@ -62,7 +63,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
   const task = await prisma.planTask.findUniqueOrThrow({
     where: { id: taskId },
     include: {
-      site: { include: { client: { select: { cerebroClientId: true } } } },
+      site: { include: { client: { select: { cerebroClientId: true, name: true } } } },
       plan: { select: { id: true, clientId: true, branchName: true, month: true } },
       steps: { orderBy: { order: "asc" } },
     },
@@ -221,6 +222,86 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           triggeredById: triggeredById ?? null,
         },
       });
+
+      // ── Image step shortcut (Next.js) ─────────────────────────
+      const imageAction = parseImageAction(step.prompt);
+      if (imageAction) {
+        try {
+          const { executeImage } = await import("./image-executor");
+          // Read brand colors from DESIGN.md if available
+          const brandColors = await readBrandColors(dir);
+          const articleSlug = task.title
+            .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 40);
+
+          const imgResult = await executeImage(imageAction, {
+            cerebroClientId: site.client?.cerebroClientId ?? "",
+            taskId,
+            clientId: plan.clientId,
+            brandColors,
+            repoDir: dir,
+            articleSlug,
+            imageCount: 0, // tracked per-task for Next.js too
+            taskKind: task.kind,
+            taskCategory: task.category,
+          });
+
+          // If image needs human intervention → WAITING_HUMAN
+          const needsHuman = imgResult.notes.startsWith("image:human-required")
+            || imgResult.notes.startsWith("image:limit")
+            || imgResult.notes.startsWith("image:qa-failed")
+            || imgResult.notes.startsWith("image:failed")
+            || imgResult.notes.startsWith("image:upload-failed");
+
+          if (needsHuman) {
+            await prisma.planStep.update({
+              where: { id: step.id },
+              data: { status: "WAITING_HUMAN", notes: imgResult.notes },
+            });
+            await prisma.planTask.update({
+              where: { id: taskId },
+              data: { status: "WAITING_HUMAN", commitShas: allShas },
+            });
+            await prisma.taskRun.update({
+              where: { id: run.id },
+              data: { status: "SUCCEEDED", logTail: imgResult.notes.slice(0, 2000), finishedAt: new Date() },
+            });
+            console.log(`[plan-task] Image step ${step.order} → WAITING_HUMAN: ${imgResult.notes.slice(0, 80)}`);
+            return;
+          }
+
+          // If image was written to repo, update frontmatter and commit
+          if (imgResult.imageUrl && imageAction.payload.usage === "featured_image") {
+            await updateMdxFrontmatter(dir, articleSlug, imgResult.imageUrl);
+          }
+
+          if (hasDiff(dir)) {
+            const sha = commitStep(dir, branchName, taskId, `image: ${step.title}`);
+            if (sha) allShas.push(sha);
+          }
+
+          await prisma.planStep.update({
+            where: { id: step.id },
+            data: { status: "DONE", notes: imgResult.notes },
+          });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "SUCCEEDED", logTail: imgResult.notes.slice(0, 2000), finishedAt: new Date() },
+          });
+          console.log(`[plan-task] Image step ${step.order} done: ${imgResult.notes.slice(0, 80)}`);
+          continue;
+        } catch (imgErr) {
+          const errMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
+          console.error(`[plan-task] Image step ${step.order} failed: ${errMsg}`);
+          await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "FAILED", logTail: errMsg.slice(0, 2000), finishedAt: new Date() },
+          });
+          await failTask(taskId, `Imagen step ${step.order} falló: ${errMsg}`);
+          return;
+        }
+      }
 
       try {
         const agentResult = await runAgent(dir, task, step);
@@ -677,17 +758,19 @@ async function processPreflight(jobData: PlanTaskJobData): Promise<void> {
 }
 
 // ─── WordPress execution engine ──────────────────────────────────────────────
-
-interface WpStepAction {
-  action: "publish" | "seo" | "update" | "media";
-  endpoint: string;
-  payload: Record<string, unknown>;
-  content_brief?: string;
-}
+// Primitivas en src/worker/wp-executor.ts; orchestración aquí.
 
 /**
  * Procesador de tareas para sitios WordPress.
  * No clona repositorios — ejecuta vía plugin Cerebro WP a través del proxy de Cerebro web.
+ *
+ * Flujo:
+ * 1. Construir perfil del sitio (getWpSiteProfile) — caché 7 días.
+ * 2. Para cada step:
+ *    - HUMAN → WAITING_HUMAN, detener.
+ *    - AI → executeWpAiStep (wp-executor.ts).
+ * 3. Si un step publish devuelve previewUrl → guardar en PlanTask.previewUrl.
+ *    resultUrls se llena al publicar el plan.
  */
 async function processWpTask(
   taskId: string,
@@ -708,14 +791,17 @@ async function processWpTask(
       notes: string | null;
     }>;
     site: {
+      url: string;
       platform: string | null;
-      client: { cerebroClientId: string | null } | null;
+      client: { cerebroClientId: string | null; name: string } | null;
     };
     objective: string;
   },
   plan: { id: string; clientId: string },
 ): Promise<void> {
   const cerebroClientId = task.site.client?.cerebroClientId ?? null;
+  const clientName = task.site.client?.name ?? "Cliente";
+  const siteUrl = task.site.url;
 
   const lock = await acquirePlanLock(plan.id);
   if (!lock.acquired) {
@@ -725,7 +811,16 @@ async function processWpTask(
 
   await prisma.planTask.update({ where: { id: taskId }, data: { status: "RUNNING" } });
 
+  // Construir perfil del sitio — para guiar la generación de contenido
+  const siteProfile = cerebroClientId
+    ? await getWpSiteProfile(cerebroClientId, clientName, siteUrl, taskId).catch((err) => {
+        console.warn(`[wp-task] siteProfile failed — continuando sin perfil: ${(err as Error).message}`);
+        return null;
+      })
+    : null;
+
   const resultUrls = [...task.resultUrls];
+  let imageCount = 0; // track AI-generated images across steps (max 2 per task)
 
   try {
     for (const step of task.steps) {
@@ -755,18 +850,59 @@ async function processWpTask(
           throw new Error("Site no tiene cerebroClientId — necesario para llamar al plugin WP via proxy");
         }
 
-        const stepResult = await executeWpAiStep(cerebroClientId, task, step, taskId);
+        const stepResult = await executeWpAiStep(cerebroClientId, siteProfile, task, step, taskId, imageCount);
+
+        // Track image count for per-task limit
+        if (stepResult.imageUrl) imageCount++;
+
+        // Image steps that need human intervention → WAITING_HUMAN
+        const isImageHuman = stepResult.notes.startsWith("image:human-required")
+          || stepResult.notes.startsWith("image:limit")
+          || stepResult.notes.startsWith("image:qa-failed")
+          || stepResult.notes.startsWith("image:failed")
+          || stepResult.notes.startsWith("image:upload-failed");
+
+        if (isImageHuman) {
+          await prisma.planStep.update({
+            where: { id: step.id },
+            data: { status: "WAITING_HUMAN", notes: stepResult.notes },
+          });
+          await prisma.planTask.update({
+            where: { id: taskId },
+            data: { status: "WAITING_HUMAN", resultUrls },
+          });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "SUCCEEDED", logTail: stepResult.notes.slice(0, 2000), finishedAt: new Date() },
+          });
+          console.log(`[wp-task] Image step ${step.order} → WAITING_HUMAN: ${stepResult.notes.slice(0, 80)}`);
+          return;
+        }
 
         await prisma.planStep.update({
           where: { id: step.id },
           data: {
             status: "DONE",
             notes: step.notes ? `${step.notes}\n---\n${stepResult.notes}` : stepResult.notes,
+            // stagedChange almacena datos estructurados del borrador (blog o seo)
+            // publishWpPlanAction los lee para aplicar al publicar el plan
+            ...(stepResult.stagedChange !== undefined
+              ? { stagedChange: stepResult.stagedChange }
+              : {}),
           },
         });
 
+        // Borrador WP → previewUrl de la tarea (resultUrls se llena al publicar el plan)
         if (stepResult.previewUrl) {
-          resultUrls.push(stepResult.previewUrl);
+          await prisma.planTask.update({
+            where: { id: taskId },
+            data: { previewUrl: stepResult.previewUrl },
+          });
+        }
+
+        // Imagen generada → resultUrls (la URL de la imagen, no previewUrl de la tarea)
+        if (stepResult.imageUrl) {
+          resultUrls.push(stepResult.imageUrl);
         }
 
         await prisma.taskRun.update({
@@ -791,12 +927,12 @@ async function processWpTask(
       }
     }
 
-    // All steps done
+    // Todos los pasos completados
     await prisma.planTask.update({
       where: { id: taskId },
       data: { status: "DONE", completedAt: new Date(), resultUrls },
     });
-    console.log(`[wp-task] ✓ Task "${task.title}" → DONE (${resultUrls.length} URLs)`);
+    console.log(`[wp-task] ✓ Task "${task.title}" → DONE`);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     if (errMsg === "PLAN_LOCKED") throw err;
@@ -805,202 +941,6 @@ async function processWpTask(
   } finally {
     await lock.release();
   }
-}
-
-/**
- * Ejecuta un step AI de WordPress: parsea la acción estructurada del prompt
- * y llama al endpoint correcto del plugin WP via proxy.
- */
-async function executeWpAiStep(
-  cerebroClientId: string,
-  task: { title: string; objective: string; kind: string; category: string },
-  step: { title: string; prompt: string | null; acceptanceCriteria: string[]; notes: string | null },
-  taskId: string,
-): Promise<{ notes: string; previewUrl?: string }> {
-  // Parse structured action from step.prompt (decomposer sets JSON for WP AI steps)
-  let action: WpStepAction | null = null;
-  if (step.prompt) {
-    try {
-      const cleaned = step.prompt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-      action = JSON.parse(cleaned) as WpStepAction;
-    } catch {
-      // Not structured JSON — fall through to heuristic
-    }
-  }
-
-  // Fallback: infer action from task kind/category
-  if (!action?.action) {
-    const isContent = task.kind === "CONTENT" || task.category === "blog";
-    const isMeta = task.category === "meta" || task.category === "seo";
-    if (isContent) {
-      action = {
-        action: "publish",
-        endpoint: "POST /publish",
-        payload: {},
-        content_brief: step.prompt ?? task.objective,
-      };
-    } else if (isMeta) {
-      action = {
-        action: "seo",
-        endpoint: "POST /seo/0",
-        payload: { page_id: 0 },
-        content_brief: step.prompt ?? task.objective,
-      };
-    } else {
-      // Stage as proposal — don't fail the step
-      return {
-        notes: `wp:staged — acción no reconocida para categoria "${task.category}". Prompt: ${(step.prompt ?? "").slice(0, 400)}`,
-      };
-    }
-  }
-
-  if (action.action === "publish") {
-    return executeWpPublish(cerebroClientId, task, action, taskId);
-  }
-  if (action.action === "seo") {
-    return executeWpSeo(cerebroClientId, task, action, taskId);
-  }
-
-  // update / media — stage as proposal for motor mínimo
-  return {
-    notes: `wp:staged — acción "${action.action}" (${action.endpoint}) pendiente de implementar. Payload: ${JSON.stringify(action.payload).slice(0, 400)}`,
-  };
-}
-
-/** Genera artículo de blog con Claude y lo publica como borrador en WP. */
-async function executeWpPublish(
-  cerebroClientId: string,
-  task: { title: string; objective: string },
-  action: WpStepAction,
-  taskId: string,
-): Promise<{ notes: string; previewUrl?: string }> {
-  const title = String(action.payload?.title ?? task.title);
-  const brief = action.content_brief ?? task.objective;
-
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const contentResponse = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 8000,
-    messages: [{
-      role: "user",
-      content: [
-        "Escribe el artículo completo de blog según este brief.",
-        "Formato: HTML semántico sin <html>/<body>/<head>.",
-        "Usa <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>.",
-        "Entre 1500 y 2500 palabras.",
-        "PROHIBIDO inventar datos del cliente: precios, casos de éxito, certificaciones, números específicos.",
-        "Solo contenido informativo del sector que no requiera verificación con el cliente.",
-        "",
-        `TÍTULO: ${title}`,
-        "",
-        "BRIEF:",
-        brief,
-      ].join("\n"),
-    }],
-  });
-
-  const content = contentResponse.content[0]?.type === "text" ? contentResponse.content[0].text : "";
-  if (!content) {
-    throw new Error("Claude no generó contenido para el artículo");
-  }
-
-  const result = await publishWpPost(cerebroClientId, {
-    title,
-    content,
-    status: "draft",
-    slug: action.payload?.slug as string | undefined,
-    focus_keyword: action.payload?.focus_keyword as string | undefined,
-    categories: action.payload?.categories as string[] | undefined,
-  }, taskId);
-
-  if (!result.ok) {
-    throw new Error(`WP /publish falló: ${result.error}`);
-  }
-
-  const { post_id, draft_url, edit_url } = result.data;
-  const previewUrl = draft_url ?? edit_url;
-  const notes = `wp:publish OK — post_id=${post_id}${previewUrl ? ` draft_url=${previewUrl}` : ""}`;
-
-  const costUsd = Number(contentResponse.usage.input_tokens) * 0.000003 + Number(contentResponse.usage.output_tokens) * 0.000015;
-  await logApiUsage({ provider: "anthropic", endpoint: "wp-publish-content", cost: costUsd, clientId: "" });
-
-  return { notes, previewUrl };
-}
-
-/** Genera meta title/description con Claude y los aplica via Yoast SEO. */
-async function executeWpSeo(
-  cerebroClientId: string,
-  task: { title: string; objective: string },
-  action: WpStepAction,
-  taskId: string,
-): Promise<{ notes: string }> {
-  const pageId = Number(action.payload?.page_id ?? 0);
-  let metaTitle = action.payload?.meta_title as string | undefined;
-  let metaDescription = action.payload?.meta_description as string | undefined;
-  const focusKeyword = action.payload?.focus_keyword as string | undefined;
-
-  // Generate with Claude if not already in the payload
-  if (!metaTitle || !metaDescription) {
-    const brief = action.content_brief ?? `${task.title}: ${task.objective}`;
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const metaResponse = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 500,
-      messages: [{
-        role: "user",
-        content: [
-          "Genera meta title y meta description para SEO según este contexto.",
-          "meta_title: 50-60 caracteres exactos, incluye keyword principal, evita mayúsculas innecesarias.",
-          "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
-          "PROHIBIDO inventar datos del cliente.",
-          "Responde SOLO con JSON: {\"meta_title\": \"...\", \"meta_description\": \"...\"}",
-          "",
-          "CONTEXTO:",
-          brief,
-        ].join("\n"),
-      }],
-    });
-
-    const rawMeta = metaResponse.content[0]?.type === "text" ? metaResponse.content[0].text : "{}";
-    try {
-      const cleaned = rawMeta.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(cleaned) as { meta_title?: string; meta_description?: string };
-      metaTitle = metaTitle ?? parsed.meta_title;
-      metaDescription = metaDescription ?? parsed.meta_description;
-    } catch {
-      // Use whatever we have
-    }
-  }
-
-  if (!metaTitle || !metaDescription) {
-    return {
-      notes: `wp:seo STAGED — no se pudo generar meta. Objetivo: ${task.objective.slice(0, 200)}`,
-    };
-  }
-
-  // If page_id is unknown (0): stage the proposal for manual application
-  if (pageId === 0) {
-    const proposal = JSON.stringify({ meta_title: metaTitle, meta_description: metaDescription, focus_keyword: focusKeyword });
-    return {
-      notes: `wp:seo STAGED — page_id desconocido. Propuesta lista para aplicar:\n${proposal}`,
-    };
-  }
-
-  const result = await updateWpSeo(cerebroClientId, pageId, {
-    meta_title: metaTitle,
-    meta_description: metaDescription,
-    focus_keyword: focusKeyword,
-  }, taskId);
-
-  if (!result.ok) {
-    throw new Error(`WP /seo/${pageId} falló: ${result.error}`);
-  }
-
-  return {
-    notes: `wp:seo OK — page_id=${pageId} meta_title="${metaTitle}" (${metaTitle.length} chars) meta_description="${metaDescription.slice(0, 60)}..." (${metaDescription.length} chars)`,
-  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1017,4 +957,87 @@ async function failRun(runId: string, error: string, logTail?: string): Promise<
     where: { id: runId },
     data: { status: "FAILED", error, logTail: logTail ?? null, finishedAt: new Date() },
   });
+}
+
+// ─── Image step helpers ──────────────────────────────────────────────────────
+
+import type { ImageStepAction } from "./image-executor";
+
+/**
+ * Intenta parsear el prompt de un step como una acción de imagen.
+ * Retorna null si no es un step de imagen.
+ */
+function parseImageAction(prompt: string | null): ImageStepAction | null {
+  if (!prompt) return null;
+  try {
+    const cleaned = prompt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (parsed.action === "image") return parsed as unknown as ImageStepAction;
+  } catch {
+    // Not JSON or not an image action
+  }
+  return null;
+}
+
+/**
+ * Lee colores de marca desde DESIGN.md del repo del cliente.
+ * Busca un patron "colors:" o "palette:" y extrae la primera línea.
+ */
+async function readBrandColors(repoDir: string): Promise<string | null> {
+  const { readFile } = await import("fs/promises");
+  const { join } = await import("path");
+
+  try {
+    const design = await readFile(join(repoDir, "DESIGN.md"), "utf-8");
+    // Look for color definitions: "Primary: #hex" or "colors: ..."
+    const colorMatch = design.match(/(?:colou?rs?|palette|primary|brand)[:\s]*([#\w\s,()-]+)/i);
+    return colorMatch?.[1]?.trim().slice(0, 200) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Actualiza el frontmatter de un artículo MDX para incluir la imagen de portada.
+ * Busca content/blog/{slug}.mdx y agrega/actualiza el campo "image".
+ */
+async function updateMdxFrontmatter(repoDir: string, slug: string, imagePath: string): Promise<void> {
+  const { readFile, writeFile } = await import("fs/promises");
+  const { join } = await import("path");
+  const { globSync } = await import("glob");
+
+  // Find the MDX file matching this slug
+  const candidates = globSync(`content/blog/**/${slug}*.mdx`, { cwd: repoDir });
+  if (candidates.length === 0) {
+    console.log(`[image] No MDX found for slug "${slug}" — skipping frontmatter update`);
+    return;
+  }
+
+  const mdxPath = join(repoDir, candidates[0]);
+  const content = await readFile(mdxPath, "utf-8");
+
+  // Check if frontmatter has image field
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) return;
+
+  const frontmatter = fmMatch[1];
+  let updatedFm: string;
+
+  if (/^image\s*:/m.test(frontmatter)) {
+    // Replace existing image field
+    updatedFm = frontmatter.replace(/^image\s*:.*$/m, `image: "${imagePath}"`);
+  } else {
+    // Add image field after title
+    updatedFm = frontmatter.replace(
+      /^(title\s*:.*$)/m,
+      `$1\nimage: "${imagePath}"`,
+    );
+  }
+
+  const updatedContent = content.replace(
+    /^---\n[\s\S]*?\n---/,
+    `---\n${updatedFm}\n---`,
+  );
+  await writeFile(mdxPath, updatedContent, "utf-8");
+  console.log(`[image] Updated frontmatter in ${candidates[0]}: image="${imagePath}"`);
 }
