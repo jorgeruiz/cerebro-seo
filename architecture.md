@@ -515,6 +515,28 @@ export class DataForSeoProvider implements SeoDataProvider { /* ... */ }
 
 ---
 
+## 4b. Higgsfield — Generación de imágenes AI
+
+**API:** `https://api.higgsfield.ai` — REST async (submit + poll).
+**Auth:** `Key {HIGGSFIELD_KEY_ID}:{HIGGSFIELD_KEY_SECRET}` (env vars del worker).
+**Modelo:** `recraft/v4.1/text-to-image` ($0.035/imagen).
+**Flujo:** POST /{model} → poll GET /requests/{id}/status (backoff 2s→10s, timeout 120s) → completed/failed/nsfw.
+
+**Implementación:** `src/worker/image-executor.ts`
+- Genera imagen → optimiza con sharp (WebP, max 1600px, <200KB) → QA con Claude Vision → upload
+- WP: POST /media via proxy + PUT /update con featured_image_id
+- Next.js: escribe en public/images/blog/ + actualiza frontmatter MDX
+- Límites: max 2 imágenes/tarea, costos en ApiUsage (provider="higgsfield")
+- Guard blog-only en worker (no solo en prompt del decomposer)
+- Fallos → WAITING_HUMAN con motivo explícito
+
+**Restricciones:**
+- Solo imágenes conceptuales/ilustraciones para blogs. Landings/servicios → HUMAN siempre.
+- Si la imagen necesita personas/productos/instalaciones reales → HUMAN.
+- Brand colors: WP vía GET /kit, Next.js vía DESIGN.md.
+
+---
+
 ## 5. Sistema de Multiagentes (infraestructura transversal)
 
 El sistema de multiagentes ya está construido como infraestructura. No es una fase del roadmap — es la capa de inteligencia que acompaña todo el sistema. Los agentes se activan conforme las fases proveen datos reales.

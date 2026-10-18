@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-16 (S3a — motor WordPress completo)
-**Fase actual:** S2e+S3+S4a+S4c+S2f completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Probar S2f en Quicsa desde 3 módulos. Luego S4d (límites + bitácora visible).
+**Última actualización:** 2026-10-17 (IMG — imágenes AI con Higgsfield + correcciones flujo WP)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Probar generación de imagen en Quicsa (Next.js) y Navalsa (WordPress) con API key Higgsfield configurada. Luego S4d (límites + bitácora visible).
 
 ---
 
@@ -532,6 +532,93 @@ El Dockerfile usa `ARG`/`ENV` con valores placeholder antes del build. Easypanel
 - `WP_PROXY_SECRET`: pendiente de agregar cuando cerebro-web despliegue el auth M2M
 
 **Commit:** `f15167c`
+
+---
+
+### Sesión IMG — 2026-10-17 ✅ COMPLETA (Imágenes AI con Higgsfield + correcciones flujo WP)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Motor de imágenes AI integrado al plan mensual + 3 correcciones de flujo WP. 30 tests.
+
+**Imágenes AI (Higgsfield):**
+- `image-executor.ts`: Higgsfield API (submit → poll con backoff → terminal state), sharp WebP optimization (max 1600px, <200KB), Claude Vision QA con 1 reintento
+- Solo blogs (guard blog-only validado en worker, no solo en prompt del decomposer)
+- Portada → featured_media automático via PUT /update/{id} con featured_image_id
+- Brand colors: WP vía GET /kit (Elementor system_colors), Next.js vía DESIGN.md
+- Max 2 imágenes/tarea. Costos registrados en ApiUsage (provider="higgsfield")
+- Fallos (generación, QA, upload) → WAITING_HUMAN con motivo (no DONE silencioso)
+- Next.js: escribe en public/images/blog/, actualiza frontmatter MDX automáticamente
+- WP: upload via POST /media proxy, asigna featured image si attach_to_post_id
+
+**Corrección 1 — publishWpPlanAction NO publica blogs:**
+- Reescrito: blogs se skipean (quedan como borrador en WP Admin)
+- Decomposer agrega paso HUMAN final "Revisar y publicar borrador en WordPress"
+- Solo aplica: SEO metas (POST /seo) y Elementor borradores (POST /elementor/apply)
+
+**Corrección 2 — featured_media automático:**
+- Tras upload a WP, si usage=featured_image y post_id existe → PUT /update con featured_image_id
+
+**Corrección 3 — enforceModeRules por capacidad (no regex):**
+- Nuevo campo `actionType` en candidatas (create_blog, update_meta, edit_page_widgets, etc.)
+- `enforceModeRules` cruza actionType con /capabilities del plugin (cached 24h)
+- Regex solo como fallback cuando proxy no responde (modeReason lo indica)
+- Al actualizar plugin → tareas migran a AI automáticamente sin cambiar código
+- `claude-analysis.ts`: gatherUnifiedContext ahora fetcha wpCapabilities para WP sites
+
+**Archivos nuevos:**
+- `src/worker/image-executor.ts` — core de generación de imágenes
+- `src/worker/__tests__/image-executor.test.ts` — 10 tests
+
+**Archivos modificados:**
+- `wp-executor.ts`: routing action=image + brand colors de /kit
+- `task-processor.ts`: image step detection Next.js, WAITING_HUMAN en fallos, imageCount tracking
+- `task-decomposer.ts`: reglas de imagen en SYSTEM_PROMPT (blog-only, subject_type, max 2, paso HUMAN final en blogs)
+- `wp-proxy-client.ts`: uploadWpMedia()
+- `analysis-candidates.ts`: WpActionType + ACTION_TYPE_CAPABILITIES + enforceModeRules refactorizado
+- `claude-analysis.ts`: actionType en prompt + wpCapabilities en gatherUnifiedContext
+- `publish-wp-plan-action.ts`: eliminó publicación de blogs, solo metas + Elementor
+- `catalogo-tareas.md`: documentación de imagen AI en WP y Next.js
+
+**Deps:** sharp 0.35.5
+**Env:** HIGGSFIELD_KEY_ID + HIGGSFIELD_KEY_SECRET en worker (Easypanel configurado)
+**Tests:** 30/30 (10 image-executor + 7 analysis-candidates + 13 publish-wp-plan)
+**Commit:** `a36750a`
+
+**Pendiente:**
+- Test end-to-end: crear tarea de blog con imagen en Quicsa (Next.js) y Navalsa (WordPress)
+- Deploy plugin v1.6.0 en Navalsa (prerequisito para test Elementor)
+
+---
+
+### Sesión WP3 — 2026-10-17 ✅ COMPLETA (Plugin WP v1.6.0 — Elementor Pro escritura)
+**Participantes:** Jorge + Claude Code
+**Resultado:** ✅ Plugin v1.6.0 con 7 endpoints Elementor Pro de escritura + TS integration completa. Tag `wp-plugin-v1.6.0`.
+
+**Plugin PHP (`plugin/class-cerebro-wp-v160.php`):**
+- `POST /elementor/duplicate` — crea borrador duplicando elementos Elementor (Document API, no `_elementor_data` directo)
+- `PATCH /elementor/{draftId}/widgets` — actualiza widgets en borrador (texto, imagen, botón, heading, icon-box)
+- `POST /elementor/{draftId}/apply` — aplica borrador a página original (crea revisión pre-apply con `wp_save_post_revision`)
+- `POST /elementor/{draftId}/revert` — revierte a revisión pre-apply
+- `POST /elementor/from-template/{templateId}` — crea página desde plantilla local (`elementor_library`)
+- `POST /elementor/import` — importa página desde JSON externo
+- `GET /kit` — colores y tipografías del kit activo de Elementor
+- `GET /forms/submissions` — resumen de envíos de formularios Elementor Pro (solo nombres de campo, sin PII)
+- Regla crítica: NUNCA `update_post_meta($id, '_elementor_data', ...)` — siempre `$document->save(['elements' => ...])` via Document API
+
+**TypeScript:**
+- `wp-proxy-client.ts`: 8 nuevas funciones (`duplicateWpElementorPage`, `updateWpElementorWidgets`, `applyWpElementorDraft`, `revertWpElementorPage`, `createWpDraftFromTemplate`, `importWpElementorPage`, `getWpKit`, `getWpFormsSubmissions`)
+- `wp-staged-change.ts`: nuevo tipo `WpStagedElementorChange` + `isElementorChange` type guard
+- `analysis-candidates.ts`: patrones v1.6.0 en `WP_PLUGIN_ACTION_PATTERNS` (landing/Elementor/heading/hero)
+- `wp-executor.ts`: `executeWpElementor` — genera `WpWidgetUpdate[]` vía Claude, stagea sin aplicar directamente
+- `publish-wp-plan-action.ts` reescrito: blogs se SKIPEAN (se publican manualmente desde WP Admin); SEO y Elementor se aplican. Removes `published` counter, adds `elementorApplied`. Fix: `tryResolvePageId` ignora slugs vacíos. Fix: doble-conteo de `skipped` en steps SEO no resueltos.
+
+**Tests:** 13/13 en `publish-wp-plan-action.test.ts`. Mock TDZ fix: `vi.hoisted()` en lugar de `const` antes de `vi.mock`.
+
+**Pendiente:**
+- Deploy del plugin en Navalsa (subir `class-cerebro-wp-v160.php` al servidor)
+- Test end-to-end: duplicate página servicios → cambiar H2 → preview → apply → revert
+- Test creación landing desde plantilla (verificar si hay plantillas disponibles)
+
+**Commit:** `c29fc1a` — tag `wp-plugin-v1.6.0`
 
 ---
 

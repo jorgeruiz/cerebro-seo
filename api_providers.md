@@ -197,7 +197,42 @@ NOTION_API_KEY=
 
 ---
 
-## 7. Stack de proveedores opcional / a evaluar
+## 7. Higgsfield (generación de imágenes AI)
+
+### Setup
+- **URL:** https://api.higgsfield.ai
+- **Auth:** `Key {KEY_ID}:{KEY_SECRET}` en header Authorization
+- **Modelo de pricing:** Pay-as-you-go, balance en USD
+- **Estado:** ✅ API key configurada en Easypanel (worker) y .env.local (17-oct-2026)
+
+### Endpoints que usamos
+
+| Endpoint | Uso | Costo |
+|---|---|---|
+| `POST /{model}` | Generar imagen (text-to-image) | $0.035/imagen (Recraft v4.1) |
+| `GET /requests/{id}/status` | Poll resultado (backoff 2s→10s, timeout 120s) | Gratis |
+| `POST /estimate/{model}` | Pre-estimar costo | Gratis |
+
+### Modelo activo
+- `recraft/v4.1/text-to-image` — resolución 1k, batch_size 1
+
+### Flujo
+Submit → poll → completed/failed/nsfw → fetch image → sharp optimize → Claude Vision QA → upload
+
+### Variables de entorno (solo worker)
+```
+HIGGSFIELD_KEY_ID=
+HIGGSFIELD_KEY_SECRET=
+```
+
+### Límites
+- Max 2 imágenes por tarea del plan mensual
+- Solo blogs (portada + inline). Landings/servicios → HUMAN siempre
+- Costos registrados en ApiUsage (provider="higgsfield")
+
+---
+
+## 8. Stack de proveedores opcional / a evaluar
 
 ### 7.1 AI Search Visibility (a definir en Fase 4)
 
@@ -225,7 +260,7 @@ Opciones a evaluar para tracking de presencia en respuestas de LLMs:
 
 ---
 
-## 8. Resumen de costos para 10 clientes
+## 9. Resumen de costos para 10 clientes
 
 | Proveedor | Costo mensual estimado |
 |---|---|
@@ -244,7 +279,7 @@ Estimación parcialmente validada con llamada SERP real a DataForSEO (07-may-202
 
 ---
 
-## 9. Alertas de costo
+## 10. Alertas de costo
 
 Implementar en monitoreo de `ApiUsage`:
 - Alerta diaria si gasto del día > $5 (umbral inusual)
