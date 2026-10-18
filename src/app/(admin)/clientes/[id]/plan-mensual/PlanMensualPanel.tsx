@@ -135,11 +135,13 @@ function StepRow({
   stepResult,
   onComplete,
   isCompleting,
+  isWordPress = false,
 }: {
   step: PlanStepView;
   stepResult: string | null;
   onComplete: (stepId: string) => void;
   isCompleting: boolean;
+  isWordPress?: boolean;
 }) {
   const statusCfg = STEP_STATUS[step.status] ?? STEP_STATUS.PENDING;
   const isHumanPending = step.type === "HUMAN" && (step.status === "PENDING" || step.status === "WAITING_HUMAN");
@@ -179,7 +181,9 @@ function StepRow({
             )}
             {step.prompt && (
               <div className="space-y-1">
-                <p className="font-mono text-[0.55rem] text-orange-400/70">Prompt para la terminal:</p>
+                <p className="font-mono text-[0.55rem] text-orange-400/70">
+                  {isWordPress ? "Instrucciones:" : "Prompt para la terminal:"}
+                </p>
                 <div className="bg-zinc-950 rounded px-2.5 py-2 relative group/prompt">
                   <pre className="font-mono text-[0.6rem] text-zinc-300 whitespace-pre-wrap leading-relaxed">{step.prompt}</pre>
                   <button
@@ -192,7 +196,11 @@ function StepRow({
               </div>
             )}
             <p className="font-mono text-[0.55rem] text-muted-foreground/60">
-              {step.prompt
+              {isWordPress
+                ? step.prompt
+                  ? "Sigue las instrucciones. Cuando termines en WordPress Admin, marca como hecho."
+                  : "Haz el cambio en WordPress Admin. Cuando termines, marca como hecho."
+                : step.prompt
                 ? "Copia el prompt y pégalo en la terminal. Cuando termines, marca como hecho."
                 : "Usa la terminal para hacer los cambios, o trabaja fuera y marca como hecho."}
             </p>
@@ -255,6 +263,7 @@ function StepRow({
 function TaskCard({
   task,
   planPreviewUrl,
+  isWordPress,
   onExecute,
   onVoid,
   onRetry,
@@ -263,6 +272,7 @@ function TaskCard({
 }: {
   task: PlanTaskFullView;
   planPreviewUrl?: string | null;
+  isWordPress?: boolean;
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
@@ -367,6 +377,7 @@ function TaskCard({
                     stepResult={stepRun?.logTail ?? null}
                     onComplete={onCompleteStep}
                     isCompleting={isActing}
+                    isWordPress={isWordPress}
                   />
                 );
               })}
@@ -477,6 +488,7 @@ function TaskGroup({
   mode,
   tasks,
   planPreviewUrl,
+  isWordPress,
   onExecute,
   onVoid,
   onRetry,
@@ -486,6 +498,7 @@ function TaskGroup({
   mode: string;
   tasks: PlanTaskFullView[];
   planPreviewUrl?: string | null;
+  isWordPress?: boolean;
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
@@ -511,6 +524,7 @@ function TaskGroup({
             key={task.id}
             task={task}
             planPreviewUrl={planPreviewUrl}
+            isWordPress={isWordPress}
             onExecute={onExecute}
             onVoid={onVoid}
             onRetry={onRetry}
@@ -765,6 +779,8 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
         .filter((g) => g.tasks.length > 0)
     : [];
 
+  const isWordPress = plan?.platform === "WORDPRESS" || plan?.platform === "MIGRACION";
+
   const progress = plan ? planProgress(plan.tasks) : 0;
 
   return (
@@ -845,6 +861,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
                   mode={g.mode}
                   tasks={g.tasks}
                   planPreviewUrl={plan.previewUrl}
+                  isWordPress={isWordPress}
                   onExecute={handleExecute}
                   onVoid={handleVoid}
                   onRetry={handleRetry}

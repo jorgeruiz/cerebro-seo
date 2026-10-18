@@ -66,6 +66,7 @@ export interface PlanFullView {
   completedAt: string | null;
   mergedAt: string | null;
   totalCostUsd: number;
+  platform: string | null;
   tasks: PlanTaskFullView[];
 }
 
@@ -106,18 +107,21 @@ export async function getPlanData(
       ? months[0].month
       : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`);
 
-  const plan = await prisma.monthlyPlan.findFirst({
-    where: { clientId, month: targetMonth },
-    include: {
-      tasks: {
-        orderBy: { order: "asc" },
-        include: {
-          steps: { orderBy: { order: "asc" } },
-          runs: { orderBy: { startedAt: "desc" }, take: 5 },
+  const [plan, site] = await Promise.all([
+    prisma.monthlyPlan.findFirst({
+      where: { clientId, month: targetMonth },
+      include: {
+        tasks: {
+          orderBy: { order: "asc" },
+          include: {
+            steps: { orderBy: { order: "asc" } },
+            runs: { orderBy: { startedAt: "desc" }, take: 5 },
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.site.findFirst({ where: { clientId }, select: { platform: true } }),
+  ]);
 
   if (!plan) return { plan: null, months };
 
@@ -140,6 +144,7 @@ export async function getPlanData(
     completedAt: plan.completedAt?.toISOString() ?? null,
     mergedAt: plan.mergedAt?.toISOString() ?? null,
     totalCostUsd,
+    platform: site?.platform ?? null,
     tasks: plan.tasks.map((t) => ({
       id: t.id,
       order: t.order,
