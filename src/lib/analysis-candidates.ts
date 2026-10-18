@@ -72,91 +72,105 @@ export const analysisResultSchema = z.object({
   candidatas: z.array(candidateSchema),
 });
 
-// ─── Patrones por plataforma ─────────────────────────────────────────────────
+// ─── Clasificación de modo por plataforma ────────────────────────────────────
 
-/** Next.js: performance/bundle → forzar HYBRID (nunca AI) */
+/**
+ * Next.js: acciones que el agente puede hacer pero requieren revisión humana (HYBRID).
+ * Performance, bundle size, refactors estructurales → el agente toca código
+ * pero el resultado necesita validación visual antes de mergear.
+ */
 const NEXTJS_HYBRID_PATTERNS = [
   /performance/i, /speed\s*index/i, /tbt/i, /fcp/i, /lcp/i, /cls/i,
   /core\s*web\s*vitals/i, /lighthouse/i, /bundle/i, /lazy.?load/i,
-  /code.?split/i, /refactor/i, /layout/i, /js\s*(sin\s*usar|unused)/i,
+  /code.?split/i, /refactor/i, /js\s*(sin\s*usar|unused)/i,
   /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
 ];
 
 /**
- * WordPress: actividades que el plugin NO puede hacer → forzar HUMAN.
- * Cubre Elementor (edición visual), landings, templates, diseño, performance, plugins.
- * Catálogo completo en docs/catalogo-tareas.md.
+ * WordPress: acciones ejecutables por el plugin vía proxy Cerebro web.
+ *
+ * Lista explícita de lo que SÍ puede hacer:
+ *   v1.5.0 CONTENT (POST /publish):         crear artículo de blog o post
+ *   v1.5.0 META    (POST /seo/{id}):         actualizar meta title/description/keyword
+ *   v1.5.0 ALT     (POST /media):            subir imagen con alt text
+ *   v1.6.0 ELEMENTOR (duplicate+widgets):    editar página Elementor existente
+ *   v1.6.0 LANDING (from-template/import):   crear landing desde plantilla o JSON
+ *
+ * Categorías implícitamente HUMAN (sin lista negra — todo lo que no está aquí):
+ *   Performance, CSS global, tema, plugins, header/footer, diseño desde cero, etc.
+ *
+ * El decomposer valida en tiempo real contra GET /capabilities antes de generar steps AI.
  */
-const WP_FORCE_HUMAN_PATTERNS = [
-  /elementor/i, /landing/i, /plantilla/i, /template/i,
-  /performance/i, /velocidad/i, /pagespeed/i, /lcp/i, /fcp/i, /tbt/i, /cls/i,
-  /plugin/i, /tema\b/i, /theme/i, /header/i, /footer/i,
-  /diseño/i, /layout/i, /cta\b/i, /button/i, /botón/i,
-  /slider/i, /carousel/i, /galería/i, /gallery/i,
-  /css\b/i, /estilo/i, /tipograf/i,
+const WP_PLUGIN_ACTION_PATTERNS = [
+  // CONTENT — crear blog/post
+  /\bblog\b/i, /artículo/i, /articulo/i, /\bpost\b/i, /publicar\s*(artículo|post|blog)/i,
+  /crear\s*(artículo|post|contenido)/i, /redactar/i, /escribir\s*(artículo|post|blog)/i,
+  /contenido.*blog/i, /blog.*contenido/i,
+  // META — actualizar meta tags via Yoast
+  /meta\s*(title|description|tag)/i, /yoast/i, /\bseo.*título/i, /título.*seo\b/i,
+  /reescribir.*meta/i, /optimizar.*meta/i, /actualizar.*meta/i, /meta.*seo/i,
+  /focus\s*keyword/i,
+  // ALT — imágenes con texto alternativo
+  /\balt\b.*imagen/i, /imagen.*\balt\b/i, /texto\s*alternativo/i, /alt\s*text/i,
+  // ELEMENTOR EDITING — v1.6.0: duplicate + widget updates
+  /landing\s*(page|de\s*aterrizaje)?/i, /\baterrizaje\b/i,
+  /duplicar.*página/i, /página.*duplicar/i,
+  /editar.*(?:página|sección|hero).*elementor/i, /elementor.*(?:editar|actualizar|modificar)/i,
+  /actualizar.*(?:h[1-6]|heading|encabezado|título\s*principal)/i,
+  /(?:h[1-6]|heading|encabezado).*(?:actualizar|cambiar|reescribir)/i,
+  /modificar.*(?:imagen|texto|botón|cta).*(?:página|sección)/i,
+  /cambiar.*(?:texto|imagen|botón).*(?:página|hero|banner)/i,
+  // LANDING CREATION — v1.6.0: from-template / import
+  /crear.*(?:landing|página\s*de\s*(?:servicio|producto|contacto|venta))/i,
+  /nueva.*(?:landing|página\s*web)/i, /landing.*(?:crear|construir|generar)/i,
 ];
 
 /**
- * WordPress: actividades que el plugin SÍ puede hacer → permitir AI.
- * v1.5.0: blog (POST /publish), meta Yoast (POST /seo/{id}),
- *         imágenes con alt (POST /media), editar post (PUT /update/{id}).
- */
-const WP_ALLOW_AI_PATTERNS = [
-  /blog/i, /artículo/i, /articulo/i, /post\b/i, /publicar/i,
-  /meta\s*(title|description|tag)/i, /yoast/i, /seo.*título/i, /título.*seo/i,
-  /\balt\b/i, /imagen.*alt/i, /alt.*imagen/i,
-  /focus\s*keyword/i, /keyword.*yoast/i,
-];
-
-/**
- * Aplica reglas de modo post-Claude según el catálogo oficial (docs/catalogo-tareas.md).
+ * Aplica reglas de modo deterministas tras la generación por Claude.
  *
- * WordPress:
- *  - HYBRID nunca permitido → HUMAN
- *  - AI permitido solo para: blog, meta Yoast, alt de imágenes (plugin v1.5.0)
- *  - Todo lo demás (Elementor, landing, performance, plugins) → HUMAN
+ * Reemplaza clasificación por palabras clave con reglas por tipo de acción:
+ * - WordPress/Migración: modo basado en si la acción es ejecutable por el plugin v1.5.0
+ *   (blog/meta/alt → AI; todo lo demás → HUMAN). HYBRID no existe en WP.
+ * - Next.js: performance/bundle → HYBRID (requiere revisión visual).
  *
- * Next.js:
- *  - Performance/bundle/refactor → HYBRID (nunca AI)
+ * La validación final contra GET /capabilities ocurre en el decomposer,
+ * que ajusta el tipo de cada step según los endpoints activos en el sitio.
  */
 export function enforceModeRules(candidate: AnalysisCandidate, platform?: string | null): AnalysisCandidate {
   if (platform === "WORDPRESS" || platform === "MIGRACION") {
-    // HYBRID nunca existe en WordPress
+    // HYBRID no existe en WordPress — el plugin no tiene operaciones de revisión intermedia
     if (candidate.mode === "HYBRID") {
-      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no HYBRID — convierte a HUMAN guiado" };
+      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no existe modo HYBRID — convierte a HUMAN guiado" };
     }
 
     const text = `${candidate.titulo} ${candidate.descripcion}`;
-    const isManualActivity = WP_FORCE_HUMAN_PATTERNS.some((p) => p.test(text));
-    const isPluginActivity = WP_ALLOW_AI_PATTERNS.some((p) => p.test(text));
+    const isPluginAction = WP_PLUGIN_ACTION_PATTERNS.some((p) => p.test(text));
 
-    if (candidate.mode === "AI") {
-      if (isManualActivity && !isPluginActivity) {
+    if (isPluginAction) {
+      // La acción pertenece al catálogo del plugin (blog, meta, alt) → AI
+      if (candidate.mode !== "AI") {
         return {
           ...candidate,
-          mode: "HUMAN",
-          modeReason: "WordPress: actividad requiere Elementor/diseño/performance — HUMAN guiado con instrucciones exactas",
+          mode: "AI",
+          modeReason: "WordPress: acción ejecutable por plugin v1.6.0 (blog/meta/alt/elementor/landing) — AI via proxy Cerebro web",
         };
       }
-      // isPluginActivity → AI permitido (blog, meta, alt)
       return candidate;
     }
 
-    // HUMAN → upgrade a AI si es claramente actividad del plugin
-    // (Claude tiende a ser conservador en WP — corregir aquí)
-    if (candidate.mode === "HUMAN" && isPluginActivity && !isManualActivity) {
+    // No está en el catálogo del plugin → HUMAN guiado con instrucciones exactas
+    if (candidate.mode !== "HUMAN") {
       return {
         ...candidate,
-        mode: "AI",
-        modeReason: "WordPress: plugin v1.5.0 puede ejecutar esta tarea (blog/meta/alt) — AI via POST /publish o POST /seo/{id}",
+        mode: "HUMAN",
+        modeReason: "WordPress: acción fuera del catálogo del plugin (Elementor/diseño/performance) — HUMAN con pasos WP Admin",
       };
     }
-
     return candidate;
   }
 
-  // Next.js: performance/bundle → HYBRID (nunca AI)
-  if (candidate.mode === "AI") {
+  // Next.js: performance/bundle → HYBRID (el agente lo hace pero necesita revisión visual)
+  if (platform === "NEXTJS" && candidate.mode === "AI") {
     const text = `${candidate.titulo} ${candidate.descripcion}`;
     if (NEXTJS_HYBRID_PATTERNS.some((p) => p.test(text))) {
       return {
@@ -166,6 +180,7 @@ export function enforceModeRules(candidate: AnalysisCandidate, platform?: string
       };
     }
   }
+
   return candidate;
 }
 
