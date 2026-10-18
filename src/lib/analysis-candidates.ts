@@ -129,8 +129,14 @@ const ACTION_TYPE_CAPABILITIES: Record<WpActionType, string[]> = {
   update_meta:                    ["seo"],
   upload_media:                   ["media"],
   update_post:                    ["update"],
-  edit_page_widgets:              ["elementor", "elementor/duplicate", "elementor/widgets"],
-  create_landing_from_template:   ["elementor", "elementor/from-template"],
+  // SAFETY GATE — [] = siempre HUMAN hasta que pase la prueba WP3 en Navalsa.
+  // Para habilitar, cambiar a:
+  //   edit_page_widgets:           ["elementor/duplicate", "elementor/apply"]
+  //   create_landing_from_template:["elementor/from-template"]
+  // El class v1.6.0 retorna "elementor/apply/{draftId}" — isActionExecutable usa
+  // startsWith("elementor/apply/"), NO "elementor/widgets" (ruta diferente).
+  edit_page_widgets:              [], // TODO: habilitar tras prueba WP3 en Navalsa
+  create_landing_from_template:   [], // TODO: habilitar tras prueba WP3 en Navalsa
   generate_image:                 ["media"],
   other:                          [], // never matches → always HUMAN
 };
