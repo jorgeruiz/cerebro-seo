@@ -16,10 +16,9 @@
 
 import sharp from "sharp";
 import Anthropic from "@anthropic-ai/sdk";
-import { randomUUID } from "crypto";
 import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
-import { uploadWpMedia, updateWpPost, type WpMediaResult } from "@/lib/wp-proxy-client";
+import { uploadWpMedia, updateWpPost } from "@/lib/wp-proxy-client";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -329,7 +328,6 @@ export async function executeImage(
   const config = getHiggsfieldConfig();
   const brief = action.content_brief;
   const aspectRatio = action.payload.aspect_ratio ?? "16:9";
-  const usage = action.payload.usage ?? "featured_image";
   const colorHint = buildColorHint(context.brandColors);
 
   const fullPrompt = `${brief}${colorHint} Professional photography style, high quality, no text overlays, no logos, no watermarks.`;

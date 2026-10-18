@@ -14,7 +14,6 @@
  * 8. Liberar candado.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
@@ -22,7 +21,6 @@ import { createCanUseTool } from "./agent-permissions";
 import { prisma } from "@/lib/db";
 import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { workerEnv } from "./env";
-import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { executeWpAiStep } from "./wp-executor";
 import { getWpSiteProfile } from "@/lib/wp-site-profile";
 import {
@@ -887,7 +885,7 @@ async function processWpTask(
             // stagedChange almacena datos estructurados del borrador (blog o seo)
             // publishWpPlanAction los lee para aplicar al publicar el plan
             ...(stepResult.stagedChange !== undefined
-              ? { stagedChange: stepResult.stagedChange }
+              ? { stagedChange: stepResult.stagedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"] }
               : {}),
           },
         });

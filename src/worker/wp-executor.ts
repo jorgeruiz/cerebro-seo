@@ -268,7 +268,7 @@ async function executeWpSeo(
   cerebroClientId: string,
   task: { title: string; objective: string },
   action: WpStepAction,
-  taskId: string,
+  _taskId: string,
 ): Promise<WpStepResult> {
   const pageId = Number(action.payload?.page_id ?? 0);
   let metaTitle = action.payload?.meta_title as string | undefined;
