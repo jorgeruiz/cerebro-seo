@@ -171,6 +171,24 @@ En este caso, el `docker-compose.yml` no se usa en local (solo serviría para re
 
 ---
 
+## Plugin de WordPress
+
+El código fuente del plugin (`clicksociety-cerebro-connector`) **vive únicamente en cerebro-web**:
+```
+cerebro-web/wordpress-plugin/clicksociety-cerebro-connector/
+  clicksociety-cerebro-connector.php   ← plugin principal (v1.6.1+)
+  includes/class-cerebro-wp-v160.php   ← endpoints Elementor Pro write
+  CHANGELOG.md
+  README.md
+```
+
+**No editar ni crear código PHP del plugin en este repo.** La carpeta `plugin/` fue eliminada en octubre 2026.
+- El ZIP se genera on-the-fly en `/api/wp-plugin/download` (no se commitea nunca).
+- El auto-updater en el plugin consulta `CSCC_UPDATE_URL` (apps-cerebro-web.easypanel.host).
+- Para cambios al plugin: editar en cerebro-web, deployar, y WP detecta la nueva versión automáticamente.
+
+---
+
 ## Patrones de Cerebro a reutilizar
 
 Cerebro ya resolvió varios problemas. Antes de inventar, revisar cómo se hizo allá:
