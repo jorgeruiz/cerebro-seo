@@ -29,6 +29,7 @@
  *   PATCH: /elementor/{draftId}/widgets            (requiere X-Task-Id)
  */
 
+import { z } from "zod";
 import { redis } from "@/lib/redis";
 
 const CEREBRO_BASE = (process.env.CEREBRO_API_URL ?? "").replace(/\/$/, "");
@@ -263,6 +264,56 @@ async function proxyCall(
 
 // ─── API pública ─────────────────────────────────────────────────────────────
 
+// ─── Zod schemas para /capabilities (soporta v1.5.0 y v1.6.0) ───────────────
+
+/** v1.5.0: { plugin_version, api_namespace, capabilities: [{id, ...}] } */
+const RawCapsV15Schema = z.object({
+  plugin_version: z.string().optional(),
+  api_namespace: z.string().optional(),
+  capabilities: z.array(z.object({ id: z.string() }).passthrough()),
+});
+
+/** v1.6.0: { ok, version, endpoints: string[], write_require_task_id, elementor_active } */
+const RawCapsV16Schema = z.object({
+  ok: z.literal(true),
+  version: z.string().optional(),
+  endpoints: z.array(z.string()),
+  write_require_task_id: z.boolean().optional(),
+  elementor_active: z.boolean().optional(),
+  elementor_pro_active: z.boolean().optional(),
+});
+
+/**
+ * Normaliza la respuesta cruda de /capabilities (cualquier versión del plugin)
+ * al contrato interno WpCapabilities. Nunca lanza — devuelve endpoints:[] en worst case.
+ */
+function normalizeCapabilities(raw: unknown): WpCapabilities {
+  // Intentar v1.6.0 primero (tiene campo `endpoints`)
+  const v16 = RawCapsV16Schema.safeParse(raw);
+  if (v16.success) {
+    return {
+      endpoints: v16.data.endpoints,
+      write_require_task_id: v16.data.write_require_task_id,
+      elementor_active: v16.data.elementor_active,
+      elementor_pro_active: v16.data.elementor_pro_active,
+    };
+  }
+
+  // Intentar v1.5.0 (tiene campo `capabilities:[{id}]`)
+  const v15 = RawCapsV15Schema.safeParse(raw);
+  if (v15.success) {
+    return {
+      endpoints: v15.data.capabilities.map((c) => c.id),
+      write_require_task_id: false,
+      elementor_active: false,
+    };
+  }
+
+  // Formato desconocido — devolver vacío para no romper la descomposición
+  console.warn("[wp-proxy] /capabilities: formato de respuesta desconocido", raw);
+  return { endpoints: [] };
+}
+
 /**
  * Obtiene las capacidades del plugin WP para un cliente.
  * Cacheado 24 h en Redis para no golpear el proxy en cada descomposición.
@@ -280,6 +331,13 @@ export async function getWpCapabilities(
   if (cached) {
     try {
       const data = JSON.parse(cached) as WpCapabilities;
+      // Guardia: si la caché contiene respuesta cruda v1.5.0 sin normalizar,
+      // re-normalizar antes de devolver (evita crash si se cacheó sin Zod).
+      if (!Array.isArray(data.endpoints)) {
+        const normalized = normalizeCapabilities(data);
+        await redis.setex(cacheKey, CAPABILITIES_TTL_SECONDS, JSON.stringify(normalized)).catch(() => {});
+        return { ok: true, data: normalized, fromCache: true };
+      }
       return { ok: true, data, fromCache: true };
     } catch {
       // cache corrupto — continuar y refrescar
@@ -292,7 +350,7 @@ export async function getWpCapabilities(
     return result;
   }
 
-  const caps = result.data as WpCapabilities;
+  const caps = normalizeCapabilities(result.data);
   await redis.setex(cacheKey, CAPABILITIES_TTL_SECONDS, JSON.stringify(caps)).catch(() => {});
   return { ok: true, data: caps };
 }
