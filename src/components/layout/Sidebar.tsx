@@ -119,6 +119,15 @@ function SidebarContent({ collapsed = false }: { collapsed?: boolean }) {
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Version tag */}
+      {!collapsed && process.env.COMMIT_SHA && process.env.COMMIT_SHA !== "unknown" && (
+        <div className="px-5 pb-1">
+          <span className="font-mono text-[0.6rem] text-muted-foreground/50 select-all">
+            {process.env.COMMIT_SHA}
+          </span>
+        </div>
+      )}
+
       {/* User footer */}
       <div className={cn("border-t border-sidebar-border", collapsed ? "p-1.5" : "p-[14px_20px]")}>
         <DropdownMenu>

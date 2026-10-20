@@ -1,8 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
 
-# OpenSSL requerido por Prisma en Alpine
-RUN apk add --no-cache libc6-compat openssl
+# OpenSSL + git requeridos (Prisma / commit SHA en next.config.mjs)
+RUN apk add --no-cache libc6-compat openssl git
 
 # ── Capa de dependencias (cached a menos que cambie package.json) ─────────────
 COPY package.json package-lock.json ./

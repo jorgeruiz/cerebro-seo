@@ -1,0 +1,22 @@
+name: Deploy to Easypanel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Trigger Easypanel deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy web (cerebro-seo)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.EASYPANEL_DEPLOY_WEB }}")
+          echo "web deploy HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+      - name: Deploy worker (cerebro-seo-worker)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.EASYPANEL_DEPLOY_WORKER }}")
+          echo "worker deploy HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1

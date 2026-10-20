@@ -22,7 +22,13 @@ import type { PlanTaskJobData } from "@/server/jobs/queues";
 // Import terminal handler — registers its own Worker on "terminal-sessions"
 import "./terminal-handler";
 
-console.log("[plan-runner] Starting plan task worker...");
+import { execSync } from "child_process";
+const COMMIT = (() => {
+  try { return execSync("git rev-parse --short HEAD").toString().trim(); }
+  catch { return process.env.COMMIT_SHA ?? "unknown"; }
+})();
+
+console.log(`[plan-runner] Starting plan task worker... commit=${COMMIT}`);
 
 let isShuttingDown = false;
 

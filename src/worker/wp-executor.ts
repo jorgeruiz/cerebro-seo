@@ -148,6 +148,9 @@ export async function executeWpAiStep(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Haiku model ID for cheap second-pass operations. */
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+
 function normStr(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -278,6 +281,93 @@ function validateKeywordPresence(
   void metaDescLen; void metaDesc;
 
   return warnings;
+}
+
+/**
+ * Segunda pasada con Haiku: verifica afirmaciones sobre el cliente y reemplaza
+ * las que no tienen respaldo en factsBlock con [COMPLETAR: ...].
+ *
+ * Solo verifica campos de texto visible (sections, faq) — no modifica schema,
+ * internal_links, ni campos de estructura.
+ *
+ * Devuelve pkg modificado + lista de reemplazos realizados.
+ * Si Haiku falla o devuelve JSON inválido: devuelve el pkg original sin error.
+ */
+async function verifyAndReplaceUnsupportedClaims(
+  pkg: Record<string, unknown>,
+  factsBlock: string,
+  anthropic: Anthropic,
+): Promise<{ revisedPkg: Record<string, unknown>; replacements: string[] }> {
+  // Skip if no real facts are available (factsBlock is the "no disponible" message)
+  if (factsBlock.startsWith("PERFIL DEL SITIO: no disponible")) {
+    return { revisedPkg: pkg, replacements: [] };
+  }
+
+  // Only send the text-bearing fields to Haiku — keeps token count low
+  const toCheck = {
+    h1: pkg.h1,
+    sections: pkg.sections,
+    faq: pkg.faq,
+    cta: pkg.cta,
+  };
+
+  const systemPrompt = `Eres un verificador de afirmaciones para contenido SEO B2B en español.
+
+OBJETIVO: identificar afirmaciones sobre el CLIENTE que no tienen respaldo en los HECHOS VERIFICADOS
+y reemplazarlas con [COMPLETAR: descripción breve de qué se necesita confirmar].
+
+AFIRMACIONES A VERIFICAR (solo del cliente, no del sector):
+- Cobertura geográfica ("distribución nacional", "toda la república", "envíos a todo México")
+- Productos/servicios específicos que distribuye o fabrica
+- Certificaciones o normas que posee el cliente (ISO, ASME aplicado al cliente, etc.)
+- Stock disponible, inventario, capacidad de entrega
+- Tiempos de entrega, SLA, plazos de respuesta
+- Años de experiencia, clientes atendidos, proyectos completados
+- Cualquier número o estadística sobre el cliente
+
+NO TOCAR: conocimiento sectorial general (qué es una brida, normas ASME de la industria,
+tipos de productos, usos industriales, etc.) — ese contenido es educativo y no requiere fuente.
+
+RESPONDE SOLO con JSON válido (sin markdown):
+{
+  "revised": { <mismo objeto JSON que recibiste, con reemplazos aplicados> },
+  "replaced": ["texto original reemplazado 1", "texto original reemplazado 2"]
+}
+
+Si no encuentras ninguna afirmación no verificada, devuelve "replaced": [].`;
+
+  const userMessage = `HECHOS VERIFICADOS (única fuente autorizada para afirmaciones del cliente):
+${factsBlock}
+
+CONTENIDO A VERIFICAR:
+${JSON.stringify(toCheck, null, 2)}`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 6000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+    });
+
+    const raw = response.content[0]?.type === "text" ? response.content[0].text : "{}";
+    const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    const result = JSON.parse(cleaned) as { revised?: Record<string, unknown>; replaced?: string[] };
+
+    const costUsd =
+      Number(response.usage.input_tokens) * 0.0000008 +
+      Number(response.usage.output_tokens) * 0.000004;
+    await logApiUsage({ provider: "anthropic", endpoint: "wp-claim-verifier", cost: costUsd });
+
+    if (result.revised && typeof result.revised === "object") {
+      const merged = { ...pkg, ...result.revised };
+      return { revisedPkg: merged, replacements: result.replaced ?? [] };
+    }
+  } catch {
+    // Haiku failed or returned invalid JSON — silently return original
+  }
+
+  return { revisedPkg: pkg, replacements: [] };
 }
 
 /**
@@ -544,6 +634,16 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
     }
   }
 
+  // ── Step D3: Claim verifier (Haiku second pass) ───────────────────────────
+  const { revisedPkg, replacements } = await verifyAndReplaceUnsupportedClaims(
+    pkg,
+    factsBlock,
+    anthropic,
+  );
+  if (replacements.length > 0) {
+    pkg = revisedPkg;
+  }
+
   // ── Step E: Build valid schema (programmatic, not from Claude) ────────────
   const safeSchema = buildSafeSchema(kind, pageTitle, (pkg.meta_description as string) ?? "", siteProfile, keyword);
 
@@ -595,6 +695,14 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
 
   if (metaDescription.length < 120) warnings.push(`meta_description corta (${metaDescription.length} chars, recomendado 140+)`);
   if (metaDescription.length > 165) warnings.push(`meta_description larga (${metaDescription.length} chars, máximo 165)`);
+
+  // Claim verifier results
+  if (replacements.length > 0) {
+    warnings.push(
+      `[verificador] ${replacements.length} afirmación(es) sin fuente reemplazada(s) con [COMPLETAR]:`,
+      ...replacements.map((r) => `  • "${r.slice(0, 120)}"`),
+    );
+  }
 
   // Propagate human review flag from retry logic
   if (pkg.__needs_human_review) {
