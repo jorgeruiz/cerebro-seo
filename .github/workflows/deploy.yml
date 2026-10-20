@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+# Required secrets (GitHub repo → Settings → Secrets and variables → Actions):
+#   EASYPANEL_DEPLOY_WEB    — webhook URL for cerebro-seo service
+#   EASYPANEL_DEPLOY_WORKER — webhook URL for cerebro-seo-worker service
+
 jobs:
   deploy:
     name: Trigger Easypanel deploy

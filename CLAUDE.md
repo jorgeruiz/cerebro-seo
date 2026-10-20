@@ -202,6 +202,18 @@ Cerebro ya resolvió varios problemas. Antes de inventar, revisar cómo se hizo 
 
 ## Reglas críticas
 
+### Secretos — regla permanente e incondicional
+**NUNCA imprimir en chat, reportes, tablas, comandos de ejemplo ni ninguna salida de texto:**
+- Valores de API keys, tokens de acceso o autenticación
+- Contraseñas, secrets, valores de variables de entorno sensibles
+- URLs de webhooks (contienen tokens embebidos)
+- Cualquier credencial de cualquier servicio
+
+Siempre referirse a ellos por **nombre de variable** (ej: `EASYPANEL_DEPLOY_WEB`, `ANTHROPIC_API_KEY`).
+Esta regla aplica incluso si el valor ya fue expuesto antes en la sesión, incluso en bloques de código,
+incluso en tablas de configuración, incluso si el usuario lo solicita explícitamente.
+Si necesitas mostrar una URL de webhook de ejemplo, usa `<EASYPANEL_DEPLOY_WEB>` como placeholder.
+
 ### Seguridad
 - **Cliente A nunca debe ver datos de Cliente B.** Toda query de Prisma filtra por `clientId` derivado de la sesión. Nunca confiar en `clientId` que venga del request.
 - **Secrets nunca en commits.** Usar `.env.local`, verificar que está en `.gitignore` (excluido como `.env*.local`).

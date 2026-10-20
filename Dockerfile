@@ -15,7 +15,14 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 # ── Capa de código fuente (invalidada cuando CUALQUIER archivo del repo cambia) ─
+# IMPORTANTE: NO agregar .git a .dockerignore — next.config.mjs usa git rev-parse
+# para bake del commit SHA. Si .git no está disponible, el build retorna "unknown".
 COPY . .
+
+# Build arg para commit SHA — respaldo si git rev-parse no funciona.
+# El GitHub Action puede pasar --build-arg BUILD_SHA=${{ github.sha }}.
+ARG BUILD_SHA="unknown"
+ENV COMMIT_SHA=$BUILD_SHA
 
 # Vars placeholder para que next build no falle por validación de env.
 # Con SKIP_ENV_VALIDATION=1 no se validan, pero deben existir como strings.
