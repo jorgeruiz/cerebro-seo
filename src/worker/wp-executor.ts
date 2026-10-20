@@ -466,23 +466,82 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
     kindInstructions[kind] ?? kindInstructions.landing,
   ].join("\n");
 
-  // ── Step D: Generate ──────────────────────────────────────────────────────
+  // ── Steps D + D2: Generate (with 1 retry if keyword missing from H1/meta_title) ──
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 8000,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
 
-  const rawText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
-  const cleaned = rawText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+  type PkgResult = {
+    pkg: Record<string, unknown>;
+    inputTokens: number;
+    outputTokens: number;
+  };
 
-  let pkg: Record<string, unknown>;
-  try {
-    pkg = JSON.parse(cleaned) as Record<string, unknown>;
-  } catch {
-    throw new Error(`content_package: JSON parse failed. Respuesta: ${cleaned.slice(0, 400)}`);
+  async function callClaude(messages: Anthropic.MessageParam[]): Promise<PkgResult> {
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8000,
+      system: systemPrompt,
+      messages,
+    });
+    const raw = res.content[0]?.type === "text" ? res.content[0].text : "{}";
+    const cl = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    let p: Record<string, unknown>;
+    try {
+      p = JSON.parse(cl) as Record<string, unknown>;
+    } catch {
+      throw new Error(`content_package: JSON parse failed. Respuesta: ${cl.slice(0, 400)}`);
+    }
+    return { pkg: p, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens };
+  }
+
+  let { pkg, inputTokens, outputTokens } = await callClaude([
+    { role: "user", content: userPrompt },
+  ]);
+
+  // Check keyword presence before possible retry
+  const kwWordsForCheck = normStr(keyword).split(/\s+/).filter((w) => w.length > 3);
+  const hasKwInH1 = kwWordsForCheck.every((w) => normStr((pkg.h1 as string) ?? "").includes(w));
+  const hasKwInMeta = kwWordsForCheck.every((w) => normStr((pkg.meta_title as string) ?? "").includes(w));
+
+  if (!hasKwInH1 || !hasKwInMeta) {
+    const missing: string[] = [];
+    if (!hasKwInH1) missing.push(`H1 actual: "${(pkg.h1 as string) ?? ""}"`);
+    if (!hasKwInMeta) missing.push(`meta_title actual: "${(pkg.meta_title as string) ?? ""}"`);
+
+    // Single retry with explicit correction prompt
+    const retryMessages: Anthropic.MessageParam[] = [
+      { role: "user", content: userPrompt },
+      { role: "assistant", content: JSON.stringify(pkg) },
+      {
+        role: "user",
+        content: [
+          `CORRECCIÓN REQUERIDA: el keyword "${keyword}" no aparece exactamente en:`,
+          ...missing,
+          "",
+          `Reescribe el JSON completo con estas correcciones OBLIGATORIAS:`,
+          `- h1 DEBE contener exactamente: "${keyword}"`,
+          `- meta_title DEBE contener exactamente: "${keyword}" (50-60 chars total)`,
+          `Responde SOLO con el JSON corregido completo.`,
+        ].join("\n"),
+      },
+    ];
+    const retry = await callClaude(retryMessages);
+    inputTokens += retry.inputTokens;
+    outputTokens += retry.outputTokens;
+
+    const retryH1Ok = kwWordsForCheck.every((w) => normStr((retry.pkg.h1 as string) ?? "").includes(w));
+    const retryMetaOk = kwWordsForCheck.every((w) => normStr((retry.pkg.meta_title as string) ?? "").includes(w));
+
+    if (retryH1Ok && retryMetaOk) {
+      pkg = retry.pkg;
+    } else {
+      // Still failing after retry → use retry result but flag for human review
+      pkg = retry.pkg;
+      const stillMissing: string[] = [];
+      if (!retryH1Ok) stillMissing.push("H1");
+      if (!retryMetaOk) stillMissing.push("meta_title");
+      pkg.__needs_human_review = true;
+      pkg.__human_review_reason = `Keyword "${keyword}" no incluida en: ${stillMissing.join(", ")} tras reintento automático. Revisar y corregir manualmente.`;
+    }
   }
 
   // ── Step E: Build valid schema (programmatic, not from Claude) ────────────
@@ -500,7 +559,6 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
           page_id: c.page_id ?? targetPageId,
           page_slug: targetPageSlug,
           widgets: (c.widgets ?? []).map((w) => {
-            // Try to find matching real widget for "before" text
             const realWidget = w.widget_id
               ? realWidgets.find((rw) => rw.id === w.widget_id)
               : realWidgets.find(
@@ -526,7 +584,7 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
   const ctaUrlFinal = typeof rawCta === "object" ? (rawCta?.url ?? ctaUrl) : ctaUrl;
   const ctaFinal = `${ctaText} — ${ctaUrlFinal}`;
 
-  // ── Step H: Validate keyword presence ────────────────────────────────────
+  // ── Step H: Validate keyword + lengths ───────────────────────────────────
   const h1 = (pkg.h1 as string) ?? pageTitle;
   const metaTitle = (pkg.meta_title as string) ?? "";
   const metaDescription = (pkg.meta_description as string) ?? "";
@@ -535,9 +593,13 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
 
   const warnings = validateKeywordPresence(h1, metaTitle, firstSectionText, keyword);
 
-  // Warn about meta description length
   if (metaDescription.length < 120) warnings.push(`meta_description corta (${metaDescription.length} chars, recomendado 140+)`);
   if (metaDescription.length > 165) warnings.push(`meta_description larga (${metaDescription.length} chars, máximo 165)`);
+
+  // Propagate human review flag from retry logic
+  if (pkg.__needs_human_review) {
+    warnings.unshift(`⚠ REVISIÓN HUMANA REQUERIDA: ${pkg.__human_review_reason as string}`);
+  }
 
   // ── Assemble staged change ────────────────────────────────────────────────
   const stagedChange: WpStagedContentPackageChange = {
@@ -559,12 +621,13 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
     staged_at: new Date().toISOString(),
   };
 
-  const costUsd =
-    Number(response.usage.input_tokens) * 0.000003 +
-    Number(response.usage.output_tokens) * 0.000015;
+  const costUsd = inputTokens * 0.000003 + outputTokens * 0.000015;
   await logApiUsage({ provider: "anthropic", endpoint: "wp-content-package", cost: costUsd });
 
-  const warnNote = warnings.length > 0 ? ` | ⚠ ${warnings.length} advertencia(s)` : "";
+  const needsReview = !!pkg.__needs_human_review;
+  const warnNote = warnings.length > 0
+    ? needsReview ? ` | 🔴 REVISIÓN REQUERIDA` : ` | ⚠ ${warnings.length} advertencia(s)`
+    : "";
   const notes = `content_package OK — kind=${kind} kw="${keyword}" secciones=${sections.length} faq=${stagedChange.faq?.length ?? 0}${warnNote}`;
 
   return { notes, stagedChange };

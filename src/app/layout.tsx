@@ -1,29 +1,10 @@
 import type { Metadata } from "next";
-import { Syne, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/layout/SessionProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const syne = Syne({
-  subsets: ["latin"],
-  weight: ["500", "700", "800"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-body",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
-  display: "swap",
-});
+// Fonts are self-hosted via @fontsource-variable (imported in globals.css).
+// CSS variables --font-display / --font-body / --font-mono defined in :root there.
 
 export const metadata: Metadata = {
   title: "Cerebro SEO — Click Society",
@@ -43,7 +24,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`dark ${syne.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+      className="dark"
     >
       <head>
         <meta name="theme-color" content="#6366f1" />

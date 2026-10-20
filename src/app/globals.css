@@ -1,3 +1,6 @@
+@import "@fontsource-variable/syne";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @tailwind base;
@@ -47,6 +50,11 @@
   }
 
   :root {
+    /* ── Fonts (self-hosted via @fontsource-variable) ────── */
+    --font-display: 'Syne Variable', 'Syne', sans-serif;
+    --font-body:    'Inter Variable', 'Inter', sans-serif;
+    --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+
     /* ── Backgrounds ─────────────────────────────────────── */
     --background: oklch(0.090 0.003 106);    /* #0a0a08 — fondo global */
     --card:       oklch(0.152 0.004 106);    /* #1a1a16 — cards, paneles */
