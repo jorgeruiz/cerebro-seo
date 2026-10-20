@@ -98,14 +98,25 @@ export interface WpStagedContentPackageChange {
    */
   optimization_changes?: Array<{
     page_title: string;
+    /** WP post ID real (0 si desconocido) */
     page_id: number;
+    /** Slug real obtenido de GET /pages */
+    page_slug?: string;
     widgets: Array<{
+      /** ID interno del nodo Elementor (para PATCH /elementor/{id}/widgets) */
+      widget_id?: string;
       section: string;
       widget_type: string;
+      /** Texto real del widget, obtenido de GET /elementor/{id} */
       before: string;
       after: string;
     }>;
   }>;
+  /**
+   * Advertencias de validación post-generación.
+   * ej: "H1 no contiene la keyword", "meta_title demasiado corto", "afirmación sin fuente"
+   */
+  validation_warnings?: string[];
   staged_at: string;
 }
 

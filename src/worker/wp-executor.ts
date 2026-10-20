@@ -23,6 +23,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import {
   publishWpPost,
+  getWpPages,
   getWpElementorPage,
   duplicateWpElementorPage,
   updateWpElementorWidgets,
@@ -106,7 +107,7 @@ export async function executeWpAiStep(
     }
   }
 
-  if (action.action === "content_package") return executeContentPackage(siteProfile, task, action, taskId);
+  if (action.action === "content_package") return executeContentPackage(cerebroClientId, siteProfile, task, action, taskId);
   if (action.action === "publish") return executeWpPublish(cerebroClientId, siteProfile, task, action, taskId);
   if (action.action === "seo") return executeWpSeo(cerebroClientId, task, action, taskId);
   if (action.action === "elementor" || action.action === "landing") return executeWpElementor(cerebroClientId, task, action, taskId);
@@ -145,19 +146,154 @@ export async function executeWpAiStep(
 
 // --- Content Package ---------------------------------------------------------
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function normStr(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * Extrae hechos verificados del contentSummary del perfil.
+ * El summary tiene formato "=== Título ===" + líneas.
+ * Devuelve mapa: título de página → líneas de contenido.
+ */
+function parseVerifiedFacts(
+  contentSummary: string,
+  pages: Array<{ title: string; slug: string }>,
+): Array<{ slug: string; title: string; lines: string[] }> {
+  const result: Array<{ slug: string; title: string; lines: string[] }> = [];
+  const sections = contentSummary.split(/^=== .+ ===/m).filter(Boolean);
+  const headers = Array.from(contentSummary.matchAll(/^=== (.+) ===$/gm)).map((m) => m[1]);
+
+  for (let i = 0; i < headers.length; i++) {
+    const title = headers[i];
+    const body = sections[i + 1] ?? "";
+    const lines = body
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 15);
+
+    const page = pages.find((p) => normStr(p.title).includes(normStr(title).slice(0, 8)));
+    result.push({ slug: page?.slug ?? "", title, lines: lines.slice(0, 12) });
+  }
+  return result;
+}
+
+/**
+ * Construye un schema JSON-LD válido según Google Search Central.
+ * - blog/article → Article (no Brand, no offers)
+ * - landing → Service (provider = LocalBusiness). No Product sin precio.
+ * - optimization → Service igual
+ * Nunca agrega Brand (solo fabricantes), ni availability sin dato.
+ */
+function buildSafeSchema(
+  kind: string,
+  pageTitle: string,
+  metaDescription: string,
+  siteProfile: WpSiteProfile | null,
+  keyword: string,
+): Record<string, unknown> {
+  const clientName = siteProfile?.clientName ?? "";
+  const siteUrl = siteProfile?.siteUrl ?? "";
+
+  // Detect city from keyword (e.g. "bridas industriales Monterrey")
+  const cityMatch = keyword.match(
+    /\b(monterrey|guadalajara|cdmx|ciudad\s+de\s+m[eé]xico|puebla|juárez|ju[aá]rez|tijuana|le[oó]n|m[eé]rida|torreon|torreón)\b/i,
+  );
+  const city = cityMatch?.[1] ?? null;
+
+  if (kind === "blog") {
+    const schema: Record<string, unknown> = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": pageTitle,
+      "description": metaDescription,
+    };
+    if (clientName) {
+      schema["publisher"] = {
+        "@type": "Organization",
+        "name": clientName,
+        ...(siteUrl ? { "url": siteUrl } : {}),
+      };
+    }
+    return schema;
+  }
+
+  // Landing / optimization → Service
+  const provider: Record<string, unknown> = {
+    "@type": "LocalBusiness",
+    ...(clientName ? { "name": clientName } : {}),
+    ...(siteUrl ? { "url": siteUrl } : {}),
+    ...(city ? { "address": { "@type": "PostalAddress", "addressLocality": city, "addressCountry": "MX" } } : {}),
+  };
+
+  const schema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": pageTitle,
+    "description": metaDescription,
+    "provider": provider,
+  };
+  if (city) {
+    schema["areaServed"] = { "@type": "City", "name": city, "addressCountry": "MX" };
+  }
+  return schema;
+}
+
+/**
+ * Valida que el keyword principal aparezca en H1, meta_title y primer párrafo.
+ * Tolera variaciones de acento y capitalización.
+ * Retorna lista de advertencias (vacío = ok).
+ */
+function validateKeywordPresence(
+  h1: string,
+  metaTitle: string,
+  firstSectionText: string,
+  keyword: string,
+): string[] {
+  const warnings: string[] = [];
+  // Check each significant word of the keyword (ignore particles ≤3 chars)
+  const kwWords = normStr(keyword)
+    .split(/\s+/)
+    .filter((w) => w.length > 3);
+
+  const check = (text: string, field: string) => {
+    const t = normStr(text);
+    const missing = kwWords.filter((w) => !t.includes(w));
+    if (missing.length > 0) {
+      warnings.push(`${field} no contiene: "${missing.join(", ")}" (de keyword "${keyword}")`);
+    }
+  };
+
+  check(h1, "H1");
+  check(metaTitle, "meta_title");
+  check(firstSectionText.slice(0, 500), "primer párrafo");
+
+  const metaTitleLen = metaTitle.length;
+  if (metaTitleLen < 45) warnings.push(`meta_title demasiado corto (${metaTitleLen} chars, mínimo 45)`);
+  if (metaTitleLen > 65) warnings.push(`meta_title demasiado largo (${metaTitleLen} chars, máximo 65)`);
+
+  const metaDescLen = metaTitle.length; // intentional: reuse pattern
+  const metaDesc = firstSectionText; // placeholder — real check below
+  void metaDescLen; void metaDesc;
+
+  return warnings;
+}
+
 /**
  * Genera el paquete completo de contenido SEO para una tarea CONTENT de WordPress.
- * No requiere plugin WP — es generación pura con Claude usando el perfil del sitio.
  *
- * Tipos:
- *   blog        → H1, H2/H3, textos, tablas, FAQ, CTA, metas, schema, enlaces, brief imagen
- *   landing     → igual que blog, orientado a página de servicio/producto
- *   optimization → cambios antes→después por widget para una página existente
- *
- * El resultado se guarda en PlanStep.stagedChange como WpStagedContentPackageChange.
- * La UI lo muestra con bloques copiables individuales.
+ * Flujo:
+ *   1. Si kind=optimization: GET /pages → encontrar página → GET /elementor/{id} para "before" real.
+ *      Si falla → lanza error descriptivo (tarea detenida, motivo en failureReason).
+ *   2. Construye bloque de hechos verificados con fuente (slug de página).
+ *   3. Llama a Claude con system prompt estricto de sourcing.
+ *   4. Reemplaza schema con versión válida generada programáticamente.
+ *   5. Valida presencia de keyword en H1 / meta_title / primer párrafo.
+ *   6. Guarda validation_warnings en stagedChange.
  */
 async function executeContentPackage(
+  cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
   task: { title: string; objective: string; kind: string; category: string },
   action: WpStepAction,
@@ -167,51 +303,170 @@ async function executeContentPackage(
   const keyword = (action.payload?.keyword as string) ?? task.title;
   const pageTitle = (action.payload?.page_title as string) ?? task.title;
 
-  const profileBlock = siteProfile?.hasContent
+  // ── Step A: For optimization, fetch real Elementor data ────────────────────
+  type ElementorWidget = { id?: string; type: string; text?: string; alt?: string };
+  type ElementorSection = { id: string; type: string; widgets: ElementorWidget[] };
+  type ElementorPage = { id: number; title: string; sections: ElementorSection[] };
+
+  let optimizationContext = "";
+  let targetPageId = 0;
+  let targetPageSlug = "";
+  let targetPageTitle = "";
+  let realWidgets: Array<{ id?: string; section: string; type: string; text: string }> = [];
+
+  if (kind === "optimization") {
+    const pagesResult = await getWpPages(cerebroClientId, taskId);
+    if (!pagesResult.ok) {
+      throw new Error(
+        `content_package optimization: no se pudo leer /pages — ${pagesResult.error}. ` +
+        `Verifica que el plugin WP esté activo y el proxy accesible.`,
+      );
+    }
+
+    // Find matching page: keyword words vs slug/title
+    const kwNorm = normStr(keyword);
+    const kwWords = kwNorm.split(/\s+/).filter((w) => w.length > 3);
+    const match = pagesResult.data.find((p) => {
+      const sl = normStr(p.slug);
+      const ti = normStr(p.title);
+      return kwWords.filter((w) => sl.includes(w) || ti.includes(w)).length >= 2;
+    }) ?? pagesResult.data.find((p) => {
+      // fallback: at least 1 word
+      const sl = normStr(p.slug);
+      const ti = normStr(p.title);
+      return kwWords.some((w) => sl.includes(w) || ti.includes(w));
+    });
+
+    if (!match) {
+      const available = pagesResult.data.map((p) => `/${p.slug} ("${p.title}")`).slice(0, 15).join(", ");
+      throw new Error(
+        `content_package optimization: no se encontró página para keyword "${keyword}". ` +
+        `Páginas disponibles: ${available}. ` +
+        `Actualiza el objetivo de la tarea con la URL exacta de la página a optimizar.`,
+      );
+    }
+
+    targetPageId = match.id;
+    targetPageTitle = match.title;
+    targetPageSlug = match.slug;
+
+    // Fetch Elementor widget tree
+    const elResult = await getWpElementorPage(cerebroClientId, targetPageId, taskId);
+    if (!elResult.ok) {
+      throw new Error(
+        `content_package optimization: no se pudo leer Elementor de "${targetPageTitle}" ` +
+        `(/${targetPageSlug}, id=${targetPageId}) — ${elResult.error}. ` +
+        `Verifica que la página usa Elementor y el plugin v1.5.0+ está instalado.`,
+      );
+    }
+
+    const elPage = elResult.data as ElementorPage;
+    for (const section of elPage.sections) {
+      for (const widget of section.widgets) {
+        if (widget.text && widget.text.trim().length > 5) {
+          realWidgets.push({
+            id: widget.id,
+            section: section.id,
+            type: widget.type,
+            text: widget.text.trim().slice(0, 300),
+          });
+        }
+      }
+    }
+
+    optimizationContext = [
+      `\nPÁGINA A OPTIMIZAR: "${targetPageTitle}" (/${targetPageSlug}, post_id=${targetPageId})`,
+      `WIDGETS ACTUALES (texto real de GET /elementor/${targetPageId}):`,
+      ...realWidgets.slice(0, 20).map((w, i) => `  [${i + 1}] type=${w.type} id=${w.id ?? "?"} | "${w.text.slice(0, 120)}"`),
+      "",
+      "INSTRUCCIÓN: Los campos 'before' en optimization_changes DEBEN usar el texto real de arriba.",
+      "Incluye widget_id del widget correspondiente.",
+    ].join("\n");
+  }
+
+  // ── Step B: Build verified-facts block ────────────────────────────────────
+  const verifiedFacts = siteProfile
+    ? parseVerifiedFacts(siteProfile.contentSummary, siteProfile.pages)
+    : [];
+
+  const factsBlock = siteProfile
     ? [
-        "PERFIL DEL SITIO (única fuente — solo afirma lo que está aquí):",
+        "HECHOS VERIFICADOS DEL CLIENTE (con fuente — ÚNICA base para afirmaciones):",
         `Cliente: ${siteProfile.clientName}`,
         `Sitio: ${siteProfile.siteUrl}`,
         "",
-        "Páginas existentes:",
-        siteProfile.pages.slice(0, 30).map((p) => `- /${p.slug || ""} — "${p.title}"`).join("\n"),
+        "Páginas del sitio:",
+        siteProfile.pages.slice(0, 30).map((p) => `  /${p.slug || "(raíz)"} — "${p.title}"`).join("\n"),
         "",
-        "Contenido actual:",
-        siteProfile.contentSummary.slice(0, 2000),
+        "Contenido extraído por página:",
+        ...verifiedFacts.flatMap((pf) =>
+          pf.lines.length > 0
+            ? [`  [/${pf.slug}]`, ...pf.lines.map((l) => `    • ${l}`)]
+            : []
+        ),
       ].join("\n")
     : "PERFIL DEL SITIO: no disponible. Usa [COMPLETAR: descripción] para cualquier dato específico del cliente.";
 
+  // ── Step C: Build prompt ──────────────────────────────────────────────────
   const systemPrompt = `Eres un especialista en contenido SEO para sitios WordPress en México.
-Generas paquetes de contenido estructurados en JSON.
+Generas paquetes de contenido estructurados como JSON.
 
-REGLAS:
-1. Solo afirmar datos que estén explícitamente en el PERFIL DEL SITIO.
-2. Datos no verificables (precio, certificaciones, casos reales, direcciones) → "[COMPLETAR: descripción]"
-3. Para kind=optimization: propón cambios específicos de widgets existentes (antes→después).
-4. Español de México, tono profesional, sin tecnicismos innecesarios.
-5. Schema JSON-LD debe ser válido y apropiado para el tipo de página.
-6. Meta title: 50-60 caracteres. Meta description: 140-160 caracteres.
-7. Mínimo 3 secciones H2. Mínimo 3 FAQ. Mínimo 2 enlaces internos.
+REGLA DE SOURCING (crítica, no negociable):
+• Cada afirmación sobre lo que el CLIENTE vende, distribuye, cubre, certifica, garantiza
+  o tiene en stock DEBE venir de los HECHOS VERIFICADOS. Si no hay fuente → [COMPLETAR: descripción].
+• Puedes incluir contenido EDUCATIVO general del sector (qué es una brida weld neck,
+  cómo funciona una tubería API) sin atribuírselo al cliente como oferta propia.
+• Ejemplos válidos: "Las bridas weld neck se usan en sistemas de alta presión" (educativo, ok)
+• Ejemplos inválidos: "Distribuimos bridas weld neck" (afirmación del cliente sin fuente → [COMPLETAR])
 
-RESPONDE SOLO con JSON (sin markdown, sin texto adicional):`;
+FORMATO:
+• keyword, H1, meta_title: deben incluir EXACTAMENTE las palabras clave proporcionadas.
+• meta_title: 50-60 caracteres con keyword. meta_description: 140-160 caracteres.
+• Cada sección: texto completo de 80-150 palabras (no resúmenes).
+• Tablas: usa filas reales si los datos son de conocimiento sectorial (normas ASME, clases de presión).
+  Si dependen del inventario del cliente → [COMPLETAR: valor].
+• cta: objeto {text: "...", url: "/ruta-de-contacto"} usando rutas del sitio.
+• internal_links: array de {anchor, url, context} con URLs reales del sitio.
+• faq: mínimo 4 preguntas. Respuestas: datos verificados o [COMPLETAR].
+• schema_jsonld: NO generar — se construye automáticamente.
+
+RESPONDE SOLO con JSON válido (sin markdown, sin texto):
+{
+  "h1": "...",
+  "sections": [{"h2": "...", "h3s": [...], "text": "...", "table": {"headers":[...],"rows":[[...]]}}],
+  "meta_title": "...",
+  "meta_description": "...",
+  "internal_links": [{"anchor": "...", "url": "...", "context": "..."}],
+  "faq": [{"q": "...", "a": "..."}],
+  "cta": {"text": "...", "url": "..."},
+  "image_brief": "...",
+  "optimization_changes": []
+}`;
+
+  const cta_hint = siteProfile?.pages.find(
+    (p) => /contacto|cotiz|contact/i.test(p.slug) || /contacto|cotiz/i.test(p.title),
+  );
+  const ctaUrl = cta_hint ? `/${cta_hint.slug}` : "/contacto";
 
   const kindInstructions: Record<string, string> = {
-    blog: `Artículo de blog informativo sobre "${keyword}". JSON con: h1, sections([{h2, h3s?, text, table?}]), meta_title, meta_description, schema_jsonld({@type:Article}), internal_links([{anchor,url,context}]), faq([{q,a}]), cta, image_brief.`,
-    landing: `Página de aterrizaje para "${keyword}". JSON con: h1, sections([{h2, h3s?, text, table?}]), meta_title, meta_description, schema_jsonld({@type:Service o Product}), internal_links([{anchor,url,context}]), faq([{q,a}]), cta, image_brief.`,
-    optimization: `Optimización de página existente sobre "${keyword}". JSON con: h1 (nuevo), sections([{h2, h3s?, text}]), meta_title (mejorado), meta_description (mejorada), schema_jsonld, internal_links, faq, cta, optimization_changes([{page_title,page_id:0,widgets:[{section,widget_type,before,after}]}]).`,
+    blog: `Artículo de blog informativo de 1200-1800 palabras sobre "${keyword}". Mínimo 4 secciones H2, 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
+    landing: `Página de servicio/producto sobre "${keyword}". Mínimo 5 secciones H2, tabla de especificaciones/tipos (normas sectoriales ok, precios → [COMPLETAR]), 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
+    optimization: `Mejoras específicas para la página "${targetPageTitle}" (/${targetPageSlug}). optimization_changes DEBE usar los widgets reales listados en PÁGINA A OPTIMIZAR. widget_id obligatorio para cada cambio.`,
   };
 
   const userPrompt = [
-    profileBlock,
+    factsBlock,
+    optimizationContext,
     "",
     `TIPO: ${kind}`,
-    `KEYWORD PRINCIPAL: ${keyword}`,
-    `TÍTULO DE PÁGINA: ${pageTitle}`,
-    `OBJETIVO: ${task.objective}`,
+    `KEYWORD PRINCIPAL (incluir tal cual en H1 y meta_title): ${keyword}`,
+    `TÍTULO SEO DE PÁGINA: ${pageTitle}`,
+    `OBJETIVO DE LA TAREA: ${task.objective}`,
     "",
     kindInstructions[kind] ?? kindInstructions.landing,
   ].join("\n");
 
+  // ── Step D: Generate ──────────────────────────────────────────────────────
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -227,24 +482,80 @@ RESPONDE SOLO con JSON (sin markdown, sin texto adicional):`;
   try {
     pkg = JSON.parse(cleaned) as Record<string, unknown>;
   } catch {
-    throw new Error(`content_package: JSON parse failed. Respuesta: ${cleaned.slice(0, 300)}`);
+    throw new Error(`content_package: JSON parse failed. Respuesta: ${cleaned.slice(0, 400)}`);
   }
 
+  // ── Step E: Build valid schema (programmatic, not from Claude) ────────────
+  const safeSchema = buildSafeSchema(kind, pageTitle, (pkg.meta_description as string) ?? "", siteProfile, keyword);
+
+  // ── Step F: Normalize optimization_changes with real widget IDs ───────────
+  type RawChange = { page_title?: string; page_id?: number; widgets?: Array<{
+    widget_id?: string; section?: string; widget_type?: string; before?: string; after?: string;
+  }> };
+  const rawChanges = (pkg.optimization_changes as RawChange[] | undefined) ?? [];
+  const normalizedChanges: WpStagedContentPackageChange["optimization_changes"] =
+    kind === "optimization" && rawChanges.length > 0
+      ? rawChanges.map((c) => ({
+          page_title: c.page_title ?? targetPageTitle,
+          page_id: c.page_id ?? targetPageId,
+          page_slug: targetPageSlug,
+          widgets: (c.widgets ?? []).map((w) => {
+            // Try to find matching real widget for "before" text
+            const realWidget = w.widget_id
+              ? realWidgets.find((rw) => rw.id === w.widget_id)
+              : realWidgets.find(
+                  (rw) =>
+                    rw.type === w.widget_type &&
+                    w.before && normStr(rw.text).includes(normStr(w.before).slice(0, 20)),
+                );
+            return {
+              widget_id: realWidget?.id ?? w.widget_id,
+              section: realWidget?.section ?? w.section ?? "",
+              widget_type: realWidget?.type ?? w.widget_type ?? "",
+              before: realWidget?.text ?? w.before ?? "",
+              after: w.after ?? "",
+            };
+          }),
+        }))
+      : undefined;
+
+  // ── Step G: CTA normalization ─────────────────────────────────────────────
+  type CtaObj = { text?: string; url?: string };
+  const rawCta = pkg.cta as string | CtaObj | undefined;
+  const ctaText = typeof rawCta === "object" ? (rawCta?.text ?? "") : (rawCta ?? "");
+  const ctaUrlFinal = typeof rawCta === "object" ? (rawCta?.url ?? ctaUrl) : ctaUrl;
+  const ctaFinal = `${ctaText} — ${ctaUrlFinal}`;
+
+  // ── Step H: Validate keyword presence ────────────────────────────────────
+  const h1 = (pkg.h1 as string) ?? pageTitle;
+  const metaTitle = (pkg.meta_title as string) ?? "";
+  const metaDescription = (pkg.meta_description as string) ?? "";
+  const sections = (pkg.sections as WpStagedContentPackageChange["sections"]) ?? [];
+  const firstSectionText = sections[0]?.text ?? "";
+
+  const warnings = validateKeywordPresence(h1, metaTitle, firstSectionText, keyword);
+
+  // Warn about meta description length
+  if (metaDescription.length < 120) warnings.push(`meta_description corta (${metaDescription.length} chars, recomendado 140+)`);
+  if (metaDescription.length > 165) warnings.push(`meta_description larga (${metaDescription.length} chars, máximo 165)`);
+
+  // ── Assemble staged change ────────────────────────────────────────────────
   const stagedChange: WpStagedContentPackageChange = {
     type: "content_package" as const,
     kind: kind as "blog" | "landing" | "optimization",
     keyword,
     page_title: pageTitle,
-    h1: (pkg.h1 as string) ?? pageTitle,
-    sections: (pkg.sections as WpStagedContentPackageChange["sections"]) ?? [],
-    meta_title: (pkg.meta_title as string) ?? "",
-    meta_description: (pkg.meta_description as string) ?? "",
-    schema_jsonld: (pkg.schema_jsonld as Record<string, unknown>) ?? {},
+    h1,
+    sections,
+    meta_title: metaTitle,
+    meta_description: metaDescription,
+    schema_jsonld: safeSchema,
     internal_links: (pkg.internal_links as WpStagedContentPackageChange["internal_links"]) ?? [],
     faq: (pkg.faq as WpStagedContentPackageChange["faq"]) ?? [],
-    cta: (pkg.cta as string) ?? "",
+    cta: ctaFinal,
     image_brief: (pkg.image_brief as string | undefined),
-    optimization_changes: (pkg.optimization_changes as WpStagedContentPackageChange["optimization_changes"]),
+    optimization_changes: normalizedChanges,
+    validation_warnings: warnings.length > 0 ? warnings : undefined,
     staged_at: new Date().toISOString(),
   };
 
@@ -253,9 +564,8 @@ RESPONDE SOLO con JSON (sin markdown, sin texto adicional):`;
     Number(response.usage.output_tokens) * 0.000015;
   await logApiUsage({ provider: "anthropic", endpoint: "wp-content-package", cost: costUsd });
 
-  const sectionCount = stagedChange.sections?.length ?? 0;
-  const faqCount = stagedChange.faq?.length ?? 0;
-  const notes = `content_package OK — kind=${kind} keyword="${keyword}" secciones=${sectionCount} faq=${faqCount}`;
+  const warnNote = warnings.length > 0 ? ` | ⚠ ${warnings.length} advertencia(s)` : "";
+  const notes = `content_package OK — kind=${kind} kw="${keyword}" secciones=${sections.length} faq=${stagedChange.faq?.length ?? 0}${warnNote}`;
 
   return { notes, stagedChange };
 }
