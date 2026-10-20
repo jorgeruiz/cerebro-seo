@@ -602,6 +602,7 @@ enum MonthlyPlanStatus {
   ACTIVE
   IN_REVIEW
   PUBLISHED
+  ARCHIVED
 }
 
 enum TaskMode {

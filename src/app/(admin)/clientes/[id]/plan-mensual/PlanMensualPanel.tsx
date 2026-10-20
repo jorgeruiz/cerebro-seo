@@ -5,8 +5,8 @@ import {
   Bot, User, Settings2, FileText, Code,
   ChevronDown, ChevronRight, Loader2,
   Play, CheckCircle2, XCircle,
-  Clock, Ban, RotateCcw, Terminal,
-  ExternalLink, GitMerge, Send, DollarSign, Eye,
+  Clock, Ban, RotateCcw, RefreshCw, Terminal,
+  ExternalLink, GitMerge, Send, DollarSign, Eye, Archive,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,8 @@ import {
   actionExecuteTask,
   actionCompleteHumanStep,
   actionVoidTask,
-  actionRetryFailedTask,
+  actionResetTask,
+  actionArchivePlan,
   actionActivatePlan,
   actionRunWatchdog,
   actionSubmitForReview,
@@ -107,7 +108,7 @@ function MonthSelector({
       >
         {months.map((m) => (
           <option key={m.month} value={m.month}>
-            {m.month} ({m.taskCount} tareas)
+            {m.month} ({m.taskCount} tareas){m.status === "ARCHIVED" ? " — archivado" : ""}
           </option>
         ))}
       </select>
@@ -400,6 +401,7 @@ function TaskCard({
   onExecute,
   onVoid,
   onRetry,
+  onRedo,
   onCompleteStep,
   isActing,
 }: {
@@ -409,6 +411,7 @@ function TaskCard({
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
+  onRedo: (taskId: string) => void;
   onCompleteStep: (stepId: string) => void;
   isActing: boolean;
 }) {
@@ -421,7 +424,7 @@ function TaskCard({
   const BadgeIcon = badge.icon;
   const KindIcon = KIND_ICON[task.kind] ?? Code;
   const progress = taskProgress(task);
-  const isTerminal = task.status === "DONE" || task.status === "VOIDED";
+  const isVoided = task.status === "VOIDED";
 
   return (
     <div
@@ -572,8 +575,8 @@ function TaskCard({
           )}
 
           {/* Actions */}
-          {!isTerminal && (
-            <div className="px-4 py-3 border-t border-border flex items-center gap-2">
+          {!isVoided && task.status !== "RUNNING" && (
+            <div className="px-4 py-3 border-t border-border flex items-center gap-2 flex-wrap">
               {task.status === "READY" && task.mode !== "HUMAN" && (
                 <button
                   onClick={() => onExecute(task.id)}
@@ -588,17 +591,31 @@ function TaskCard({
                 </button>
               )}
 
-              {(task.status === "FAILED" || task.status === "PLANNING") && (
+              {/* Reintentar desde el paso fallido — mantiene pasos DONE */}
+              {(task.status === "FAILED" || task.status === "WAITING_HUMAN" || task.status === "PLANNING") && (
                 <button
                   onClick={() => onRetry(task.id)}
                   disabled={isActing}
                   className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+                  title="Continúa desde el paso donde falló, conservando los pasos ya completados"
                 >
                   <RotateCcw className="h-3 w-3" /> Reintentar
                 </button>
               )}
 
-              {task.status !== "RUNNING" && task.status !== "PLANNING" && (
+              {/* Rehacer — reset completo: borra pasos y runs, vuelve a descomponer */}
+              {(task.status === "FAILED" || task.status === "DONE" || task.status === "WAITING_HUMAN") && (
+                <button
+                  onClick={() => onRedo(task.id)}
+                  disabled={isActing}
+                  className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+                  title="Reinicio completo: borra todos los pasos y empieza desde cero"
+                >
+                  <RefreshCw className="h-3 w-3" /> Rehacer
+                </button>
+              )}
+
+              {task.status !== "PLANNING" && (
                 <button
                   onClick={() => onVoid(task.id)}
                   disabled={isActing}
@@ -625,6 +642,7 @@ function TaskGroup({
   onExecute,
   onVoid,
   onRetry,
+  onRedo,
   onCompleteStep,
   isActing,
 }: {
@@ -635,6 +653,7 @@ function TaskGroup({
   onExecute: (taskId: string) => void;
   onVoid: (taskId: string) => void;
   onRetry: (taskId: string) => void;
+  onRedo: (taskId: string) => void;
   onCompleteStep: (stepId: string) => void;
   isActing: boolean;
 }) {
@@ -661,6 +680,7 @@ function TaskGroup({
             onExecute={onExecute}
             onVoid={onVoid}
             onRetry={onRetry}
+            onRedo={onRedo}
             onCompleteStep={onCompleteStep}
             isActing={isActing}
           />
@@ -791,6 +811,19 @@ function PlanStatusBanner({
     );
   }
 
+  if (plan.status === "ARCHIVED") {
+    return (
+      <div className="bg-muted/40 border border-border rounded-xl p-4">
+        <p className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+          <Archive className="h-4 w-4" /> Plan archivado
+        </p>
+        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+          Este plan fue archivado para auditoría. Puedes rehacer tareas individuales si es necesario.
+        </p>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -874,7 +907,18 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
   }
 
   function handleRetry(taskId: string) {
-    handleAction(() => actionRetryFailedTask(taskId));
+    handleAction(() => actionResetTask(taskId, "resume"));
+  }
+
+  function handleRedo(taskId: string) {
+    if (!confirm("¿Rehacer la tarea desde cero? Se borrarán todos los pasos y ejecuciones anteriores.")) return;
+    handleAction(() => actionResetTask(taskId, "redo"));
+  }
+
+  function handleArchive() {
+    if (!plan) return;
+    if (!confirm("¿Archivar este plan? Se conserva para auditoría pero no se puede ejecutar más.")) return;
+    handleAction(() => actionArchivePlan(plan.id));
   }
 
   function handleCompleteStep(stepId: string) {
@@ -927,12 +971,24 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
             selected={selectedMonth}
             onSelect={handleMonthChange}
           />
-          {plan && hasActiveWork(plan.tasks) && (
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin text-ds-blue" />
-              <span className="font-mono text-[0.6rem] text-ds-blue">En vivo</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {plan && hasActiveWork(plan.tasks) && (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin text-ds-blue" />
+                <span className="font-mono text-[0.6rem] text-ds-blue">En vivo</span>
+              </>
+            )}
+            {plan && !["PUBLISHED", "ARCHIVED"].includes(plan.status) && (
+              <button
+                onClick={handleArchive}
+                disabled={isActing}
+                className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5 text-muted-foreground")}
+                title="Archivar plan (conserva datos para auditoría)"
+              >
+                <Archive className="h-3 w-3" /> Archivar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Error */}
@@ -998,6 +1054,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
                   onExecute={handleExecute}
                   onVoid={handleVoid}
                   onRetry={handleRetry}
+                  onRedo={handleRedo}
                   onCompleteStep={handleCompleteStep}
                   isActing={isActing}
                 />

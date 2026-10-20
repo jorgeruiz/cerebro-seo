@@ -357,10 +357,19 @@ export async function actionVoidTask(
   return { ok: true, reverted };
 }
 
-// ─── Retry failed task ──────────────────────────────────────────────────────
+// ─── Reset task (resume from failed step | full redo) ───────────────────────
 
-export async function actionRetryFailedTask(
-  taskId: string
+/**
+ * mode=resume — mantiene pasos DONE/SKIPPED, resetea el primer paso no-DONE
+ *               y los siguientes a PENDING, borra solo esos runs.
+ *               Aplica a: FAILED, WAITING_HUMAN.
+ *
+ * mode=redo   — borra todos los pasos y runs, reinicia desde cero (PLANNING).
+ *               Aplica a: FAILED, DONE, WAITING_HUMAN.
+ */
+export async function actionResetTask(
+  taskId: string,
+  mode: "resume" | "redo"
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
@@ -370,34 +379,102 @@ export async function actionRetryFailedTask(
   const task = await prisma.planTask.findUnique({
     where: { id: taskId },
     include: {
-      steps: { select: { id: true } },
+      steps: { orderBy: { order: "asc" } },
       plan: { select: { clientId: true } },
     },
   });
   if (!task) return { ok: false, error: "Tarea no encontrada." };
-  if (task.status !== "FAILED" && task.status !== "PLANNING") {
-    return { ok: false, error: "Solo se pueden reintentar tareas en FAILED o PLANNING." };
+  if (task.status === "RUNNING") {
+    return { ok: false, error: "La tarea está en ejecución. Espera a que termine." };
   }
 
-  if (task.steps.length === 0) {
-    // Failed during decomposition — re-enqueue decompose
+  const allowedResume = ["FAILED", "WAITING_HUMAN", "PLANNING"];
+  const allowedRedo   = ["FAILED", "DONE", "WAITING_HUMAN", "PLANNING", "READY"];
+  if (mode === "resume" && !allowedResume.includes(task.status)) {
+    return { ok: false, error: `'Reintentar' requiere FAILED o WAITING_HUMAN (actual: ${task.status}).` };
+  }
+  if (mode === "redo" && !allowedRedo.includes(task.status)) {
+    return { ok: false, error: `'Rehacer' no aplica a tareas en ${task.status}.` };
+  }
+
+  if (mode === "redo" || task.steps.length === 0) {
+    // Redo completo — borrar todo y re-descomponer
+    await prisma.taskRun.deleteMany({ where: { taskId } });
+    await prisma.planStep.deleteMany({ where: { taskId } });
     await prisma.planTask.update({
       where: { id: taskId },
-      data: { status: "PLANNING", failureReason: null },
+      data: {
+        status: "PLANNING",
+        failureReason: null,
+        commitShas: [],
+        resultUrls: [],
+        previewUrl: null,
+        completedAt: null,
+        completedById: null,
+      },
     });
-    await prisma.planStep.deleteMany({ where: { taskId } });
     await decomposeQueue.add("task:decompose", {
       taskId,
       clientId: task.plan.clientId,
       candidateId: "retry",
     });
-  } else {
-    // Failed during execution — reset to READY (steps exist)
-    await prisma.planTask.update({
-      where: { id: taskId },
-      data: { status: "READY", failureReason: null },
-    });
+    return { ok: true };
   }
+
+  // Resume: encontrar primer paso no-DONE, resetear ese y siguientes
+  const firstPendingIdx = task.steps.findIndex(
+    (s) => s.status !== "DONE" && s.status !== "SKIPPED"
+  );
+  const stepsToReset = firstPendingIdx >= 0
+    ? task.steps.slice(firstPendingIdx)
+    : task.steps;
+
+  const resetIds = stepsToReset.map((s) => s.id);
+
+  await prisma.taskRun.deleteMany({ where: { taskId, stepId: { in: resetIds } } });
+  await prisma.planStep.updateMany({
+    where: { id: { in: resetIds } },
+    data: { status: "PENDING", notes: null },
+  });
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: { status: "READY", failureReason: null },
+  });
+  await planTaskQueue.add("execute", {
+    taskId,
+    triggeredById: session.user.email ?? undefined,
+  });
+
+  return { ok: true };
+}
+
+/** @deprecated usar actionResetTask */
+export async function actionRetryFailedTask(
+  taskId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return actionResetTask(taskId, "resume");
+}
+
+// ─── Archive plan ────────────────────────────────────────────────────────────
+
+export async function actionArchivePlan(
+  planId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({ where: { id: planId } });
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+  if (plan.status === "PUBLISHED") {
+    return { ok: false, error: "No se puede archivar un plan ya publicado en producción." };
+  }
+
+  await prisma.monthlyPlan.update({
+    where: { id: planId },
+    data: { status: "ARCHIVED" },
+  });
 
   return { ok: true };
 }
