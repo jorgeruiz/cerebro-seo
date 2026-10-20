@@ -402,7 +402,7 @@ async function executeContentPackage(
   let targetPageId = 0;
   let targetPageSlug = "";
   let targetPageTitle = "";
-  let realWidgets: Array<{ id?: string; section: string; type: string; text: string }> = [];
+  const realWidgets: Array<{ id?: string; section: string; type: string; text: string }> = [];
 
   if (kind === "optimization") {
     const pagesResult = await getWpPages(cerebroClientId, taskId);

@@ -24,8 +24,10 @@ import "./terminal-handler";
 
 import { execSync } from "child_process";
 const COMMIT = (() => {
+  const fromEnv = process.env.GIT_SHA;
+  if (fromEnv && fromEnv !== "unknown") return fromEnv.slice(0, 7);
   try { return execSync("git rev-parse --short HEAD").toString().trim(); }
-  catch { return process.env.COMMIT_SHA ?? "unknown"; }
+  catch { return "unknown"; }
 })();
 
 console.log(`[plan-runner] Starting plan task worker... commit=${COMMIT}`);
