@@ -16,6 +16,8 @@ export interface PlanStepView {
   acceptanceCriteria: string[];
   prompt: string | null;
   notes: string | null;
+  /** WpStagedChange JSON — content_package, blog, seo, elementor */
+  stagedChange: unknown | null;
 }
 
 export interface TaskRunView {
@@ -172,6 +174,7 @@ export async function getPlanData(
         acceptanceCriteria: s.acceptanceCriteria,
         prompt: s.prompt,
         notes: s.notes,
+        stagedChange: s.stagedChange ?? null,
       })),
       runs: t.runs.map((r) => ({
         id: r.id,

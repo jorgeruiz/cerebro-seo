@@ -12,14 +12,18 @@ import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
 import { getWpCapabilities } from "@/lib/wp-proxy-client";
+import { getWpSiteProfile } from "@/lib/wp-site-profile";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 const stepSchema = z.object({
-  title: z.string().min(5).max(120),
-  type: z.enum(["AI", "HUMAN"]),
-  prompt: z.string().nullable().optional(),
-  acceptanceCriteria: z.array(z.string()),
+  title: z.string().min(2).max(200).transform((s) => s.slice(0, 120)),
+  type: z.enum(["AI", "HUMAN", "HYBRID"]).transform((t) => t === "HYBRID" ? "HUMAN" : t),
+  prompt: z.preprocess(
+    (v) => (v !== null && v !== undefined && typeof v === "object" ? JSON.stringify(v) : v),
+    z.string().nullable().optional()
+  ),
+  acceptanceCriteria: z.array(z.string()).default([]),
   complexity: z.enum(["low", "medium", "high"]).optional().default("medium"),
 });
 
@@ -77,112 +81,201 @@ async function gatherRepoContext(githubRepo: string): Promise<string> {
     : "No hay documentación del sitio disponible.";
 }
 
-// ─── Decomposition ──────────────────────────────────────────────────────────
+// ─── Anti-cannibalization helper ──────────────────────────────────────────────
+
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .trim();
+}
+
+/**
+ * Detecta si ya existe una página con el mismo tema o keyword.
+ * Usa normalización de texto para comparar slugs y títulos.
+ * Retorna la página candidata si hay match, o null si es contenido nuevo.
+ */
+function detectCannibalization(
+  pages: Array<{ title: string; slug: string }>,
+  taskTitle: string,
+  keyword?: string | null,
+): { page: { title: string; slug: string }; reason: string } | null {
+  const stopWords = new Set([
+    "para", "como", "que", "una", "los", "las", "del", "con", "por",
+    "crear", "nueva", "pagina", "landing", "blog", "articulo",
+  ]);
+  const titleNorm = normalize(taskTitle);
+  const titleWords = titleNorm.split(/\s+/).filter((w) => w.length > 3 && !stopWords.has(w));
+
+  const keyNorm = keyword ? normalize(keyword) : null;
+  const keyWords = keyNorm
+    ? keyNorm.split(/\s+/).filter((w) => w.length > 3 && !stopWords.has(w))
+    : [];
+
+  for (const page of pages) {
+    if (!page.slug) continue; // skip root
+    const slugNorm = normalize(page.slug);
+    const pageTitleNorm = normalize(page.title);
+
+    // Keyword match in slug
+    if (keyWords.length >= 2) {
+      const kwMatches = keyWords.filter((w) => slugNorm.includes(w) || pageTitleNorm.includes(w));
+      if (kwMatches.length >= 2) {
+        return { page, reason: `keyword "${keyword}" coincide con /${page.slug} ("${page.title}")` };
+      }
+    }
+
+    // Title word overlap ≥ 2 significative words
+    const titleMatches = titleWords.filter(
+      (w) => slugNorm.includes(w) || pageTitleNorm.includes(w),
+    );
+    if (titleMatches.length >= 2) {
+      return {
+        page,
+        reason: `"${taskTitle}" comparte ${titleMatches.length} palabras con /${page.slug} ("${page.title}")`,
+      };
+    }
+  }
+  return null;
+}
+
+// ─── Decomposition ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `Eres un planificador de tareas SEO. Tu trabajo: descomponer una tarea en pasos concretos y accionables para el equipo de Click Society.
 
 REGLAS GENERALES:
-1. Cada paso AI debe tener un prompt AUTOSUFICIENTE que incluya qué archivos tocar, qué cambiar exactamente y criterios de aceptación verificables.
-2. Cada paso HUMAN debe tener un "prompt" con instrucciones claras y completas: texto numerado, paso a paso, listo para que el equipo lo ejecute sin tener que adivinar nada.
-3. Tareas mode=AI: solo pasos type=AI, EXCEPTO blogs WordPress (ver regla 3b).
-3b. BLOGS WORDPRESS: todo blog creado con action=publish DEBE terminar con un paso HUMAN final "Revisar y publicar borrador en WordPress". El prompt de ese paso HUMAN debe incluir: (a) link de vista previa del borrador, (b) link de edición en WP Admin, (c) checklist: verificar que no hay placeholders [COMPLETAR, revisar formato/imágenes, hacer clic en "Publicar" en WP. Los blogs NUNCA se publican automáticamente.
-4. Tareas mode=HYBRID: pasos AI y HUMAN intercalados. Los pasos AI van primero (código), luego los HUMAN (revisión/validación).
+1. Cada paso AI debe tener un prompt AUTOSUFICIENTE (JSON) con qué ejecutar exactamente.
+2. Cada paso HUMAN debe tener un "prompt" con instrucciones claras y completas: texto numerado, paso a paso, listo para ejecutar sin adivinar.
+3. Tareas mode=AI: solo pasos type=AI. Excepción blogs WP: siempre terminan en HUMAN "Revisar y publicar".
+4. Tareas mode=HYBRID: pasos AI primero (código), luego HUMAN (revisión/validación).
 5. Tareas mode=HUMAN o kind=SETUP: solo pasos type=HUMAN.
-6. Entre 1 y 6 pasos por tarea. Un paso = una acción atómica. (6 para blogs con imagen + review).
-7. Los prompts de pasos AI deben mencionar el CLAUDE.md y DESIGN.md del repo si existen.
+6. Entre 1 y 5 pasos por tarea. Máximo 5. Un paso = una acción atómica.
+7. Los prompts de pasos AI deben mencionar CLAUDE.md y DESIGN.md si existen en el repo.
 
-HERRAMIENTAS DISPONIBLES EN CEREBRO SEO (solo estas — no inventes otras):
-- PageSpeed Insights: https://pagespeed.web.dev/ — auditoría de velocidad y Core Web Vitals (web, gratuito)
-- Google Search Console: datos de clicks, impresiones, posiciones, páginas top, queries top
-- Google Analytics 4: sesiones, usuarios, tasa de rebote, conversiones
-- DataForSEO: rankings SERP, backlinks, auditoría técnica de sitio, keywords
-- Elementor: editor visual para sitios WordPress
-- Yoast SEO / Rank Math: meta tags, schema, sitemap en WordPress
-PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest, moz.com. Estas herramientas NO están disponibles en la agencia.
+HERRAMIENTAS DISPONIBLES EN CEREBRO SEO (solo estas):
+- PageSpeed Insights: https://pagespeed.web.dev/ — velocidad y Core Web Vitals (web, gratis)
+- Google Search Console: clicks, impresiones, posiciones, páginas top, queries top
+- Google Analytics 4: sesiones, usuarios, rebote, conversiones
+- DataForSEO: rankings, backlinks, auditoría técnica, keywords
+- Elementor: editor visual para WordPress
+- Yoast SEO / Rank Math: meta tags, schema, sitemap
+PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest.
+
+REGLA ANTI-INVENCIÓN (CRÍTICA):
+- PROHIBIDO inventar: casos de éxito, certificaciones, precios, capacidades, testimonios, estadísticas del cliente.
+- Si un paso AI necesita datos reales del cliente → paso HUMAN en su lugar.
+- Usa LITERALMENTE el título y objetivo de la tarea. No reinterpretes términos técnicos.
 
 ─── PARA SITIOS PLATFORM=NEXTJS ────────────────────────────────────────────────
 
-TERMINAL DE CEREBRO SEO (solo plataforma Next.js):
-La terminal puede: leer/editar/crear archivos, npm run build, npm run lint, git status/diff/log, npx sharp (convertir imágenes), npx svgo (optimizar SVGs), cat, ls, find, head, tail.
-La terminal NO puede: instalar paquetes globales, correr Docker, acceder a URLs externas, abrir un navegador.
-Para pasos HUMAN en Next.js que implican editar un archivo: incluye en el campo "prompt" el comando copy-paste listo para usar. Ejemplo: "Abre la terminal de Cerebro SEO y ejecuta: cat src/app/page.tsx | head -30" o "Edita docs/audits/log.md — reemplaza [SCORE] con el valor real".
+TERMINAL (solo Next.js): puede leer/editar/crear archivos, npm run build/lint, git, npx sharp/svgo.
+No puede: instalar paquetes globales, correr Docker, URLs externas, abrir un navegador.
+
+IMÁGENES AI (Next.js y WordPress-blog):
+- subject_type: "conceptual" o "illustration". Personas reales / instalaciones / productos del cliente → HUMAN.
+- aspect_ratio: 16:9 portadas, 4:3 inline, 1:1 thumbnails.
+
+COMPLEJIDAD (Next.js):
+- "low" (1-2 archivos existentes), "medium" (crear 1 archivo), "high" (múltiples archivos nuevos).
+- "high" con > 2 entregables → dividir en pasos "medium".
 
 ─── PARA SITIOS PLATFORM=WORDPRESS ─────────────────────────────────────────────
 
-IMPORTANTE: Los sitios WordPress NO tienen terminal en Cerebro SEO. NUNCA uses "usa la terminal" ni comandos de shell en pasos de sitios WordPress.
+REGLAS ABSOLUTAS WORDPRESS (incumplirlas invalida el paso):
+A. NUNCA generes pasos que pidan al equipo usar API keys, credentials, comandos de terminal,
+   scripts PHP, FTP, o acceso a la base de datos. El equipo solo puede usar:
+   WordPress Admin, Elementor (editor visual), Yoast SEO (panel inferior del editor).
+B. La canibalización ya fue verificada automáticamente. Si el contexto incluye
+   "PÁGINA EXISTENTE:", la tarea DEBE optimizar esa página — NUNCA crear una nueva.
+C. Si un paso AI requiere un endpoint que NO aparece en WP CAPABILITIES → conviértelo
+   en HUMAN con instrucciones manuales equivalentes. Nunca lo dejes inválido.
 
-El equipo puede hacer cambios en WordPress vía:
-- WordPress Admin (Dashboard): editar páginas, posts, menús, configuraciones
-- Elementor: editar layouts, textos, imágenes, botones de cualquier página
-- Yoast SEO / Rank Math: editar meta title, meta description, schema, robots
-- WP Admin > Personalizar > CSS Adicional: agregar estilos personalizados
-- Hosting file manager o FTP: modificar archivos PHP/CSS (para cambios de código)
-
-Cerebro WP Plugin instalado en el sitio (base: https://{dominio}/wp-json/clicksociety/v1/, auth: X-Cerebro-Key):
-
-  LECTURA:
-  - GET /capabilities — endpoints activos en este sitio
-  - GET /pages — árbol de páginas
-  - GET /elementor/{id} — árbol simplificado de una página Elementor (textos, imágenes, links, headings con sección/widget/texto actual)
-  - GET /templates — global widgets y template insertions
-
-  ESCRITURA (v1.5.0 — disponibles para pasos AI):
-  - POST /publish — crear artículo de blog (siempre borrador para revisión)
-  - PUT /update/{id} — editar texto/contenido de un post existente (NO páginas Elementor)
-  - POST /media — subir imagen con alt text descriptivo
-  - POST /seo/{id} — actualizar meta title, meta description, focus keyword via Yoast SEO
-
-Pasos type=AI en WordPress: el campo "prompt" DEBE ser un JSON (no texto libre) con este schema exacto:
+PASO OBLIGATORIO "content_package":
+Toda tarea CONTENT en WordPress DEBE comenzar con este paso AI como paso 1:
 {
-  "action": "publish" | "seo" | "update" | "media" | "image",
-  "endpoint": "POST /publish" | "POST /seo/{page_id}" | "PUT /update/{post_id}" | "POST /media",
-  "payload": {
-    // Para publish: "title" (string), "slug" (string, opcional), "focus_keyword" (string, opcional), "categories" (string[], opcional)
-    // Para seo: "page_id" (number, usa 0 si no conoces el ID), "meta_title" (string, 50-60 chars), "meta_description" (string, 140-160 chars), "focus_keyword" (string)
-    // Para update: "post_id" (number), "title" (string, opcional)
-    // Para image: "usage" ("featured_image" | "inline"), "attach_to_post_id" (number | null), "aspect_ratio" ("16:9" | "1:1" | "4:3"), "style" ("professional-photo" | "illustration" | "conceptual" | "infographic"), "subject_type" ("conceptual" | "illustration")
-  },
-  "content_brief": "Para action=publish: brief DETALLADO de 200-400 palabras con: estructura del artículo, secciones principales, keyword objetivo, tono del cliente, CTAs, qué NO inventar. El motor generará el HTML completo a partir de este brief. Para action=image: descripción de la imagen a generar (tema, composición, paleta, qué NO incluir)."
+  "action": "content_package",
+  "kind": "blog" | "landing" | "optimization",
+  "keyword": "<keyword principal de la tarea>",
+  "page_title": "<título SEO de la página o artículo>",
+  "target_page_id": 0
 }
-El campo "acceptanceCriteria" del paso sigue siendo un array de strings normal.
-IMPORTANTE: el campo "prompt" del paso AI debe ser SOLO el JSON — nada de texto antes ni después.
+Este paso genera el paquete completo (H1, H2/H3, textos, tablas, FAQ, CTA, metas, schema, enlaces internos, brief de imagen).
+NO requiere plugin WP. Siempre es type=AI, complexity=high.
 
-Para pasos HUMAN en WordPress (cuando la tarea no puede ejecutarse via plugin):
-- Especifica la ruta exacta en WP Admin (ej: "Ve a Dashboard > Páginas > [nombre página] > Editar con Elementor")
-- Para Elementor: lee primero GET /elementor/{id} para localizar el widget exacto (sección > columna > widget), luego incluye el texto actual y el texto final listo para pegar
-- Para meta tags HUMAN: "Ve a Dashboard > [post/página] > Yoast SEO (panel inferior) > editar meta title y meta description"
-- Para imágenes: "Descarga la imagen → comprime en https://squoosh.app o https://tinypng.com → sube en WordPress > Media"
-- Para velocidad: "Ve a https://pagespeed.web.dev/ y analiza la URL en modo Móvil"
-- Los pasos HUMAN deben ser tan específicos que el equipo pueda ejecutarlos sin preguntar qué hacer
+PLANTILLAS OBLIGATORIAS POR TIPO:
 
-ANTI-CANIBALIZACIÓN:
-- Revisa el site-map del contexto antes de crear una página nueva. Si ya existe una ruta que cubra el mismo tema o keyword, el paso debe OPTIMIZAR la página existente en vez de crear una nueva.
-- Si se necesita una página nueva, su ruta debe seguir la estructura del sitio (ej: /blog/..., /servicios/...) y el prompt debe indicar explícitamente que revisó las rutas existentes.
+BLOG (kind=CONTENT con artículo/post/redactar):
+1. [AI] Paquete de contenido → action: content_package, kind: "blog"
+2. [AI] Crear borrador en WordPress → action: "publish"
+3. [AI] Imagen de portada → action: "image" (SOLO si tema es conceptual/ilustración — si necesita fotos reales del cliente, omitir y agregar instrucción en paso 4)
+4. [HUMAN] Revisar y publicar borrador
+   prompt: "Ve a WordPress Admin > Entradas > Borradores. El artículo '[título]' fue creado como borrador (URL de vista previa disponible en el paso anterior).
+   Checklist antes de publicar:
+   1. Verifica que no haya [COMPLETAR] sin reemplazar
+   2. Revisa el formato, imágenes y que los H2/H3 sean correctos
+   3. En Yoast SEO (panel inferior), confirma el meta title y meta description
+   4. Si hay imagen de portada, verifica que esté asignada en 'Imagen destacada'
+   5. Haz clic en 'Publicar' cuando todo esté revisado"
 
-SERVICIOS VERIFICADOS:
-- Si la tarea pide crear una landing o página de servicio, verifica en site-spec y catalog-schemas que el servicio/producto exista. Si no aparece, el paso debe ser HUMAN con la instrucción "Confirmar con el cliente si ofrece [servicio] antes de crear la página."
-- Artículos de blog técnicos del sector no requieren esta verificación (no afirman que el cliente ofrezca el servicio).
+LANDING (kind=CONTENT con nueva página de servicio/producto/categoría):
+1. [AI] Paquete de contenido → action: content_package, kind: "landing"
+2. [HUMAN] Crear landing en Elementor con el paquete
+   prompt: "El Paso 1 generó el paquete completo de contenido (disponible en el detalle del paso).
+   Ve a WordPress Admin > Páginas > Añadir nueva > Editar con Elementor.
+   Usa el paquete del Paso 1 como estructura:
+   1. Sección Hero: usa el H1 del paquete como encabezado principal
+   2. Crea secciones siguiendo los H2/H3 del paquete
+   3. Agrega tablas y listas del paquete en las secciones correspondientes
+   4. Sección FAQ: agrega las preguntas y respuestas del paquete
+   5. Sección CTA: [usa el texto CTA del paquete]
+   6. En Yoast SEO (panel inferior): pega el meta title y meta description del paquete
+   7. Solicita al cliente foto real para la sección hero (brief: [brief de imagen del paquete])
+   8. Guarda como borrador"
+3. [HUMAN] Revisar, agregar fotos reales y publicar
+   prompt: "Revisión final antes de publicar:
+   1. Confirma que todas las secciones del paquete estén implementadas
+   2. Reemplaza cualquier [COMPLETAR] con información real del cliente
+   3. Verifica que las imágenes sean de calidad y tengan alt text descriptivo
+   4. En Yoast SEO: verifica el meta title y meta description
+   5. Verifica que la URL/slug sea correcta (ej: /[keyword-principal])
+   6. Haz clic en 'Publicar'"
 
-IMÁGENES GENERADAS POR IA:
-- Cerebro SEO puede generar imágenes con IA (Higgsfield) para artículos de blog: portada (featured_image) e imágenes inline.
-- SOLO para artículos de blog. En landings, páginas de servicio, o cualquier otra página → el paso de imagen SIEMPRE es HUMAN con instrucción "Solicitar/tomar foto real para [descripción]."
-- subject_type SOLO puede ser "conceptual" o "illustration". Si la imagen necesita mostrar personas reales, instalaciones, productos o trabajos del cliente → paso HUMAN, nunca AI.
-- Máximo 2 pasos de imagen por tarea (1 portada + 1 inline máximo).
-- El content_brief de action=image debe describir: tema visual, composición deseada, paleta de colores (si hay colores de marca conocidos, incluirlos), y qué NO debe aparecer (logos, texto, personas).
-- aspect_ratio: 16:9 para portadas, 4:3 para inline, 1:1 para thumbnails.
-- Si el artículo de blog tiene un paso publish, el paso image va DESPUÉS del publish (para que attach_to_post_id pueda referenciar el post creado).
-- Para Next.js: el paso image escribe el archivo en public/images/blog/ y actualiza el frontmatter del MDX automáticamente.
+OPTIMIZACIÓN (PÁGINA EXISTENTE detectada, o título dice 'optimizar'/'mejorar'):
+1. [AI] Paquete de cambios antes→después → action: content_package, kind: "optimization"
+2. [HUMAN] Aplicar cambios en Elementor
+   prompt: "El Paso 1 generó los cambios específicos antes→después (disponible en el detalle del paso).
+   Ve a Dashboard > Páginas > [nombre página] > Editar con Elementor.
+   Para cada cambio del paquete:
+   1. Localiza el widget exacto por sección y tipo
+   2. Reemplaza el texto anterior con el texto nuevo indicado
+   3. Verifica que el cambio se vea bien visualmente
+   4. Guarda los cambios
+   Nota: los meta tags se aplicarán automáticamente al publicar el plan."
 
-REGLA ANTI-INVENCIÓN (CRÍTICA):
-- PROHIBIDO inventar datos del cliente: casos de éxito, nombres de clientes, certificaciones, precios, capacidades técnicas, procesos internos, testimonios, estadísticas, modelos de equipos o cualquier dato factual específico de la empresa.
-- Si un paso AI necesita datos reales del cliente (fotos, precios, especificaciones, certificaciones, casos), el paso debe ser HUMAN, no AI.
-- Los pasos AI solo pueden generar estructura, contenido genérico del sector, y elementos técnicos (schema, meta tags, componentes).
-- Usa LITERALMENTE el título y objetivo de la tarea y la documentación del sitio (site-spec, catalog-schemas). No reinterpretes siglas ni términos técnicos del cliente — pueden tener significados específicos de su industria.
+OTROS PASOS AI VÁLIDOS (solo si endpoint aparece en WP CAPABILITIES):
+{
+  "action": "publish",
+  "endpoint": "POST /publish",
+  "payload": { "title": "...", "slug": "...", "focus_keyword": "...", "categories": [...] },
+  "content_brief": "Brief de 200+ palabras con estructura, keyword, tono, CTAs, qué no inventar."
+}
+{
+  "action": "seo",
+  "endpoint": "POST /seo/{page_id}",
+  "payload": { "page_id": 0, "meta_title": "50-60 chars", "meta_description": "140-160 chars", "focus_keyword": "..." }
+}
+{
+  "action": "image",
+  "endpoint": "",
+  "payload": { "usage": "featured_image", "attach_to_post_id": null, "aspect_ratio": "16:9", "subject_type": "conceptual" },
+  "content_brief": "Descripción visual: tema, composición, paleta, qué NO incluir (logos, texto, personas)."
+}
 
-COMPLEJIDAD DE CADA PASO:
-- Asigna "complexity" a cada paso AI: "low" (editar 1-2 archivos existentes, ej: meta tags), "medium" (crear 1 archivo o modificar 3-5, ej: artículo blog), "high" (crear múltiples archivos + componentes, ej: landing con page.tsx + componente + MDX).
-- Si un paso sería "high" y tiene más de un entregable independiente (ej: crear MDX + crear componente React), DIVÍDELO en dos pasos "medium" separados.
-- Nunca dejes un solo paso que cree más de 2 archivos nuevos — eso excede los turnos del agente.
+DEGRADAR en lugar de fallar:
+Si el endpoint requerido no está en WP CAPABILITIES → convierte el paso AI en HUMAN equivalente.
+Nunca generes un paso con acción inválida. Prefiere HUMAN claro a AI roto.
 
 RESPONDE ÚNICAMENTE con un JSON array:
 [
@@ -190,19 +283,21 @@ RESPONDE ÚNICAMENTE con un JSON array:
     "title": "Título corto del paso (max 120 chars)",
     "type": "AI|HUMAN",
     "complexity": "low|medium|high",
-    "prompt": "Para AI: prompt autosuficiente. Para HUMAN: instrucciones detalladas paso a paso (NO null — siempre completo).",
-    "acceptanceCriteria": ["Criterio 1 verificable", "Criterio 2"]
+    "prompt": "Para AI: JSON estructurado exacto. Para HUMAN: instrucciones completas paso a paso.",
+    "acceptanceCriteria": ["Criterio verificable 1", "Criterio 2"]
   }
 ]
 
-Sin texto fuera del JSON.`;
+Sin texto fuera del JSON. El primer elemento del array siempre es el primer paso (orden ascendente).`;
 
 export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   const { taskId, clientId } = data;
 
   const task = await prisma.planTask.findUniqueOrThrow({
     where: { id: taskId },
-    include: { site: { include: { client: { select: { cerebroClientId: true } } } } },
+    include: {
+      site: { include: { client: { select: { cerebroClientId: true, name: true } } } },
+    },
   });
 
   // Gather repo context (Next.js only)
@@ -211,17 +306,52 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     repoContext = await gatherRepoContext(task.site.githubRepo);
   }
 
-  // Gather WP capabilities via Cerebro web proxy (WordPress only)
-  let wpCapabilitiesContext = "";
   const platform = task.site?.platform ?? "OTRO";
-  if ((platform === "WORDPRESS" || platform === "MIGRACION") && task.site?.client?.cerebroClientId) {
-    const capsResult = await getWpCapabilities(task.site.client.cerebroClientId, taskId);
+  const cerebroClientId = task.site?.client?.cerebroClientId ?? null;
+
+  // ── WP: capabilities + site profile + anti-cannibalization ──────────────────
+  let wpCapabilitiesContext = "";
+  let wpCannibalContext = "";
+  let wpPagesContext = "";
+
+  if ((platform === "WORDPRESS" || platform === "MIGRACION") && cerebroClientId) {
+    // Capabilities
+    const capsResult = await getWpCapabilities(cerebroClientId, taskId);
     if (capsResult.ok && (capsResult.data.endpoints ?? []).length > 0) {
       const src = capsResult.fromCache ? "caché 24h" : "en vivo";
-      wpCapabilitiesContext = `\nWP CAPABILITIES (${src} via GET /capabilities):\nEndpoints activos: ${capsResult.data.endpoints.join(", ")}\nNota: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;
+      wpCapabilitiesContext =
+        `\nWP CAPABILITIES (${src}):\nEndpoints activos: ${capsResult.data.endpoints.join(", ")}\n` +
+        `Recuerda: solo generar pasos type=AI para endpoints que aparezcan en esta lista.\n`;
     } else {
-      const reason = capsResult.ok ? "lista vacía" : capsResult.error;
-      wpCapabilitiesContext = `\nWP CAPABILITIES: catálogo estático v1.5.0 (proxy no disponible: ${reason}).\n`;
+      const reason = capsResult.ok ? "ningún endpoint registrado" : capsResult.error;
+      wpCapabilitiesContext = `\nWP CAPABILITIES: no disponibles (${reason}). Todos los pasos AI deben degradarse a HUMAN.\n`;
+    }
+
+    // Site profile (pages + content summary)
+    const siteProfile = await getWpSiteProfile(
+      cerebroClientId,
+      task.site?.client?.name ?? "Cliente",
+      task.site?.url ?? "",
+      taskId,
+    ).catch(() => null);
+
+    if (siteProfile && siteProfile.pages.length > 0) {
+      wpPagesContext = `\nPÁGINAS EXISTENTES EN EL SITIO (${siteProfile.pages.length} páginas):\n${siteProfile.pages
+        .map((p) => `- /${p.slug || ""} — "${p.title}"`)
+        .join("\n")}\n`;
+
+      // Anti-cannibalization check
+      const sourceRef = task.sourceRef as { keyword?: string } | null;
+      const keyword = sourceRef?.keyword ?? null;
+      const cannibal = detectCannibalization(siteProfile.pages, task.title, keyword);
+      if (cannibal) {
+        wpCannibalContext =
+          `\n⚠ CANIBALIZACIÓN DETECTADA: Ya existe una página similar.\n` +
+          `PÁGINA EXISTENTE: "${cannibal.page.title}" (/${cannibal.page.slug})\n` +
+          `Razón: ${cannibal.reason}\n` +
+          `INSTRUCCIÓN: Esta tarea DEBE optimizar la página existente, NO crear una nueva.\n` +
+          `Usa kind="optimization" en el paso content_package.\n`;
+      }
     }
   }
 
@@ -245,11 +375,11 @@ PRIORIDAD: ${task.priority}
 ESFUERZO: ${task.effort}
 PLATFORM: ${platform}
 SITE_URL: ${siteUrl}
-${wpCapabilitiesContext}${sourceContext}
+${wpCapabilitiesContext}${wpCannibalContext}${wpPagesContext}${sourceContext}
 CONTEXTO DEL SITIO:
 ${repoContext}
 
-Genera los pasos como JSON array. Recuerda aplicar las reglas de la sección correcta según PLATFORM=${platform}.`;
+Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${platform}.`;
 
   try {
     const response = await anthropic.messages.create({
@@ -285,7 +415,19 @@ Genera los pasos como JSON array. Recuerda aplicar las reglas de la sección cor
     }
 
     if (validSteps.length === 0) {
-      throw new Error("Todos los pasos fueron inválidos");
+      // Degrade instead of fail: create a single fallback HUMAN step
+      console.warn(`[task-decomposer] Todos los pasos inválidos para "${task.title}" — creando paso HUMAN fallback`);
+      validSteps.push({
+        title: `Ejecutar manualmente: ${task.title.slice(0, 90)}`,
+        type: "HUMAN" as const,
+        prompt:
+          `Ningún paso pudo generarse automáticamente para esta tarea.\n` +
+          `Objetivo: ${task.objective}\n\n` +
+          `Ejecuta esta tarea manualmente según el objetivo indicado.\n` +
+          `Cuando esté completada, marca este paso como hecho.`,
+        acceptanceCriteria: ["Tarea completada según el objetivo"],
+        complexity: "medium" as const,
+      });
     }
 
     // Create PlanSteps (complexity stored in notes as metadata for the worker)

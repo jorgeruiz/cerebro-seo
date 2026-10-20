@@ -35,6 +35,7 @@ import type {
   WpStagedBlogChange,
   WpStagedSeoChange,
   WpStagedElementorChange,
+  WpStagedContentPackageChange,
 } from "@/lib/wp-staged-change";
 import { executeImage, type ImageStepAction } from "./image-executor";
 
@@ -105,6 +106,7 @@ export async function executeWpAiStep(
     }
   }
 
+  if (action.action === "content_package") return executeContentPackage(siteProfile, task, action, taskId);
   if (action.action === "publish") return executeWpPublish(cerebroClientId, siteProfile, task, action, taskId);
   if (action.action === "seo") return executeWpSeo(cerebroClientId, task, action, taskId);
   if (action.action === "elementor" || action.action === "landing") return executeWpElementor(cerebroClientId, task, action, taskId);
@@ -139,6 +141,123 @@ export async function executeWpAiStep(
   return {
     notes: `wp:staged — accion "${action.action}" (${action.endpoint}) pendiente de implementar. Payload: ${JSON.stringify(action.payload).slice(0, 400)}`,
   };
+}
+
+// --- Content Package ---------------------------------------------------------
+
+/**
+ * Genera el paquete completo de contenido SEO para una tarea CONTENT de WordPress.
+ * No requiere plugin WP — es generación pura con Claude usando el perfil del sitio.
+ *
+ * Tipos:
+ *   blog        → H1, H2/H3, textos, tablas, FAQ, CTA, metas, schema, enlaces, brief imagen
+ *   landing     → igual que blog, orientado a página de servicio/producto
+ *   optimization → cambios antes→después por widget para una página existente
+ *
+ * El resultado se guarda en PlanStep.stagedChange como WpStagedContentPackageChange.
+ * La UI lo muestra con bloques copiables individuales.
+ */
+async function executeContentPackage(
+  siteProfile: WpSiteProfile | null,
+  task: { title: string; objective: string; kind: string; category: string },
+  action: WpStepAction,
+  taskId: string,
+): Promise<WpStepResult> {
+  const kind = (action.payload?.kind as string) ?? "landing";
+  const keyword = (action.payload?.keyword as string) ?? task.title;
+  const pageTitle = (action.payload?.page_title as string) ?? task.title;
+
+  const profileBlock = siteProfile?.hasContent
+    ? [
+        "PERFIL DEL SITIO (única fuente — solo afirma lo que está aquí):",
+        `Cliente: ${siteProfile.clientName}`,
+        `Sitio: ${siteProfile.siteUrl}`,
+        "",
+        "Páginas existentes:",
+        siteProfile.pages.slice(0, 30).map((p) => `- /${p.slug || ""} — "${p.title}"`).join("\n"),
+        "",
+        "Contenido actual:",
+        siteProfile.contentSummary.slice(0, 2000),
+      ].join("\n")
+    : "PERFIL DEL SITIO: no disponible. Usa [COMPLETAR: descripción] para cualquier dato específico del cliente.";
+
+  const systemPrompt = `Eres un especialista en contenido SEO para sitios WordPress en México.
+Generas paquetes de contenido estructurados en JSON.
+
+REGLAS:
+1. Solo afirmar datos que estén explícitamente en el PERFIL DEL SITIO.
+2. Datos no verificables (precio, certificaciones, casos reales, direcciones) → "[COMPLETAR: descripción]"
+3. Para kind=optimization: propón cambios específicos de widgets existentes (antes→después).
+4. Español de México, tono profesional, sin tecnicismos innecesarios.
+5. Schema JSON-LD debe ser válido y apropiado para el tipo de página.
+6. Meta title: 50-60 caracteres. Meta description: 140-160 caracteres.
+7. Mínimo 3 secciones H2. Mínimo 3 FAQ. Mínimo 2 enlaces internos.
+
+RESPONDE SOLO con JSON (sin markdown, sin texto adicional):`;
+
+  const kindInstructions: Record<string, string> = {
+    blog: `Artículo de blog informativo sobre "${keyword}". JSON con: h1, sections([{h2, h3s?, text, table?}]), meta_title, meta_description, schema_jsonld({@type:Article}), internal_links([{anchor,url,context}]), faq([{q,a}]), cta, image_brief.`,
+    landing: `Página de aterrizaje para "${keyword}". JSON con: h1, sections([{h2, h3s?, text, table?}]), meta_title, meta_description, schema_jsonld({@type:Service o Product}), internal_links([{anchor,url,context}]), faq([{q,a}]), cta, image_brief.`,
+    optimization: `Optimización de página existente sobre "${keyword}". JSON con: h1 (nuevo), sections([{h2, h3s?, text}]), meta_title (mejorado), meta_description (mejorada), schema_jsonld, internal_links, faq, cta, optimization_changes([{page_title,page_id:0,widgets:[{section,widget_type,before,after}]}]).`,
+  };
+
+  const userPrompt = [
+    profileBlock,
+    "",
+    `TIPO: ${kind}`,
+    `KEYWORD PRINCIPAL: ${keyword}`,
+    `TÍTULO DE PÁGINA: ${pageTitle}`,
+    `OBJETIVO: ${task.objective}`,
+    "",
+    kindInstructions[kind] ?? kindInstructions.landing,
+  ].join("\n");
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 8000,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const rawText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
+  const cleaned = rawText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  let pkg: Record<string, unknown>;
+  try {
+    pkg = JSON.parse(cleaned) as Record<string, unknown>;
+  } catch {
+    throw new Error(`content_package: JSON parse failed. Respuesta: ${cleaned.slice(0, 300)}`);
+  }
+
+  const stagedChange: WpStagedContentPackageChange = {
+    type: "content_package" as const,
+    kind: kind as "blog" | "landing" | "optimization",
+    keyword,
+    page_title: pageTitle,
+    h1: (pkg.h1 as string) ?? pageTitle,
+    sections: (pkg.sections as WpStagedContentPackageChange["sections"]) ?? [],
+    meta_title: (pkg.meta_title as string) ?? "",
+    meta_description: (pkg.meta_description as string) ?? "",
+    schema_jsonld: (pkg.schema_jsonld as Record<string, unknown>) ?? {},
+    internal_links: (pkg.internal_links as WpStagedContentPackageChange["internal_links"]) ?? [],
+    faq: (pkg.faq as WpStagedContentPackageChange["faq"]) ?? [],
+    cta: (pkg.cta as string) ?? "",
+    image_brief: (pkg.image_brief as string | undefined),
+    optimization_changes: (pkg.optimization_changes as WpStagedContentPackageChange["optimization_changes"]),
+    staged_at: new Date().toISOString(),
+  };
+
+  const costUsd =
+    Number(response.usage.input_tokens) * 0.000003 +
+    Number(response.usage.output_tokens) * 0.000015;
+  await logApiUsage({ provider: "anthropic", endpoint: "wp-content-package", cost: costUsd });
+
+  const sectionCount = stagedChange.sections?.length ?? 0;
+  const faqCount = stagedChange.faq?.length ?? 0;
+  const notes = `content_package OK — kind=${kind} keyword="${keyword}" secciones=${sectionCount} faq=${faqCount}`;
+
+  return { notes, stagedChange };
 }
 
 // --- Publish -----------------------------------------------------------------

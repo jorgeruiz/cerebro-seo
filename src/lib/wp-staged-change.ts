@@ -67,7 +67,53 @@ export interface WpStagedElementorChange {
   applied_at?: string;
 }
 
-export type WpStagedChange = WpStagedBlogChange | WpStagedSeoChange | WpStagedElementorChange;
+/**
+ * Paquete de contenido generado por el worker.
+ * Primer paso AI en toda tarea CONTENT de WordPress.
+ * No requiere plugin WP — es generación pura con Claude + perfil del sitio.
+ */
+export interface WpStagedContentPackageChange {
+  type: "content_package";
+  kind: "blog" | "landing" | "optimization";
+  keyword: string;
+  page_title: string;
+  h1: string;
+  /** Secciones de contenido: H2 + cuerpo + H3s opcionales */
+  sections: Array<{
+    h2: string;
+    h3s?: string[];
+    text: string;
+    table?: { headers: string[]; rows: string[][] };
+  }>;
+  meta_title: string;
+  meta_description: string;
+  schema_jsonld: Record<string, unknown>;
+  internal_links: Array<{ anchor: string; url: string; context: string }>;
+  faq: Array<{ q: string; a: string }>;
+  cta: string;
+  image_brief?: string;
+  /**
+   * Solo para kind=optimization: cambios antes→después por widget.
+   * Usados en el paso HUMAN "Aplicar en Elementor".
+   */
+  optimization_changes?: Array<{
+    page_title: string;
+    page_id: number;
+    widgets: Array<{
+      section: string;
+      widget_type: string;
+      before: string;
+      after: string;
+    }>;
+  }>;
+  staged_at: string;
+}
+
+export type WpStagedChange =
+  | WpStagedBlogChange
+  | WpStagedSeoChange
+  | WpStagedElementorChange
+  | WpStagedContentPackageChange;
 
 // ─── Type guards ──────────────────────────────────────────────────────────────
 
@@ -83,6 +129,10 @@ export function isElementorChange(c: WpStagedChange): c is WpStagedElementorChan
   return c.type === "elementor";
 }
 
+export function isContentPackageChange(c: WpStagedChange): c is WpStagedContentPackageChange {
+  return c.type === "content_package";
+}
+
 // ─── Parser con fallback ──────────────────────────────────────────────────────
 
 /**
@@ -92,6 +142,7 @@ export function isElementorChange(c: WpStagedChange): c is WpStagedElementorChan
 export function parseStagedChange(raw: unknown): WpStagedChange | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
-  if (obj.type !== "blog" && obj.type !== "seo" && obj.type !== "elementor") return null;
+  const validTypes = ["blog", "seo", "elementor", "content_package"];
+  if (!validTypes.includes(obj.type as string)) return null;
   return raw as WpStagedChange;
 }

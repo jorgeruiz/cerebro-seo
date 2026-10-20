@@ -128,6 +128,132 @@ function ProgressBar({ percent, size = "lg" }: { percent: number; size?: "sm" | 
   );
 }
 
+// ─── Content Package Block ───────────────────────────────────────────────────
+
+interface ContentSection { h2: string; h3s?: string[]; text: string; table?: { headers: string[]; rows: string[][] } }
+interface ContentFaq { q: string; a: string }
+interface ContentLink { anchor: string; url: string; context: string }
+interface OptimizationWidget { section: string; widget_type: string; before: string; after: string }
+interface OptimizationChange { page_title: string; page_id: number; widgets: OptimizationWidget[] }
+interface ContentPackage {
+  type: "content_package";
+  kind: "blog" | "landing" | "optimization";
+  keyword: string;
+  page_title: string;
+  h1: string;
+  sections: ContentSection[];
+  meta_title: string;
+  meta_description: string;
+  schema_jsonld?: Record<string, unknown>;
+  internal_links?: ContentLink[];
+  faq?: ContentFaq[];
+  cta?: string;
+  image_brief?: string;
+  optimization_changes?: OptimizationChange[];
+}
+
+function CopyableBlock({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="group/block relative">
+      <p className="font-mono text-[0.55rem] text-indigo-400/70 mb-0.5">{label}</p>
+      <div className="bg-zinc-950 rounded px-2.5 py-2">
+        <pre className={cn("whitespace-pre-wrap leading-relaxed text-zinc-200", mono ? "font-mono text-[0.6rem]" : "font-sans text-xs")}>{value}</pre>
+        <button
+          onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+          className="absolute top-1 right-1 opacity-0 group-hover/block:opacity-100 transition-opacity font-mono text-[0.5rem] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded hover:text-zinc-200"
+        >
+          {copied ? "✓" : "Copiar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ContentPackageBlock({ pkg }: { pkg: ContentPackage }) {
+  const structureText = [
+    `H1: ${pkg.h1}`,
+    ...(pkg.sections ?? []).map((s: ContentSection) => [
+      `H2: ${s.h2}`,
+      ...(s.h3s ?? []).map((h3) => `  H3: ${h3}`),
+    ].join("\n")),
+  ].join("\n");
+
+  const fullTextBlocks = (pkg.sections ?? []).map((s: ContentSection) =>
+    [`## ${s.h2}`, ...(s.h3s ?? []).map((h: string) => `### ${h}`), s.text].join("\n")
+  ).join("\n\n");
+
+  const faqText = (pkg.faq ?? []).map((f: ContentFaq) => `Q: ${f.q}\nA: ${f.a}`).join("\n\n");
+  const linksText = (pkg.internal_links ?? []).map((l: ContentLink) => `- ${l.anchor} → ${l.url} (${l.context})`).join("\n");
+  const schemaText = JSON.stringify(pkg.schema_jsonld ?? {}, null, 2);
+
+  return (
+    <div className="mt-2 border border-indigo-500/30 rounded-md bg-indigo-500/5 p-3 space-y-2.5">
+      <p className="font-mono text-[0.6rem] font-semibold text-indigo-400 flex items-center gap-1.5">
+        <FileText className="h-3 w-3" />
+        Paquete de contenido — {pkg.kind} · {pkg.keyword}
+      </p>
+
+      <CopyableBlock label="H1" value={pkg.h1} />
+      <CopyableBlock label="Estructura (H2 / H3)" value={structureText} />
+      <CopyableBlock label="Meta title" value={pkg.meta_title} />
+      <CopyableBlock label="Meta description" value={pkg.meta_description} />
+      <CopyableBlock label="CTA" value={pkg.cta ?? ""} />
+
+      {faqText && <CopyableBlock label={`FAQ (${pkg.faq?.length ?? 0})`} value={faqText} />}
+      {linksText && <CopyableBlock label="Enlaces internos" value={linksText} />}
+      {pkg.image_brief && <CopyableBlock label="Brief de imagen" value={pkg.image_brief} />}
+      {schemaText !== "{}" && <CopyableBlock label="Schema JSON-LD" value={schemaText} />}
+
+      <details className="group/content">
+        <summary className="font-mono text-[0.6rem] text-indigo-400 cursor-pointer hover:underline flex items-center gap-1">
+          <ChevronRight className="h-2.5 w-2.5 group-open/content:rotate-90 transition-transform" />
+          Ver textos completos por sección
+        </summary>
+        <div className="mt-2">
+          <CopyableBlock label="Contenido completo" value={fullTextBlocks} />
+        </div>
+      </details>
+
+      {pkg.optimization_changes && pkg.optimization_changes.length > 0 && (
+        <div className="space-y-2">
+          <p className="font-mono text-[0.55rem] text-indigo-400/70 font-semibold">Cambios antes → después:</p>
+          {pkg.optimization_changes.map((change: OptimizationChange, ci: number) => (
+            <div key={ci} className="space-y-1.5">
+              <p className="font-mono text-[0.55rem] text-zinc-400">{change.page_title}</p>
+              {change.widgets.map((w: OptimizationWidget, wi: number) => (
+                <div key={wi} className="bg-zinc-900 rounded p-2 space-y-1">
+                  <p className="font-mono text-[0.55rem] text-zinc-500">{w.section} · {w.widget_type}</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <p className="font-mono text-[0.5rem] text-red-400/70 mb-0.5">Antes:</p>
+                      <div className="bg-red-950/30 rounded px-1.5 py-1">
+                        <p className="font-mono text-[0.55rem] text-red-200/80 whitespace-pre-wrap">{w.before}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[0.5rem] text-emerald-400/70 mb-0.5">Después:</p>
+                      <div className="bg-emerald-950/30 rounded px-1.5 py-1 relative group/after">
+                        <p className="font-mono text-[0.55rem] text-emerald-200/80 whitespace-pre-wrap">{w.after}</p>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(w.after)}
+                          className="absolute top-0.5 right-0.5 opacity-0 group-hover/after:opacity-100 font-mono text-[0.45rem] bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Step Row ───────────────────────────────────────────────────────────────
 
 function StepRow({
@@ -218,8 +344,15 @@ function StepRow({
           </ul>
         )}
 
+        {/* Content package block — shown when AI content_package step is DONE */}
+        {step.status === "DONE" &&
+          (step.stagedChange as { type?: string } | null)?.type === "content_package" && (
+          <ContentPackageBlock pkg={step.stagedChange as ContentPackage} />
+        )}
+
         {/* Step result (from AI step runs) — expandable */}
-        {stepResult && step.status === "DONE" && (
+        {stepResult && step.status === "DONE" &&
+          (step.stagedChange as { type?: string } | null)?.type !== "content_package" && (
           <details className="mt-2 group/result">
             <summary className="font-mono text-[0.6rem] text-ds-blue cursor-pointer hover:underline flex items-center gap-1">
               <ChevronRight className="h-2.5 w-2.5 group-open/result:rotate-90 transition-transform" />
