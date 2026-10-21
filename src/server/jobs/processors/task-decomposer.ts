@@ -148,8 +148,8 @@ const SYSTEM_PROMPT = `Eres un planificador de tareas SEO. Tu trabajo: descompon
 REGLAS GENERALES:
 1. Cada paso AI debe tener un prompt AUTOSUFICIENTE (JSON) con qué ejecutar exactamente.
 2. Cada paso HUMAN debe tener un "prompt" con instrucciones claras y completas: texto numerado, paso a paso, listo para ejecutar sin adivinar.
-3. Tareas mode=AI: solo pasos type=AI. Excepción blogs WP: siempre terminan en HUMAN "Revisar y publicar".
-4. Tareas mode=HYBRID: pasos AI primero (código), luego HUMAN (revisión/validación).
+3. Tareas mode=AI: solo pasos type=AI.
+4. Tareas mode=HYBRID: pasos AI primero, luego HUMAN (revisión/validación). En WordPress, blogs y landings son siempre HYBRID: AI crea el borrador/paquete, HUMAN revisa y publica.
 5. Tareas mode=HUMAN o kind=SETUP: solo pasos type=HUMAN.
 6. Entre 1 y 5 pasos por tarea. Máximo 5. Un paso = una acción atómica.
 7. Los prompts de pasos AI deben mencionar CLAUDE.md y DESIGN.md si existen en el repo.

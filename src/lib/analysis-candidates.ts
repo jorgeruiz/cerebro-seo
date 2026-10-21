@@ -95,7 +95,7 @@ export const analysisResultSchema = z.object({
   })),
   recomendaciones: z.array(z.string()),
   conclusionEstrategica: z.string(),
-  candidatas: z.array(candidateSchema),
+  candidatas: z.array(candidateSchema).min(8, "Se esperan al menos 8 candidatas (4 CONTENT + 4 CODE)"),
 });
 
 // ─── Clasificación de modo por plataforma ────────────────────────────────────
@@ -115,30 +115,41 @@ const NEXTJS_HYBRID_PATTERNS = [
 // ─── Capability-based mode resolution for WordPress ─────────────────────────
 
 /**
- * Mapeo: action_type → endpoint IDs requeridos en GET /capabilities.
+ * Modo base por action_type en WordPress.
  *
- * Si TODOS los endpoints de un action_type aparecen en /capabilities → AI.
- * Si al menos uno falta → HUMAN.
+ * AI   → el plugin ejecuta sin intervención humana (requiere capability check).
+ * HYBRID → el sistema genera contenido AI pero el equipo aplica/revisa en WP.
+ *          No requiere endpoints WP — siempre HYBRID independiente de capabilities.
+ * HUMAN  → requiere WP Admin / Elementor manual, no hay endpoint disponible.
+ */
+const WP_ACTION_MODE: Record<WpActionType, CandidateMode> = {
+  create_blog:                  "HYBRID",  // AI genera borrador → HUMAN revisa y publica
+  update_meta:                  "AI",      // seo endpoint
+  upload_media:                 "AI",      // media endpoint
+  update_post:                  "AI",      // update endpoint
+  edit_page_widgets:            "HUMAN",   // TODO: → AI cuando se apruebe WP3 en Navalsa (necesita elementor/apply)
+  create_landing_from_template: "HYBRID",  // AI content_package → HUMAN crea en Elementor
+  generate_image:               "AI",      // media endpoint
+  other:                        "HUMAN",   // acción desconocida
+};
+
+/**
+ * Mapeo: action_type → endpoint IDs requeridos en GET /capabilities (solo para tipos AI).
+ * Si TODOS los endpoints aparecen en /capabilities → AI confirmado.
+ * Si falta alguno → HUMAN (capability no instalada).
  *
- * Al actualizar el plugin (ej: v1.6.0 agrega elementor endpoints),
- * edit_page_widgets y create_landing_from_template pasan automáticamente
- * a AI sin cambiar código — solo necesitan aparecer en /capabilities.
+ * Para tipos HYBRID: no se chequean capabilities — el content_package corre local.
+ * Para tipos HUMAN: no aplica.
  */
 const ACTION_TYPE_CAPABILITIES: Record<WpActionType, string[]> = {
-  create_blog:                    ["publish"],
+  create_blog:                    ["publish"],  // HYBRID — pero el paso publish necesita este endpoint
   update_meta:                    ["seo"],
   upload_media:                   ["media"],
   update_post:                    ["update"],
-  // SAFETY GATE — [] = siempre HUMAN hasta que pase la prueba WP3 en Navalsa.
-  // Para habilitar, cambiar a:
-  //   edit_page_widgets:           ["elementor/duplicate", "elementor/apply"]
-  //   create_landing_from_template:["elementor/from-template"]
-  // El class v1.6.0 retorna "elementor/apply/{draftId}" — isActionExecutable usa
-  // startsWith("elementor/apply/"), NO "elementor/widgets" (ruta diferente).
-  edit_page_widgets:              [], // TODO: habilitar tras prueba WP3 en Navalsa
-  create_landing_from_template:   [], // TODO: habilitar tras prueba WP3 en Navalsa
+  edit_page_widgets:              [],           // HUMAN siempre (ver WP_ACTION_MODE)
+  create_landing_from_template:   [],           // HYBRID siempre (content_package es local)
   generate_image:                 ["media"],
-  other:                          [], // never matches → always HUMAN
+  other:                          [],
 };
 
 /**
@@ -192,63 +203,77 @@ export function enforceModeRules(
   capabilities?: string[] | null,
 ): AnalysisCandidate {
   if (platform === "WORDPRESS" || platform === "MIGRACION") {
-    // HYBRID no existe en WordPress
-    if (candidate.mode === "HYBRID") {
-      return { ...candidate, mode: "HUMAN", modeReason: "WordPress: no existe modo HYBRID — HUMAN guiado" };
-    }
-
     // Determinar action_type: primero el campo explícito de Claude, luego regex fallback
     const text = `${candidate.titulo} ${candidate.descripcion}`;
     const actionType = candidate.actionType ?? inferActionTypeFromText(text);
     const usingFallback = !candidate.actionType;
 
+    const targetMode = WP_ACTION_MODE[actionType];
+
+    // HYBRID types: content_package corre local — no necesitan capability check
+    if (targetMode === "HYBRID") {
+      return {
+        ...candidate,
+        mode: "HYBRID",
+        modeReason: `WordPress: ${actionType} — el sistema genera contenido AI, el equipo aplica en WP`,
+        actionType,
+      };
+    }
+
+    // HUMAN types: siempre HUMAN
+    if (targetMode === "HUMAN") {
+      return {
+        ...candidate,
+        mode: "HUMAN",
+        modeReason: `WordPress: ${actionType} — requiere WP Admin / Elementor manual`,
+        actionType,
+      };
+    }
+
+    // AI types: verificar capabilities
     if (capabilities) {
       // ── Capability-based (authoritative) ─────────────────────────
       const executable = isActionExecutable(actionType, capabilities);
 
       if (executable) {
-        const reason = `WordPress: ${actionType} ejecutable (endpoints verificados via /capabilities)`;
-        if (candidate.mode !== "AI") {
-          return { ...candidate, mode: "AI", modeReason: reason, actionType };
-        }
-        return { ...candidate, actionType };
-      }
-
-      // Not executable — missing endpoints
-      const required = ACTION_TYPE_CAPABILITIES[actionType];
-      const missing = required.filter((cap) => !capabilities.some((c) => c === cap || c.startsWith(`${cap}/`)));
-      const reason = `WordPress: ${actionType} no ejecutable (faltan endpoints: ${missing.join(", ")}) — HUMAN`;
-      if (candidate.mode !== "HUMAN") {
-        return { ...candidate, mode: "HUMAN", modeReason: reason, actionType };
-      }
-      return { ...candidate, actionType };
-    }
-
-    // ── Regex fallback (capabilities not available) ────────────────
-    if (actionType !== "other") {
-      const fallbackNote = usingFallback ? " [regex fallback — /capabilities no disponible]" : " [/capabilities no disponible]";
-      if (candidate.mode !== "AI") {
         return {
           ...candidate,
           mode: "AI",
-          modeReason: `WordPress: ${actionType} (probable — sin verificación de endpoints)${fallbackNote}`,
+          modeReason: `WordPress: ${actionType} ejecutable (endpoints verificados via /capabilities)`,
           actionType,
         };
       }
-      return { ...candidate, actionType };
-    }
 
-    // Unrecognized action → HUMAN
-    if (candidate.mode !== "HUMAN") {
-      const fallbackNote = usingFallback ? " [regex fallback]" : "";
+      // Endpoint faltante → HUMAN
+      const required = ACTION_TYPE_CAPABILITIES[actionType];
+      const missing = required.filter((cap) => !capabilities.some((c) => c === cap || c.startsWith(`${cap}/`)));
       return {
         ...candidate,
         mode: "HUMAN",
-        modeReason: `WordPress: acción no reconocida — HUMAN con pasos WP Admin${fallbackNote}`,
-        actionType: "other",
+        modeReason: `WordPress: ${actionType} no ejecutable (faltan endpoints: ${missing.length > 0 ? missing.join(", ") : "requeridos"}) — HUMAN`,
+        actionType,
       };
     }
-    return { ...candidate, actionType: "other" };
+
+    // ── Regex fallback (capabilities no disponibles) ───────────────
+    if (actionType !== "other") {
+      const fallbackNote = usingFallback ? " [regex fallback — /capabilities no disponible]" : " [/capabilities no disponible]";
+      return {
+        ...candidate,
+        mode: "AI",
+        modeReason: `WordPress: ${actionType} (probable — sin verificación de endpoints)${fallbackNote}`,
+        actionType,
+      };
+    }
+
+    // Acción no reconocida → HUMAN
+    const fallbackNote = usingFallback ? " [regex fallback]" : "";
+    return {
+      ...candidate,
+      mode: "HUMAN",
+      modeReason: `WordPress: acción no reconocida — HUMAN con pasos WP Admin${fallbackNote}`,
+      actionType: "other",
+    };
   }
 
   // Next.js: performance/bundle → HYBRID

@@ -77,28 +77,33 @@ CANDIDATAS — PLATAFORMA (LEE ESTO PRIMERO, ES OBLIGATORIO):
 El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OTRO".
 
 ▶ Si Platform = WORDPRESS o MIGRACION:
-  El Plugin Cerebro v1.5.0 está instalado en el sitio. Tiene endpoints de ESCRITURA reales.
+  El Plugin Cerebro v1.6.x está instalado en el sitio. Tiene endpoints de ESCRITURA reales.
   Usa esto para determinar el mode de cada candidata:
 
-  MODE = AI (el plugin puede ejecutarlo sin intervención humana):
-    • Crear artículo de blog → POST /publish (siempre como borrador para revisión)
+  MODE = AI (el plugin ejecuta sin intervención humana):
     • Meta title + meta description → POST /seo/{id} via Yoast SEO
     • Focus keyword Yoast → POST /seo/{id}
     • Subir imagen con alt text → POST /media
     • Editar texto/H1 de un POST existente (no páginas Elementor) → PUT /update/{id}
 
-  MODE = HUMAN (el plugin NO puede hacerlo — requiere intervención humana):
-    • H1, H2, textos dentro de páginas Elementor → WP Admin > Elementor
+  MODE = HYBRID (el plugin genera el contenido AI, pero el equipo aplica o revisa en WP):
+    • Crear artículo de blog → el sistema genera y publica como borrador (POST /publish); el equipo revisa y publica desde WP Admin
+    • Crear landing page de servicio/producto nueva → el sistema genera el paquete de contenido (H1, textos, metas, CTA, schema); el equipo crea la página en Elementor
+
+  MODE = HUMAN (el plugin NO puede hacerlo — requiere intervención humana completa):
+    • Editar H1, H2, textos dentro de páginas Elementor existentes → WP Admin > Elementor
     • Imágenes dentro de páginas → Elementor > Widget Image
     • CTAs, botones → Elementor > Widget Button
-    • Landings nuevas, headers, footers → Elementor Theme Builder
     • Performance, velocidad, Core Web Vitals → pagespeed.web.dev + WP Rocket/Autoptimize
     • Plugins (instalar, configurar) → WP Admin > Plugins
     • Tema, CSS personalizado → WP Admin > Apariencia > Personalizar
     • Schema JSON-LD → Yoast SEO / plugin Schema Pro
+    • Encabezados/pie de página globales → Elementor Theme Builder
 
-  MODE = HYBRID: NO EXISTE en WordPress. Si dudas entre AI y HUMAN, usa HUMAN.
-  Criterio práctico: si el plugin v1.5.0 tiene endpoint de escritura para esa acción → AI. Si no → HUMAN.
+  Criterio práctico:
+  - Si el plugin tiene endpoint de escritura para la acción → AI
+  - Si el sistema genera el contenido AI pero un humano lo aplica en WP → HYBRID
+  - Si no hay endpoint y requiere WP Admin / Elementor manual → HUMAN
 
 ▶ Si Platform = OTRO (cualquier valor distinto de NEXTJS, WORDPRESS, MIGRACION):
   - TODOS los candidatos DEBEN ser mode=HUMAN. Sin excepciones.
@@ -110,8 +115,8 @@ El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OT
     • HUMAN: decisiones de diseño, cuentas externas (GSC, GBP), configuración de plataformas, verificación de datos sospechosos.
 
 CANDIDATAS — KIND:
-- CONTENT: blog, landing, página nueva, optimización de contenido existente
-- CODE: meta tags, schema, técnico, interlinking, performance
+- CONTENT: blog, landing, página nueva, optimización de contenido existente, meta tags (title/description/focus keyword)
+- CODE: schema JSON-LD, técnico, interlinking, performance, velocidad
 - SETUP: verificaciones, cuentas externas (GSC, GBP), tracking, configuración de plataformas. Mode siempre HUMAN.
 
 ANTI-CANIBALIZACIÓN (CRÍTICO):
@@ -232,7 +237,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       where: { clientId, status: { in: ["ACTIVE", "PLANNING"] } },
       orderBy: { yearMonth: "desc" },
       include: {
-        tasks: { where: { status: { not: "DONE" } }, select: { title: true, status: true, priority: true }, take: 10 },
+        tasks: { select: { title: true, status: true, priority: true }, take: 10 },
         hypotheses: { select: { statement: true, validation: true, expectedMetric: true, expectedDelta: true }, take: 5 },
       },
     }),
@@ -302,7 +307,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       const now = new Date();
       const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       return prisma.monthlyPlan.findFirst({
-        where: { clientId, month: curMonth },
+        where: { clientId, month: curMonth, status: { not: "ARCHIVED" } },
         include: {
           tasks: {
             where: { status: { notIn: ["VOIDED", "FAILED"] } },
@@ -359,7 +364,22 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       if (cycle.focus) lines.push(`Foco (histórico): ${cycle.focus}`);
     }
     if (cycle.tasks.length > 0) {
-      lines.push(`Tareas ${cycleIsCurrent ? "activas" : "históricas"}: ${cycle.tasks.map((t) => `${t.title} [${t.status}]`).join(", ")}`);
+      if (cycleIsCurrent) {
+        const activeTasks = cycle.tasks.filter((t) => t.status !== "DONE");
+        if (activeTasks.length > 0) {
+          lines.push(`Tareas activas: ${activeTasks.map((t) => `${t.title} [${t.status}]`).join(", ")}`);
+        }
+      } else {
+        // Ciclo vencido: mostrar completadas positivamente; las no-completadas NO son pendientes actuales
+        const doneTasks = cycle.tasks.filter((t) => t.status === "DONE");
+        const incompleteTasks = cycle.tasks.filter((t) => t.status !== "DONE");
+        if (doneTasks.length > 0) {
+          lines.push(`Tareas completadas: ${doneTasks.map((t) => t.title).join(", ")}`);
+        }
+        if (incompleteTasks.length > 0) {
+          lines.push(`⚠ Tareas NO completadas (contexto histórico, NO son pendientes actuales): ${incompleteTasks.map((t) => t.title).join(", ")}`);
+        }
+      }
     }
     if (cycle.hypotheses.length > 0) {
       lines.push(`Hipótesis: ${cycle.hypotheses.map((h) => `"${h.statement.slice(0, 60)}..." → ${h.validation}`).join(" | ")}`);
@@ -516,12 +536,7 @@ export async function generateClientAnalysis(
     messages: [
       {
         role: "user",
-        content: [
-          platform && platform !== "NEXTJS"
-            ? `⚠ PLATAFORMA: ${platform}. TODOS los candidatos deben ser mode=HUMAN sin excepción. No uses AI ni HYBRID.\n\n`
-            : `PLATAFORMA: ${platform ?? "no detectada"} (Next.js — puedes usar AI/HYBRID/HUMAN según corresponda).\n\n`,
-          `Analiza el siguiente contexto SEO y genera el diagnóstico ejecutivo + candidatas para el Plan mensual:\n\n${context}`,
-        ].join(""),
+        content: `PLATAFORMA: ${platform ?? "no detectada"}.\n\nAnaliza el siguiente contexto SEO y genera el diagnóstico ejecutivo + candidatas para el Plan mensual:\n\n${context}`,
       },
     ],
   });

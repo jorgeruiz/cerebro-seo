@@ -182,7 +182,7 @@ describe("analysis-candidates", () => {
 
     // ── WordPress: capability-based mode ───────────────────────────────
 
-    it("WP: sets AI when actionType matches capabilities", () => {
+    it("WP: create_blog → HYBRID (AI genera borrador, HUMAN revisa y publica)", () => {
       const candidate = {
         id: "test", titulo: "Crear artículo de blog SEO", descripcion: "Blog sobre servicios",
         kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 1, effort: "MEDIUM" as const,
@@ -191,9 +191,8 @@ describe("analysis-candidates", () => {
       };
       const caps = ["publish", "seo", "media", "capabilities", "pages"];
       const result = enforceModeRules(candidate, "WORDPRESS", caps);
-      expect(result.mode).toBe("AI");
+      expect(result.mode).toBe("HYBRID");
       expect(result.modeReason).toContain("create_blog");
-      expect(result.modeReason).toContain("/capabilities");
     });
 
     it("WP: sets HUMAN when actionType requires missing endpoint", () => {
@@ -207,32 +206,106 @@ describe("analysis-candidates", () => {
       const caps = ["publish", "seo", "media"];
       const result = enforceModeRules(candidate, "WORDPRESS", caps);
       expect(result.mode).toBe("HUMAN");
-      expect(result.modeReason).toContain("elementor");
+      expect(result.modeReason.toLowerCase()).toContain("elementor");
     });
 
-    it("WP: edit_page_widgets becomes AI when plugin has elementor endpoints", () => {
+    it("WP: edit_page_widgets → HUMAN siempre hasta habilitar WP3 en Navalsa", () => {
+      // TODO: cuando se apruebe WP3 en Navalsa, cambiar WP_ACTION_MODE["edit_page_widgets"] a "AI"
+      // y agregar ["elementor/apply"] a ACTION_TYPE_CAPABILITIES — este test pasará a esperar AI.
       const candidate = {
         id: "test", titulo: "Actualizar textos en página de servicios", descripcion: "Editar via Elementor",
         kind: "CODE" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 2, effort: "MEDIUM" as const,
         impactoEsperado: "Mejores conversiones", justificacion: "Textos desactualizados", fuente: "signal" as const,
         actionType: "edit_page_widgets" as const,
       };
-      // Plugin v1.6.0 — elementor endpoints present
-      const caps = ["publish", "seo", "media", "elementor", "elementor/duplicate", "elementor/widgets"];
+      const caps = ["publish", "seo", "media", "elementor", "elementor/duplicate", "elementor/apply/123"];
       const result = enforceModeRules(candidate, "WORDPRESS", caps);
-      expect(result.mode).toBe("AI");
+      expect(result.mode).toBe("HUMAN");
     });
 
-    it("WP: uses regex fallback when capabilities are null", () => {
+    it("WP: blog sin actionType explícito → HYBRID via regex fallback (infer create_blog)", () => {
       const candidate = {
         id: "test", titulo: "Escribir artículo de blog sobre válvulas", descripcion: "Crear post",
         kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 1, effort: "MEDIUM" as const,
         impactoEsperado: "Tráfico", justificacion: "Gap", fuente: "analisis" as const,
-        // No actionType — will infer from text
+        // No actionType — inferido como create_blog por regex → HYBRID
       };
       const result = enforceModeRules(candidate, "WORDPRESS", null);
+      expect(result.mode).toBe("HYBRID");
+      expect(result.actionType).toBe("create_blog");
+    });
+
+    it("WP: meta sin actionType explícito → AI via regex fallback cuando capabilities disponibles", () => {
+      const candidate = {
+        id: "test", titulo: "Actualizar meta title con yoast SEO de /servicios", descripcion: "focus keyword",
+        kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 2, effort: "LOW" as const,
+        impactoEsperado: "Mejor CTR", justificacion: "CTR bajo", fuente: "signal" as const,
+        // No actionType explícito — regex infiere update_meta
+      };
+      const caps = ["seo", "publish", "media"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
       expect(result.mode).toBe("AI");
-      expect(result.modeReason).toContain("regex fallback");
+      expect(result.actionType).toBe("update_meta");
+    });
+
+    it("WP: update_meta → AI cuando seo capability disponible", () => {
+      const candidate = {
+        id: "test", titulo: "Actualizar meta title y description de /servicios", descripcion: "Optimizar meta tags",
+        kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 2, effort: "LOW" as const,
+        impactoEsperado: "Mejor CTR", justificacion: "CTR bajo", fuente: "signal" as const,
+        actionType: "update_meta" as const,
+      };
+      const caps = ["publish", "seo", "media"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("AI");
+      expect(result.modeReason).toContain("update_meta");
+    });
+
+    it("WP: create_landing_from_template → HYBRID siempre (AI content_package + HUMAN Elementor)", () => {
+      const candidate = {
+        id: "test", titulo: "Crear landing page de servicios HVAC", descripcion: "Nueva página de servicio",
+        kind: "CONTENT" as const, mode: "HUMAN" as const, modeReason: "Default", priority: 1, effort: "HIGH" as const,
+        impactoEsperado: "Capturar tráfico de servicios", justificacion: "Keyword gap", fuente: "analisis" as const,
+        actionType: "create_landing_from_template" as const,
+      };
+      // No importa qué capabilities tenga — landing siempre HYBRID
+      const caps = ["publish", "seo", "media"];
+      const result = enforceModeRules(candidate, "WORDPRESS", caps);
+      expect(result.mode).toBe("HYBRID");
+      expect(result.modeReason).toContain("create_landing_from_template");
+    });
+
+    it("WP: create_landing_from_template → HYBRID incluso sin capabilities", () => {
+      const candidate = {
+        id: "test", titulo: "Crear landing page de contabilidad fiscal", descripcion: "Nueva landing",
+        kind: "CONTENT" as const, mode: "AI" as const, modeReason: "AI default", priority: 2, effort: "HIGH" as const,
+        impactoEsperado: "Posicionamiento local", justificacion: "Keyword gap local", fuente: "contentplan" as const,
+        actionType: "create_landing_from_template" as const,
+      };
+      const result = enforceModeRules(candidate, "WORDPRESS", null); // null caps
+      expect(result.mode).toBe("HYBRID");
+    });
+
+    // Regression S3 — antes se forzaba HYBRID→HUMAN para todos los sitios WP
+    it("regression S3: WP blog/landing nunca quedan HUMAN por el override de plataforma", () => {
+      const blog = {
+        id: "b1", titulo: "Artículo: guía de servicios industriales 2026", descripcion: "Blog post",
+        kind: "CONTENT" as const, mode: "AI" as const, modeReason: "AI default", priority: 1, effort: "MEDIUM" as const,
+        impactoEsperado: "Tráfico orgánico", justificacion: "Gap de contenido", fuente: "contentplan" as const,
+        actionType: "create_blog" as const,
+      };
+      const landing = {
+        id: "l1", titulo: "Landing: servicios de mantenimiento industrial", descripcion: "Nueva landing de servicio",
+        kind: "CONTENT" as const, mode: "AI" as const, modeReason: "AI default", priority: 2, effort: "HIGH" as const,
+        impactoEsperado: "Capturar búsquedas de servicio", justificacion: "Keyword gap", fuente: "analisis" as const,
+        actionType: "create_landing_from_template" as const,
+      };
+      const caps = ["publish", "seo", "media"];
+      expect(enforceModeRules(blog, "WORDPRESS", caps).mode).toBe("HYBRID");
+      expect(enforceModeRules(landing, "WORDPRESS", caps).mode).toBe("HYBRID");
+      // Con caps=null tampoco deben ser HUMAN
+      expect(enforceModeRules(blog, "WORDPRESS", null).mode).toBe("HYBRID");
+      expect(enforceModeRules(landing, "WORDPRESS", null).mode).toBe("HYBRID");
     });
 
     it("WP: unrecognized action stays HUMAN", () => {
