@@ -102,10 +102,15 @@ export async function getPlanData(
     taskCount: p._count.tasks,
   }));
 
-  // Determine which month to load
+  // Determine which month to load.
+  // Si no se pide un mes específico, omitir planes ARCHIVED al elegir el default
+  // (los archivados aparecen en el selector de mes para auditoría, pero no se abren automáticamente).
+  const activeMonths = months.filter((m) => m.status !== "ARCHIVED");
   const targetMonth =
     month ??
-    (months.length > 0
+    (activeMonths.length > 0
+      ? activeMonths[0].month
+      : months.length > 0
       ? months[0].month
       : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`);
 
