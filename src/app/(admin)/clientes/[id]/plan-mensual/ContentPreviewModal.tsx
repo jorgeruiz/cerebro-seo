@@ -182,6 +182,13 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
               <p className="font-mono text-[0.6rem] text-muted-foreground/60">
                 {data.filePath}
               </p>
+
+              {/* Frontmatter debug — muestra si title/description están vacíos */}
+              {(!data.title || !data.description) && data.frontmatterKeys.length > 0 && (
+                <p className="font-mono text-[0.55rem] text-muted-foreground/40">
+                  campos: {data.frontmatterKeys.join(", ")}
+                </p>
+              )}
             </>
           )}
         </div>

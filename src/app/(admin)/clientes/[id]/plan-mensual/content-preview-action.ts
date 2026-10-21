@@ -13,6 +13,8 @@ export interface ContentPreviewData {
   bodyPreview: string;
   route: string;
   filePath: string;
+  /** Claves del frontmatter detectadas — para debug */
+  frontmatterKeys: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,10 +147,21 @@ export async function actionFetchContentPreview(
   }
 
   const { frontmatter, body } = parseFrontmatter(fileResult.content);
-  const title = frontmatter.title ?? "";
-  const description = frontmatter.description ?? "";
+  const title =
+    frontmatter.title ??
+    frontmatter.seoTitle ??
+    frontmatter.metaTitle ??
+    frontmatter.pageTitle ??
+    "";
+  const description =
+    frontmatter.description ??
+    frontmatter.seoDescription ??
+    frontmatter.metaDescription ??
+    frontmatter.excerpt ??
+    frontmatter.summary ??
+    "";
   const coverImage =
-    frontmatter.coverImage ?? frontmatter.image ?? frontmatter.cover ?? null;
+    frontmatter.coverImage ?? frontmatter.image ?? frontmatter.cover ?? frontmatter.thumbnail ?? null;
   const hasBorrador =
     frontmatter.borrador === "true" || frontmatter.draft === "true";
   const internalLinks = extractInternalLinks(body);
@@ -168,6 +181,7 @@ export async function actionFetchContentPreview(
       bodyPreview,
       route,
       filePath: fileResult.filePath,
+      frontmatterKeys: Object.keys(frontmatter),
     },
   };
 }
