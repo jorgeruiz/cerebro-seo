@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import Image from "next/image";
 import { X, AlertTriangle, Link as LinkIcon, Loader2, WrapText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -115,11 +116,13 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
                 </p>
                 <div className="border border-border rounded-xl p-4 bg-background space-y-1 max-w-xl">
                   {data.coverImage && (
-                    <img
+                    <Image
                       src={data.coverImage}
                       alt="Portada"
+                      width={600}
+                      height={128}
                       className="w-full h-32 object-cover rounded-lg mb-3"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      unoptimized
                     />
                   )}
                   <p className="text-[0.65rem] text-green-700 truncate">{siteLabel}</p>
