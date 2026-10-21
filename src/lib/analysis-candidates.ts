@@ -112,6 +112,19 @@ const NEXTJS_HYBRID_PATTERNS = [
   /css\s*(sin\s*usar|unused)/i, /webpack|turbopack/i,
 ];
 
+/**
+ * Next.js: acciones que el agente ejecuta sin intervención humana → siempre AI.
+ * Meta tags en layout.tsx/page.tsx son edición directa de texto — no requieren
+ * verificación visual antes de mergear.
+ */
+const NEXTJS_META_AI_PATTERNS = [
+  /\bmetas?\b/i,
+  /meta\s*(?:title|description|tag)/i,
+  /yoast|focus.?keyword/i,
+  /reescribir\s*(?:el\s*)?meta|actualizar\s*(?:el\s*)?meta/i,
+  /meta.*(?:seo|page|sitio)/i,
+];
+
 // ─── Capability-based mode resolution for WordPress ─────────────────────────
 
 /**
@@ -158,7 +171,8 @@ const ACTION_TYPE_CAPABILITIES: Record<WpActionType, string[]> = {
  */
 const WP_REGEX_FALLBACK: Array<{ pattern: RegExp; actionType: WpActionType }> = [
   { pattern: /\b(?:blog|artículo|articulo|post|redactar|escribir)\b/i, actionType: "create_blog" },
-  { pattern: /meta\s*(?:title|description|tag)|yoast|focus.?keyword/i, actionType: "update_meta" },
+  // "meta", "metas", "meta title", "meta description", "meta tags", "yoast", "focus keyword"
+  { pattern: /\bmetas?\b|meta\s*(?:title|description|tag|tags)|yoast|focus.?keyword/i, actionType: "update_meta" },
   { pattern: /\balt\b.*imagen|imagen.*\balt\b|texto\s*alternativo/i, actionType: "upload_media" },
   { pattern: /editar.*(?:página|sección|hero).*elementor|elementor.*(?:editar|actualizar)/i, actionType: "edit_page_widgets" },
   { pattern: /crear.*(?:landing|página\s*de\s*(?:servicio|producto|venta))/i, actionType: "create_landing_from_template" },
@@ -276,10 +290,20 @@ export function enforceModeRules(
     };
   }
 
-  // Next.js: performance/bundle → HYBRID
-  if (platform === "NEXTJS" && candidate.mode === "AI") {
+  if (platform === "NEXTJS") {
     const text = `${candidate.titulo} ${candidate.descripcion}`;
-    if (NEXTJS_HYBRID_PATTERNS.some((p) => p.test(text))) {
+
+    // Meta tags → siempre AI en Next.js (layout.tsx/page.tsx — edición directa sin revisión visual)
+    if (candidate.mode !== "AI" && NEXTJS_META_AI_PATTERNS.some((p) => p.test(text))) {
+      return {
+        ...candidate,
+        mode: "AI",
+        modeReason: "Next.js: meta tags editables por el agente en layout.tsx/page.tsx — sin intervención humana",
+      };
+    }
+
+    // Performance/bundle → HYBRID (requiere verificación visual antes de mergear)
+    if (candidate.mode === "AI" && NEXTJS_HYBRID_PATTERNS.some((p) => p.test(text))) {
       return {
         ...candidate,
         mode: "HYBRID",
