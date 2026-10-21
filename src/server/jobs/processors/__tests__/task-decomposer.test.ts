@@ -19,7 +19,6 @@ import { TASK_DECOMPOSER_SYSTEM_PROMPT } from "../task-decomposer";
 // These tests ensure critical rules are present and haven't been accidentally removed.
 
 const nextjsSection = TASK_DECOMPOSER_SYSTEM_PROMPT.split("PARA SITIOS PLATFORM=WORDPRESS")[0];
-const wpSection = TASK_DECOMPOSER_SYSTEM_PROMPT.split("PARA SITIOS PLATFORM=WORDPRESS")[1] ?? "";
 
 describe("task-decomposer SYSTEM_PROMPT — Next.js rules", () => {
   it("prohíbe borrador: true en frontmatter MDX (regresión Brainet)", () => {
