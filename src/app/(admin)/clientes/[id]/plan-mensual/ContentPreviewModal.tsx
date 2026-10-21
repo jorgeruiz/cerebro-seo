@@ -85,6 +85,17 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
 
           {data && (
             <>
+              {/* Landing page — no es MDX */}
+              {data.isCode && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-muted-foreground">
+                    Esta tarea es una <strong>landing page</strong> (.tsx) — no tiene frontmatter MDX.
+                    El contenido se generó como código React. Usa <strong>Ver en sitio</strong> para revisar el resultado visual.
+                  </p>
+                </div>
+              )}
+
               {/* borrador warning */}
               {data.hasBorrador && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-2">

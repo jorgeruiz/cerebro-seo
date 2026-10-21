@@ -15,6 +15,8 @@ export interface ContentPreviewData {
   filePath: string;
   /** Claves del frontmatter detectadas — para debug */
   frontmatterKeys: string[];
+  /** true si es landing page (.tsx/.jsx), false si es blog (.mdx) */
+  isCode: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,10 +82,10 @@ async function findMdxFile(
   route: string,
   branch: string,
   pat: string
-): Promise<{ content: string; sha: string; filePath: string } | null> {
+): Promise<{ content: string; sha: string; filePath: string; isCode: boolean } | null> {
   const slug = route.replace(/^\/+|\/+$/g, "");
   const bare = slug.replace(/^blog\//, "");
-  const candidates = [
+  const mdxCandidates = [
     `src/content/${slug}.mdx`,
     `src/content/${slug}/index.mdx`,
     `content/${slug}.mdx`,
@@ -94,9 +96,21 @@ async function findMdxFile(
     `posts/${bare}.mdx`,
     `src/posts/${bare}.mdx`,
   ];
-  for (const fp of candidates) {
+  for (const fp of mdxCandidates) {
     const r = await fetchGitHubFile(owner, repo, fp, branch, pat);
-    if (r) return { ...r, filePath: fp };
+    if (r) return { ...r, filePath: fp, isCode: false };
+  }
+  // Fallback: landing pages are .tsx files
+  const tsxCandidates = [
+    `src/app/${slug}/page.tsx`,
+    `app/${slug}/page.tsx`,
+    `src/app/(pages)/${slug}/page.tsx`,
+    `src/pages/${slug}.tsx`,
+    `pages/${slug}.tsx`,
+  ];
+  for (const fp of tsxCandidates) {
+    const r = await fetchGitHubFile(owner, repo, fp, branch, pat);
+    if (r) return { ...r, filePath: fp, isCode: true };
   }
   return null;
 }
@@ -182,6 +196,7 @@ export async function actionFetchContentPreview(
       route,
       filePath: fileResult.filePath,
       frontmatterKeys: Object.keys(frontmatter),
+      isCode: fileResult.isCode,
     },
   };
 }
