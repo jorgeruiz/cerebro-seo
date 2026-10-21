@@ -22,6 +22,7 @@ export function ServiceToggle() {
       params.set("filter", active);
       router.replace(`${pathname}?${params.toString()}`);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggle(value: "seo" | "all") {
