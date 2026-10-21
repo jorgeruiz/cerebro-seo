@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Image from "next/image";
-import { X, AlertTriangle, Link as LinkIcon, Loader2, WrapText, Github } from "lucide-react";
+import { X, AlertTriangle, Link as LinkIcon, Loader2, WrapText, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { actionFetchContentPreview, actionFixBorrador, type ContentPreviewData } from "./content-preview-action";
@@ -71,7 +71,7 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
                 rel="noopener noreferrer"
                 className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
               >
-                <Github className="h-3 w-3" /> Ver en GitHub
+                <ExternalLink className="h-3 w-3" /> Ver en GitHub
               </a>
             )}
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
