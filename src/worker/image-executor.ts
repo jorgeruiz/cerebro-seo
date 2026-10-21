@@ -327,7 +327,7 @@ export async function executeImage(
 
   const config = getHiggsfieldConfig();
   const brief = action.content_brief;
-  const aspectRatio = action.payload.aspect_ratio ?? "16:9";
+  const aspectRatio = action.payload?.aspect_ratio ?? "16:9";
   const colorHint = buildColorHint(context.brandColors);
 
   const fullPrompt = `${brief}${colorHint} Professional photography style, high quality, no text overlays, no logos, no watermarks.`;
@@ -428,7 +428,7 @@ async function finalizeImage(
   totalCost: number,
 ): Promise<ImageStepResult> {
   const brief = action.content_brief;
-  const usage = action.payload.usage ?? "featured_image";
+  const usage = action.payload?.usage ?? "featured_image";
   const filename = generateSeoFilename(brief, usage);
   const altText = generateAltText(brief);
 
@@ -455,15 +455,15 @@ async function finalizeImage(
 
     // Auto-assign as featured image if usage=featured_image and post exists
     let featuredNote = "";
-    if (usage === "featured_image" && action.payload.attach_to_post_id) {
+    if (usage === "featured_image" && action.payload?.attach_to_post_id) {
       const attachResult = await updateWpPost(
         context.cerebroClientId,
-        action.payload.attach_to_post_id,
+        action.payload.attach_to_post_id!,
         { featured_image_id: mediaId },
         context.taskId,
       );
       featuredNote = attachResult.ok
-        ? ` | featured_image asignada a post_id=${action.payload.attach_to_post_id}`
+        ? ` | featured_image asignada a post_id=${action.payload?.attach_to_post_id}`
         : ` | featured_image falló: ${attachResult.error} (asignar manualmente)`;
     }
 
