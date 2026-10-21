@@ -173,9 +173,13 @@ REGLA ANTI-INVENCIÓN (CRÍTICA):
 TERMINAL (solo Next.js): puede leer/editar/crear archivos, npm run build/lint, git, npx sharp/svgo.
 No puede: instalar paquetes globales, correr Docker, URLs externas, abrir un navegador.
 
+FRONTMATTER MDX (CRÍTICO — Next.js): nunca incluyas borrador: true, draft: true, published: false ni ningún campo que marque el artículo como inédito. En Next.js el preview del plan ES la revisión; el merge a main ES la publicación. Campos válidos: title, description, date, coverImage (WebP), tags, author. Si añades borrador o draft, la tarea es inválida.
+
+No generes pasos de verificación de compilación ("Verificar que compila", "npm run build", "revisar errores de TypeScript"). El worker compila y reporta errores automáticamente después de cada paso AI. Un paso manual de build duplica trabajo y ralentiza el plan.
+
 IMÁGENES AI (Next.js y WordPress-blog):
 - subject_type: "conceptual" o "illustration". Personas reales / instalaciones / productos del cliente → HUMAN.
-- aspect_ratio: 16:9 portadas, 4:3 inline, 1:1 thumbnails.
+- aspect_ratio: 16:9 portadas, 4:3 inline, 1:1 thumbnails. Portadas de blog (16:9): formato WebP obligatorio — añadir "format": "webp" al payload.
 
 COMPLEJIDAD (Next.js):
 - "low" (1-2 archivos existentes), "medium" (crear 1 archivo), "high" (múltiples archivos nuevos).
@@ -289,6 +293,9 @@ RESPONDE ÚNICAMENTE con un JSON array:
 ]
 
 Sin texto fuera del JSON. El primer elemento del array siempre es el primer paso (orden ascendente).`;
+
+// Exported for testing
+export const TASK_DECOMPOSER_SYSTEM_PROMPT = SYSTEM_PROMPT;
 
 export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   const { taskId, clientId } = data;

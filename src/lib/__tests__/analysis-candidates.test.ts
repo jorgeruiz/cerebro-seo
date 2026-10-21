@@ -242,7 +242,8 @@ describe("analysis-candidates", () => {
         impactoEsperado: "Mejor CTR", justificacion: "CTR bajo", fuente: "signal" as const,
         // No actionType explícito — regex infiere update_meta
       };
-      const caps = ["seo", "publish", "media"];
+      // Plugin v1.6.0 usa "seo_write" (no "seo")
+      const caps = ["seo_write", "publish", "media"];
       const result = enforceModeRules(candidate, "WORDPRESS", caps);
       expect(result.mode).toBe("AI");
       expect(result.actionType).toBe("update_meta");
@@ -255,7 +256,8 @@ describe("analysis-candidates", () => {
         impactoEsperado: "Mejor CTR", justificacion: "CTR bajo", fuente: "signal" as const,
         actionType: "update_meta" as const,
       };
-      const caps = ["publish", "seo", "media"];
+      // Plugin v1.6.0 usa "seo_write" (no "seo")
+      const caps = ["publish", "seo_write", "media"];
       const result = enforceModeRules(candidate, "WORDPRESS", caps);
       expect(result.mode).toBe("AI");
       expect(result.modeReason).toContain("update_meta");

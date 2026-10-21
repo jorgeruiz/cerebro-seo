@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, Loader2,
   Play, CheckCircle2, XCircle,
   Clock, Ban, RotateCcw, RefreshCw, Terminal,
-  ExternalLink, GitMerge, Send, DollarSign, Eye, Archive,
+  ExternalLink, GitMerge, Send, DollarSign, Eye, Archive, WrapText, AlertTriangle,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ import {
   type PlanMonthOption,
 } from "./actions";
 import { TerminalPanel } from "./TerminalPanel";
+import { ContentPreviewModal } from "./ContentPreviewModal";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -418,6 +419,7 @@ function TaskCard({
   const [open, setOpen] = useState(
     task.status === "RUNNING" || task.status === "WAITING_HUMAN"
   );
+  const [showContentPreview, setShowContentPreview] = useState(false);
   const statusCfg = TASK_STATUS[task.status] ?? TASK_STATUS.PLANNING;
   const StatusIcon = statusCfg.icon;
   const badge = MODE_BADGE[task.mode] ?? MODE_BADGE.HUMAN;
@@ -543,6 +545,40 @@ function TaskCard({
             </div>
           )}
 
+          {/* DONE — Ver en sitio + Ver contenido */}
+          {task.status === "DONE" && (() => {
+            const routes = Array.from(new Set(task.runs.flatMap((r) => r.changedRoutes)));
+            const isContent = task.kind === "CONTENT";
+            if (routes.length === 0 && !isContent) return null;
+            return (
+              <div className="px-4 py-3 border-t border-border flex items-center gap-2 flex-wrap">
+                {routes.length > 0 && routes.map((route) => (
+                  planPreviewUrl ? (
+                    <a
+                      key={route}
+                      href={`${planPreviewUrl.replace(/\/$/, "")}${route}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+                    >
+                      <ExternalLink className="h-3 w-3" /> Ver en sitio
+                    </a>
+                  ) : (
+                    <span key={route} className="font-mono text-[0.65rem] text-muted-foreground">{route} (sin preview)</span>
+                  )
+                ))}
+                {isContent && (
+                  <button
+                    onClick={() => setShowContentPreview(true)}
+                    className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+                  >
+                    <WrapText className="h-3 w-3" /> Ver contenido
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Last run info */}
           {task.runs.length > 0 && (
             <div className="px-4 py-2 bg-muted/5 border-t border-border">
@@ -632,6 +668,15 @@ function TaskCard({
             </div>
           )}
         </div>
+      )}
+
+      {showContentPreview && (
+        <ContentPreviewModal
+          taskId={task.id}
+          taskTitle={task.title}
+          planPreviewUrl={planPreviewUrl ?? null}
+          onClose={() => setShowContentPreview(false)}
+        />
       )}
     </div>
   );
@@ -748,21 +793,69 @@ function PlanStatusBanner({
   }
 
   const allTerminal = plan.tasks.every((t) => ["DONE", "VOIDED", "FAILED"].includes(t.status));
+  const remaining = plan.tasks.filter((t) => !["DONE", "VOIDED", "FAILED"].includes(t.status)).length;
 
-  if (plan.status === "ACTIVE" && allTerminal) {
+  // ACTIVE + not done yet — show progress hint
+  if (plan.status === "ACTIVE" && !allTerminal) {
+    const doneTasks = plan.tasks.filter((t) => t.status === "DONE");
+    const missingPreview = !plan.previewUrl && doneTasks.some((t) =>
+      t.runs.some((r) => r.changedRoutes.length > 0)
+    );
     return (
-      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-foreground">Plan al 100%</p>
-          <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-            Todas las tareas terminadas. Pasa a revision para ver el preview y hacer merge.
+      <div className="space-y-2">
+        <div className="bg-muted/20 border border-border rounded-xl px-4 py-3">
+          <p className="font-mono text-[0.65rem] text-muted-foreground">
+            {remaining} tarea{remaining !== 1 ? "s" : ""} restante{remaining !== 1 ? "s" : ""} para Pasar a revisión
           </p>
         </div>
-        <button onClick={onSubmitReview} disabled={isActing}
-          className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
-          {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-          Pasar a revision
-        </button>
+        {missingPreview && (
+          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-2 flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0" />
+            <p className="font-mono text-[0.6rem] text-muted-foreground">
+              Sin preview URL — el worker no recibió la URL de Vercel. Verifica que VERCEL_TOKEN esté configurado en el worker.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (plan.status === "ACTIVE" && allTerminal) {
+    // Soft check: code/design tasks without changed routes
+    const codeWithoutPreview = plan.tasks.filter(
+      (t) => t.status === "DONE" && (t.kind === "CODE") && t.runs.every((r) => r.changedRoutes.length === 0)
+    );
+    return (
+      <div className="space-y-2">
+        {codeWithoutPreview.length > 0 && (
+          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-2 flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0" />
+            <p className="font-mono text-[0.6rem] text-muted-foreground">
+              {codeWithoutPreview.length} tarea{codeWithoutPreview.length !== 1 ? "s" : ""} de código sin rutas de preview registradas. Verifica antes de hacer merge.
+            </p>
+          </div>
+        )}
+        {!plan.previewUrl && (
+          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-2 flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0" />
+            <p className="font-mono text-[0.6rem] text-muted-foreground">
+              Sin preview URL — verifica que VERCEL_TOKEN esté configurado en el worker.
+            </p>
+          </div>
+        )}
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Plan al 100%</p>
+            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+              Todas las tareas terminadas. Pasa a revision para ver el preview y hacer merge.
+            </p>
+          </div>
+          <button onClick={onSubmitReview} disabled={isActing}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+            {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            Pasar a revision
+          </button>
+        </div>
       </div>
     );
   }

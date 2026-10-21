@@ -70,6 +70,7 @@ export interface PlanFullView {
   mergedAt: string | null;
   totalCostUsd: number;
   platform: string | null;
+  githubRepo: string | null;
   tasks: PlanTaskFullView[];
 }
 
@@ -128,7 +129,7 @@ export async function getPlanData(
         },
       },
     }),
-    prisma.site.findFirst({ where: { clientId }, select: { platform: true } }),
+    prisma.site.findFirst({ where: { clientId }, select: { platform: true, githubRepo: true } }),
   ]);
 
   if (!plan) return { plan: null, months };
@@ -153,6 +154,7 @@ export async function getPlanData(
     mergedAt: plan.mergedAt?.toISOString() ?? null,
     totalCostUsd,
     platform: site?.platform ?? null,
+    githubRepo: site?.githubRepo ?? null,
     tasks: plan.tasks.map((t) => ({
       id: t.id,
       order: t.order,
