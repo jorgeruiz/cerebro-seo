@@ -722,6 +722,7 @@ model PlanTask {
   commitShas         String[]       @default([])
   resultUrls         String[]       @default([])
   previewUrl         String?        // borrador WP (POST /publish draft_url) o preview Vercel de tarea
+  modeReason         String?        @db.Text  // por qué se asignó este modo (AI/HYBRID/HUMAN)
   failureReason      String?        @db.Text
   voidReason         String?        @db.Text
   completedById      String?

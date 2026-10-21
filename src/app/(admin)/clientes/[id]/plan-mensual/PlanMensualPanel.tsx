@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import {
-  Bot, User, Settings2, FileText, Code,
+  Bot, User, Settings2, FileText, Code, Info,
   ChevronDown, ChevronRight, Loader2,
   Play, CheckCircle2, XCircle,
   Clock, Ban, RotateCcw, RefreshCw, Terminal,
@@ -458,6 +458,9 @@ function TaskCard({
             <span className={cn("font-mono text-[0.6rem] uppercase px-1.5 py-0.5 rounded border flex items-center gap-0.5", badge.color)}>
               <BadgeIcon className="h-2.5 w-2.5" />
               {badge.label}
+              {task.modeReason && (
+                <Info className="h-2.5 w-2.5 opacity-60" title={task.modeReason} />
+              )}
             </span>
             <span className="font-mono text-[0.6rem] text-muted-foreground border border-border rounded px-1.5 py-0.5 flex items-center gap-0.5">
               <KindIcon className="h-2.5 w-2.5" />

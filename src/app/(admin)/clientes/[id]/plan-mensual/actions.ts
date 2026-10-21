@@ -43,6 +43,7 @@ export interface PlanTaskFullView {
   prompt: string;
   acceptanceCriteria: string[];
   mode: string;
+  modeReason: string | null;
   kind: string;
   priority: number;
   effort: string;
@@ -160,6 +161,7 @@ export async function getPlanData(
       prompt: t.prompt,
       acceptanceCriteria: t.acceptanceCriteria,
       mode: t.mode,
+      modeReason: t.modeReason ?? null,
       kind: t.kind,
       priority: t.priority,
       effort: t.effort,

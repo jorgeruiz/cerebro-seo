@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import {
-  Send, Loader2, CheckCircle2, Bot, User,
+  Send, Loader2, CheckCircle2, Bot, User, Info,
   FileText, Code, Settings2, AlertTriangle, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -97,6 +97,9 @@ function CandidateCard({
           <span className={cn("font-mono text-[0.65rem] uppercase px-1.5 py-0.5 rounded border flex items-center gap-1", badge.color)}>
             <BadgeIcon className="h-2.5 w-2.5" />
             {badge.label}
+            {candidate.modeReason && (
+              <Info className="h-2.5 w-2.5 opacity-60" title={candidate.modeReason} />
+            )}
           </span>
           <span className="font-mono text-[0.65rem] text-muted-foreground border border-border rounded px-1.5 py-0.5">
             P{candidate.priority}

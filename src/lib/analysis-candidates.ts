@@ -156,7 +156,8 @@ const WP_ACTION_MODE: Record<WpActionType, CandidateMode> = {
  */
 const ACTION_TYPE_CAPABILITIES: Record<WpActionType, string[]> = {
   create_blog:                    ["publish"],  // HYBRID — pero el paso publish necesita este endpoint
-  update_meta:                    ["seo"],
+  // Plugin v1.6.0 renombró "seo" → "seo_write" (antes era "seo" en v1.5.x)
+  update_meta:                    ["seo_write"],
   upload_media:                   ["media"],
   update_post:                    ["update"],
   edit_page_widgets:              [],           // HUMAN siempre (ver WP_ACTION_MODE)

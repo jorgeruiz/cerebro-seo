@@ -159,16 +159,12 @@ export async function actionSendToPlan(
 
     // Map candidate kind to Prisma enum
     const kind = candidate.kind === "SETUP" ? "SETUP" : candidate.kind === "CONTENT" ? "CONTENT" : "CODE";
-    // Modo según plataforma:
-    // - NEXTJS: respetar el modo del análisis (AI/HYBRID/HUMAN)
-    // - WORDPRESS/MIGRACION: HYBRID no existe → HUMAN; AI y HUMAN se respetan (el plugin tiene endpoints de escritura)
-    // - OTRO: todo HUMAN (sin capacidades de ejecución remota)
+    // Modo según plataforma (respetar el modo del análisis en todos los casos)
+    // WP ahora admite HYBRID (blog/landing: IA genera, equipo aplica en WP)
     const platform = eligibility.platform;
     let mode: "AI" | "HYBRID" | "HUMAN";
-    if (platform === "NEXTJS") {
+    if (platform === "NEXTJS" || platform === "WORDPRESS" || platform === "MIGRACION") {
       mode = candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
-    } else if (platform === "WORDPRESS" || platform === "MIGRACION") {
-      mode = candidate.mode === "HYBRID" ? "HUMAN" : candidate.mode === "AI" ? "AI" : "HUMAN";
     } else {
       mode = "HUMAN";
     }
@@ -184,6 +180,7 @@ export async function actionSendToPlan(
         prompt: "", // filled by decomposition job
         acceptanceCriteria: [],
         mode,
+        modeReason: candidate.modeReason ?? null,
         kind,
         priority: candidate.priority,
         effort,
