@@ -98,7 +98,9 @@ function CandidateCard({
             <BadgeIcon className="h-2.5 w-2.5" />
             {badge.label}
             {candidate.modeReason && (
-              <Info className="h-2.5 w-2.5 opacity-60" title={candidate.modeReason} />
+              <span title={candidate.modeReason} className="cursor-help leading-none">
+                <Info className="h-2.5 w-2.5 opacity-60" />
+              </span>
             )}
           </span>
           <span className="font-mono text-[0.65rem] text-muted-foreground border border-border rounded px-1.5 py-0.5">
