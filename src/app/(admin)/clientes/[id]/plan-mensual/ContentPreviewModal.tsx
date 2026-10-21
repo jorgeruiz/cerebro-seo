@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Image from "next/image";
-import { X, AlertTriangle, Link as LinkIcon, Loader2, WrapText } from "lucide-react";
+import { X, AlertTriangle, Link as LinkIcon, Loader2, WrapText, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { actionFetchContentPreview, actionFixBorrador, type ContentPreviewData } from "./content-preview-action";
@@ -63,9 +63,21 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
             <WrapText className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-semibold text-foreground truncate max-w-md">{taskTitle}</span>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {data?.githubUrl && (
+              <a
+                href={data.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+              >
+                <Github className="h-3 w-3" /> Ver en GitHub
+              </a>
+            )}
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -117,6 +129,18 @@ export function ContentPreviewModal({ taskId, taskTitle, planPreviewUrl, onClose
                     {isFixing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Fix
                   </button>
+                </div>
+              )}
+
+              {/* Frontmatter raw — cuando no se detectan title/description */}
+              {(!data.title || !data.description) && !data.isCode && data.frontmatterRaw && (
+                <div>
+                  <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-2">
+                    Frontmatter detectado
+                  </p>
+                  <pre className="font-mono text-[0.65rem] bg-muted/30 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground">
+                    {data.frontmatterRaw}
+                  </pre>
                 </div>
               )}
 

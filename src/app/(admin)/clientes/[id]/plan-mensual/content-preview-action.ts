@@ -17,6 +17,10 @@ export interface ContentPreviewData {
   frontmatterKeys: string[];
   /** true si es landing page (.tsx/.jsx), false si es blog (.mdx) */
   isCode: boolean;
+  /** Enlace al archivo en GitHub (rama del plan) */
+  githubUrl: string;
+  /** Frontmatter raw (primeras líneas) para diagnóstico */
+  frontmatterRaw: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -160,6 +164,11 @@ export async function actionFetchContentPreview(
     return { ok: false, error: `No se encontró el archivo MDX para la ruta ${route} en la rama ${branchName}.` };
   }
 
+  const githubUrl = `https://github.com/${owner}/${repo}/blob/${encodeURIComponent(branchName)}/${fileResult.filePath}`;
+  const frontmatterRaw = fileResult.content.split(/\n---\n/)[1]
+    ? `---\n${fileResult.content.split(/\n---\n/)[1].split(/\n---\n/)[0]}\n---`
+    : fileResult.content.slice(0, 400);
+
   const { frontmatter, body } = parseFrontmatter(fileResult.content);
   const title =
     frontmatter.title ??
@@ -197,6 +206,8 @@ export async function actionFetchContentPreview(
       filePath: fileResult.filePath,
       frontmatterKeys: Object.keys(frontmatter),
       isCode: fileResult.isCode,
+      githubUrl,
+      frontmatterRaw,
     },
   };
 }
