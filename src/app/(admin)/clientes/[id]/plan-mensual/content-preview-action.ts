@@ -172,19 +172,26 @@ export async function actionFetchContentPreview(
   const { frontmatter, body } = parseFrontmatter(fileResult.content);
   const title =
     frontmatter.title ??
+    frontmatter.titulo ??       // Brainet
     frontmatter.seoTitle ??
     frontmatter.metaTitle ??
     frontmatter.pageTitle ??
     "";
   const description =
     frontmatter.description ??
+    frontmatter.extracto ??     // Brainet
     frontmatter.seoDescription ??
     frontmatter.metaDescription ??
     frontmatter.excerpt ??
     frontmatter.summary ??
     "";
   const coverImage =
-    frontmatter.coverImage ?? frontmatter.image ?? frontmatter.cover ?? frontmatter.thumbnail ?? null;
+    frontmatter.coverImage ??
+    frontmatter.imagen_portada ?? // Brainet
+    frontmatter.image ??
+    frontmatter.cover ??
+    frontmatter.thumbnail ??
+    null;
   const hasBorrador =
     frontmatter.borrador === "true" || frontmatter.draft === "true";
   const internalLinks = extractInternalLinks(body);
