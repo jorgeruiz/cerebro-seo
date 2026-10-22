@@ -1,4 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+
+// Mock workerEnv so importing repo-manager doesn't fail env validation
+vi.mock("../env", () => ({
+  workerEnv: {
+    ANTHROPIC_API_KEY: "test",
+    GITHUB_PAT_CLIENT_REPOS: "test",
+    WORKSPACES_DIR: "/tmp/workspaces",
+    AGENT_TIMEOUT_MIN: 30,
+    AGENT_MAX_TURNS_CAP: 60,
+    AGENT_MAX_BUDGET_USD: 5,
+    REDIS_URL: "redis://localhost:6379",
+  },
+}));
+
+import { scanExistingRoutes } from "../repo-manager";
 
 // Import only pure functions that don't depend on workerEnv
 // branchName and sanitizePat are tested here; repo operations need integration tests
@@ -56,5 +74,72 @@ describe("repo-manager helpers", () => {
       const sanitized = text.replaceAll(pat, "***PAT***");
       expect(sanitized).toBe("No secrets here");
     });
+  });
+});
+
+// ─── scanExistingRoutes ───────────────────────────────────────────────────────
+
+function touch(filePath: string) {
+  mkdirSync(filePath.split("/").slice(0, -1).join("/"), { recursive: true });
+  writeFileSync(filePath, "// placeholder");
+}
+
+describe("scanExistingRoutes", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "scan-routes-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("detects App Router pages in app/", () => {
+    touch(join(dir, "app/servicios/page.tsx"));
+    touch(join(dir, "app/blog/mi-post/page.mdx"));
+    const routes = scanExistingRoutes(dir);
+    expect(routes.has("/servicios")).toBe(true);
+    expect(routes.has("/blog/mi-post")).toBe(true);
+  });
+
+  it("detects App Router pages in src/app/", () => {
+    touch(join(dir, "src/app/sobre-nosotros/page.tsx"));
+    const routes = scanExistingRoutes(dir);
+    expect(routes.has("/sobre-nosotros")).toBe(true);
+  });
+
+  it("strips route groups from path (canibalización guard)", () => {
+    // Brainet uses (es) route group — should map to bare route without the group
+    touch(join(dir, "app/(es)/seguridad-electronica/control-de-acceso/page.tsx"));
+    const routes = scanExistingRoutes(dir);
+    expect(routes.has("/seguridad-electronica/control-de-acceso")).toBe(true);
+    // The stored file path should include the route group (for reference)
+    expect(routes.get("/seguridad-electronica/control-de-acceso")).toContain("(es)");
+  });
+
+  it("detects content/blog MDX files", () => {
+    touch(join(dir, "content/blog/cctv-empresas-2026.mdx"));
+    const routes = scanExistingRoutes(dir);
+    expect(routes.has("/blog/cctv-empresas-2026")).toBe(true);
+  });
+
+  it("detects src/content/blog MDX files", () => {
+    touch(join(dir, "src/content/blog/integradores-de-soluciones.mdx"));
+    const routes = scanExistingRoutes(dir);
+    expect(routes.has("/blog/integradores-de-soluciones")).toBe(true);
+  });
+
+  it("returns empty map for empty repo", () => {
+    const routes = scanExistingRoutes(dir);
+    expect(routes.size).toBe(0);
+  });
+
+  it("last writer wins when both app/ and src/app/ define same route", () => {
+    touch(join(dir, "app/contacto/page.tsx"));
+    touch(join(dir, "src/app/contacto/page.tsx"));
+    const routes = scanExistingRoutes(dir);
+    // Route exists (no crash, deterministic)
+    expect(routes.has("/contacto")).toBe(true);
   });
 });

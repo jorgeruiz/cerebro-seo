@@ -564,7 +564,7 @@ export async function actionSubmitForReview(
           select: { id: true, status: true },
         });
         const allowedIds = new Set(
-          allTasks.filter((t) => t.status === "DONE").map((t) => t.id.slice(0, 8))
+          allTasks.filter((t) => t.status === "DONE").map((t) => t.id)
         );
 
         const orphans = auditPlanCommits(dir, site.defaultBranch, allowedIds);

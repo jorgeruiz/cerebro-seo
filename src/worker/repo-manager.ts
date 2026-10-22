@@ -462,7 +462,7 @@ export function commitStep(
 ): string | null {
   if (!hasDiff(dir)) return null;
 
-  const message = `[task:${taskId.slice(0, 8)}] ${stepTitle}`;
+  const message = `[task:${taskId}] ${stepTitle}`;
   const authorName = workerEnv.GIT_AUTHOR_NAME;
   const authorEmail = workerEnv.GIT_AUTHOR_EMAIL;
 
@@ -482,7 +482,7 @@ export function revertTaskCommits(
   taskId: string,
   branch: string
 ): { ok: true; revertShas: string[] } | { ok: false; error: string } {
-  const tag = `[task:${taskId.slice(0, 8)}]`;
+  const tag = `[task:${taskId}]`;
 
   // Find commits matching this task (newest first)
   let logOutput: string;
@@ -653,6 +653,55 @@ export function auditPlanCommits(
   }
 
   return orphans;
+}
+
+/**
+ * Scans a cloned Next.js repo for existing page routes.
+ * Returns a map of route → file path for all page.tsx / page.mdx / content blog MDX files.
+ *
+ * Used by the canibalization guard: if a planned "new page" route already exists,
+ * the agent should optimize the existing file instead of creating a new one.
+ */
+export function scanExistingRoutes(dir: string): Map<string, string> {
+  const { globSync } = require("glob") as typeof import("glob");
+  const routes = new Map<string, string>();
+
+  // Next.js App Router pages: app/**/page.tsx|jsx|mdx
+  const pageFiles: string[] = globSync("app/**/page.{tsx,jsx,mdx}", { cwd: dir, nodir: true }) as string[];
+  for (const fp of pageFiles) {
+    // Strip route groups (es) and trailing /page.tsx
+    const route = "/" + fp
+      .replace(/\\/g, "/")
+      .replace(/\/page\.[^/]+$/, "")
+      .replace(/app\//, "")
+      .replace(/\([^)]+\)\//g, "");
+    if (route && route !== "/") routes.set(route, fp);
+  }
+
+  // src/app variant
+  const srcPageFiles: string[] = globSync("src/app/**/page.{tsx,jsx,mdx}", { cwd: dir, nodir: true }) as string[];
+  for (const fp of srcPageFiles) {
+    const route = "/" + fp
+      .replace(/\\/g, "/")
+      .replace(/\/page\.[^/]+$/, "")
+      .replace(/src\/app\//, "")
+      .replace(/\([^)]+\)\//g, "");
+    if (route && route !== "/") routes.set(route, fp);
+  }
+
+  // Blog MDX: content/blog/*.mdx → /blog/slug
+  const mdxFiles: string[] = globSync("content/blog/*.mdx", { cwd: dir, nodir: true }) as string[];
+  for (const fp of mdxFiles) {
+    const slug = fp.replace(/^content\/blog\//, "").replace(/\.mdx$/, "");
+    routes.set(`/blog/${slug}`, fp);
+  }
+  const srcMdxFiles: string[] = globSync("src/content/blog/*.mdx", { cwd: dir, nodir: true }) as string[];
+  for (const fp of srcMdxFiles) {
+    const slug = fp.replace(/^src\/content\/blog\//, "").replace(/\.mdx$/, "");
+    routes.set(`/blog/${slug}`, fp);
+  }
+
+  return routes;
 }
 
 export interface PreviewStatus {

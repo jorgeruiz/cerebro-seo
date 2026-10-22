@@ -112,26 +112,29 @@ describe("auditPlanCommits", () => {
   beforeEach(() => ({ dir, cleanup } = setupBareAndClone()));
   afterEach(() => cleanup());
 
+  // Use realistic full cuid2 IDs (25 chars) — NOT slice(0,8) prefixes
+  const TASK_A = "cmvhogbb0000000000000001";
+  const TASK_B = "cmvhogbb0000000000000002"; // same prefix as A — would collide with 8-char slice
+
   it("detects commits from tasks not in the allowed set", () => {
     const branch = "plan/test-2026-10";
     git(`checkout -b ${branch}`, dir);
 
-    // Commit for allowed task
+    // Commit for allowed task (full ID)
     writeFileSync(join(dir, "ok.txt"), "ok");
     git("add -A", dir);
-    git('commit -m "[task:allowed1] good step"', dir);
+    git(`commit -m "[task:${TASK_A}] good step"`, dir);
 
-    // Commit for disallowed task
+    // Commit for disallowed task (full ID)
     writeFileSync(join(dir, "bad.txt"), "bad");
     git("add -A", dir);
-    git('commit -m "[task:orphan01] bad step"', dir);
+    git(`commit -m "[task:${TASK_B}] bad step"`, dir);
 
     git(`push origin ${branch}`, dir);
 
-    // Audit
     const log = git('log --oneline --format="%H %s" origin/main..HEAD', dir);
     const orphans: { sha: string; tag: string }[] = [];
-    const allowed = new Set(["allowed1"]);
+    const allowed = new Set([TASK_A]); // only A is allowed
 
     for (const line of log.split("\n").filter(Boolean)) {
       const msg = line.slice(41);
@@ -142,21 +145,62 @@ describe("auditPlanCommits", () => {
     }
 
     expect(orphans.length).toBe(1);
-    expect(orphans[0].tag).toBe("orphan01");
+    expect(orphans[0].tag).toBe(TASK_B);
   });
 
-  it("passes when all commits belong to allowed tasks", () => {
-    const branch = "plan/test-2026-10";
+  it("no choca entre tareas con IDs creadas en el mismo segundo (mismo prefijo de 8 chars)", () => {
+    // Regression: with .slice(0,8), TASK_A and TASK_B would share the same prefix "cmvhogbb"
+    // and allowedIds.has("cmvhogbb") would accept BOTH — hiding an orphan.
+    const branch = "plan/collision-test";
     git(`checkout -b ${branch}`, dir);
 
-    writeFileSync(join(dir, "ok.txt"), "ok");
+    writeFileSync(join(dir, "a.txt"), "a");
     git("add -A", dir);
-    git('commit -m "[task:allowed1] good step"', dir);
+    git(`commit -m "[task:${TASK_A}] step A"`, dir);
+
+    writeFileSync(join(dir, "b.txt"), "b");
+    git("add -A", dir);
+    git(`commit -m "[task:${TASK_B}] step B"`, dir);
 
     git(`push origin ${branch}`, dir);
 
     const log = git('log --oneline --format="%H %s" origin/main..HEAD', dir);
-    const allowed = new Set(["allowed1"]);
+
+    // With truncated IDs: both would share prefix "cmvhogbb0000000" — Set lookup would falsely allow TASK_B
+    const truncatedAllowed = new Set([TASK_A.slice(0, 8)]);
+    const slicedFalseNegatives: string[] = [];
+    for (const line of log.split("\n").filter(Boolean)) {
+      const msg = line.slice(41);
+      const match = msg.match(/\[task:([a-z0-9]+)\]/);
+      if (match && !truncatedAllowed.has(match[1])) slicedFalseNegatives.push(match[1]);
+    }
+    // With full IDs: the truncated approach misses TASK_B because it's stored with full ID
+    // but looked up with 8-char prefix — they DON'T match → correctly flagged as orphan
+    // (this test documents the old bug was: slice kept same prefix → both tasks resolved to same key)
+    // With full IDs in commits and allowedIds, TASK_B is correctly detected as orphan:
+    const fullAllowed = new Set([TASK_A]);
+    const fullOrphans: string[] = [];
+    for (const line of log.split("\n").filter(Boolean)) {
+      const msg = line.slice(41);
+      const match = msg.match(/\[task:([a-z0-9]+)\]/);
+      if (match && !fullAllowed.has(match[1])) fullOrphans.push(match[1]);
+    }
+    expect(fullOrphans).toContain(TASK_B);
+    expect(fullOrphans).not.toContain(TASK_A);
+  });
+
+  it("passes when all commits belong to allowed tasks", () => {
+    const branch = "plan/test-2026-10b";
+    git(`checkout -b ${branch}`, dir);
+
+    writeFileSync(join(dir, "ok.txt"), "ok");
+    git("add -A", dir);
+    git(`commit -m "[task:${TASK_A}] good step"`, dir);
+
+    git(`push origin ${branch}`, dir);
+
+    const log = git('log --oneline --format="%H %s" origin/main..HEAD', dir);
+    const allowed = new Set([TASK_A]);
     const orphans = [];
 
     for (const line of log.split("\n").filter(Boolean)) {

@@ -45,6 +45,7 @@ import {
   createOrUpdatePlanPR,
   getPreviewUrl,
   sanitizePat,
+  scanExistingRoutes,
 } from "./repo-manager";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
 
@@ -550,7 +551,8 @@ function parseAgentResult(text: string): AgentStructuredResult {
 
 function composeStepPrompt(
   task: { title: string; objective: string },
-  step: { title: string; prompt: string | null; acceptanceCriteria: string[] }
+  step: { title: string; prompt: string | null; acceptanceCriteria: string[] },
+  existingRoutes?: Map<string, string>
 ): string {
   const sections = [
     `# Paso: ${step.title}`,
@@ -565,6 +567,18 @@ function composeStepPrompt(
     `## Criterios de aceptación`,
     ...step.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`),
     "",
+  ];
+
+  if (existingRoutes && existingRoutes.size > 0) {
+    sections.push(
+      `## Rutas existentes en el repositorio`,
+      "IMPORTANTE: Las siguientes rutas YA EXISTEN en el repo. Si tu tarea toca alguna de estas rutas, OPTIMIZA el archivo existente — NO crees uno nuevo.",
+      ...Array.from(existingRoutes.entries()).map(([route, fp]) => `- ${route}  →  ${fp}`),
+      ""
+    );
+  }
+
+  sections.push(
     `## Reglas`,
     "- Respeta CLAUDE.md y DESIGN.md del repo si existen.",
     "- Alcance mínimo: solo los cambios de ESTE paso.",
@@ -574,6 +588,7 @@ function composeStepPrompt(
     "- No hagas git commit ni git push — el worker lo hace después.",
     "- No salgas del directorio del repo.",
     "- PROHIBIDO inventar datos del cliente (precios, clientes, certificaciones, casos).",
+    "- Si la ruta objetivo ya existe (ver sección 'Rutas existentes'), edita ese archivo, no crees uno duplicado.",
     "",
     `## Resultado`,
     "Al terminar, responde con un bloque JSON:",
@@ -581,7 +596,7 @@ function composeStepPrompt(
     `{"summary": "resumen de lo que hiciste", "changedRoutes": ["/ruta1", "/ruta2"], "noChangeReason": null}`,
     "```",
     "Si no hiciste cambios, explica por qué en noChangeReason.",
-  ];
+  );
   return sections.join("\n");
 }
 
@@ -619,7 +634,8 @@ async function runAgent(
   let resultText = "";
 
   try {
-    const prompt = composeStepPrompt(task, step);
+    const existingRoutes = scanExistingRoutes(dir);
+    const prompt = composeStepPrompt(task, step, existingRoutes);
     const canUseTool = createCanUseTool(dir);
 
     console.log(`[plan-task] Agent maxTurns=${maxTurns} (${step.notes?.match(/complexity:\w+/)?.[0] ?? "medium"})`);

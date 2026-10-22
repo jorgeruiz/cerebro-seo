@@ -269,7 +269,7 @@ export async function actionFixBorrador(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: `fix: remove borrador: true from frontmatter\n\n[task:${task.id.slice(0, 8)}]`,
+        message: `fix: remove borrador: true from frontmatter\n\n[task:${task.id}]`,
         content: Buffer.from(fixed).toString("base64"),
         sha: fileResult.sha,
         branch: branchName,

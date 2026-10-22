@@ -141,7 +141,7 @@ async function handleTurn(job: Job<TerminalJobData>): Promise<void> {
     const ac = new AbortController();
     const timeout = setTimeout(() => ac.abort(), workerEnv.AGENT_TIMEOUT_MIN * 60 * 1000);
 
-    const commitTag = session.taskId ? `[task:${session.taskId.slice(0, 8)}]` : "[plan:review]";
+    const commitTag = session.taskId ? `[task:${session.taskId}]` : "[plan:review]";
 
     try {
       const stream = query({
