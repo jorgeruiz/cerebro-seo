@@ -961,6 +961,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
   const [selectedMonth, setSelectedMonth] = useState(initialPlan?.month ?? initialMonths[0]?.month ?? "");
   const [isActing, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [mergeWarnings, setMergeWarnings] = useState<string[]>([]);
 
   // Refresh data
   const refresh = useCallback(async (month?: string) => {
@@ -1041,7 +1042,17 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
   function handleMerge() {
     if (!plan) return;
     if (!confirm("¿Merge a producción? Esta acción no se puede deshacer.")) return;
-    handleAction(() => actionMergePlan(plan.id));
+    setError(null);
+    setMergeWarnings([]);
+    startTransition(async () => {
+      const result = await actionMergePlan(plan.id);
+      if (!result.ok) {
+        setError(result.error ?? "Error desconocido");
+      } else if (result.warnings.length > 0) {
+        setMergeWarnings(result.warnings);
+      }
+      await refresh();
+    });
   }
 
   // Group tasks by mode
@@ -1093,6 +1104,16 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
         {error && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
             <p className="text-xs text-destructive">{error}</p>
+          </div>
+        )}
+
+        {/* Merge warnings (Vercel preflight) */}
+        {mergeWarnings.length > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 space-y-1">
+            <p className="text-xs font-semibold text-amber-800">⚠️ Advertencias post-merge</p>
+            {mergeWarnings.map((w, i) => (
+              <p key={i} className="text-xs text-amber-700">{w}</p>
+            ))}
           </div>
         )}
 

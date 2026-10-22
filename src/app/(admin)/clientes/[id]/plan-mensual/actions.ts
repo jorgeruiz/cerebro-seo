@@ -630,7 +630,7 @@ export async function actionActivatePlan(
 
 export async function actionMergePlan(
   planId: string
-): Promise<{ ok: true; mergedAt: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; mergedAt: string; warnings: string[] } | { ok: false; error: string }> {
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
     return { ok: false, error: "Solo administradores." };
@@ -656,7 +656,7 @@ export async function actionMergePlan(
 
   const site = await prisma.site.findFirst({
     where: { client: { monthlyPlans: { some: { id: planId } } } },
-    select: { githubRepo: true, url: true },
+    select: { githubRepo: true, url: true, vercelProjectId: true },
   });
 
   if (!site?.githubRepo) {
@@ -665,6 +665,35 @@ export async function actionMergePlan(
 
   const GH_PAT = process.env.GITHUB_PAT_CLIENT_REPOS;
   if (!GH_PAT) return { ok: false, error: "GITHUB_PAT no configurado." };
+
+  // Preflight: verify Vercel↔GitHub integration so the merge triggers a deploy
+  const mergeWarnings: string[] = [];
+  if (site.vercelProjectId) {
+    const vercelToken = process.env.VERCEL_TOKEN;
+    if (!vercelToken) {
+      mergeWarnings.push("VERCEL_TOKEN no está configurado — no se puede verificar la integración Vercel↔GitHub. Verifica que el deploy se active manualmente.");
+    } else {
+      try {
+        const vRes = await fetch(
+          `https://api.vercel.com/v9/projects/${encodeURIComponent(site.vercelProjectId)}`,
+          { headers: { Authorization: `Bearer ${vercelToken}` }, signal: AbortSignal.timeout(8_000) }
+        );
+        if (vRes.ok) {
+          const vData = (await vRes.json()) as { link?: { type?: string; repo?: string } | null };
+          if (!vData.link || vData.link.type !== "github") {
+            mergeWarnings.push(
+              `El proyecto Vercel "${site.vercelProjectId}" NO tiene integración GitHub conectada. ` +
+              `El merge NO disparará un auto-deploy. Configura la integración en Vercel Dashboard → Settings → Git.`
+            );
+          }
+        } else {
+          mergeWarnings.push(`No se pudo verificar integración Vercel (status ${vRes.status}). Verifica manualmente que el deploy se active.`);
+        }
+      } catch {
+        mergeWarnings.push("Timeout al verificar integración Vercel. Verifica manualmente que el deploy se active.");
+      }
+    }
+  }
 
   // Merge via GitHub API (merge commit, not squash)
   const mergeRes = await fetch(
@@ -735,5 +764,5 @@ export async function actionMergePlan(
     }
   }
 
-  return { ok: true, mergedAt: now.toISOString() };
+  return { ok: true, mergedAt: now.toISOString(), warnings: mergeWarnings };
 }
