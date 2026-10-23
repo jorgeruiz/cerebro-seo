@@ -13,6 +13,7 @@ import { execSync } from "child_process";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
+import { globSync } from "glob";
 import { workerEnv } from "./env";
 
 const PAT = workerEnv.GITHUB_PAT_CLIENT_REPOS;
@@ -663,7 +664,6 @@ export function auditPlanCommits(
  * the agent should optimize the existing file instead of creating a new one.
  */
 export function scanExistingRoutes(dir: string): Map<string, string> {
-  const { globSync } = require("glob") as typeof import("glob");
   const routes = new Map<string, string>();
 
   // Next.js App Router pages: app/**/page.tsx|jsx|mdx
