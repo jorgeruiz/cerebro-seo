@@ -704,6 +704,129 @@ export function scanExistingRoutes(dir: string): Map<string, string> {
   return routes;
 }
 
+/**
+ * Derives changed routes from the actual git diff (staged + unstaged).
+ * Maps file paths to routes using the same logic as scanExistingRoutes.
+ */
+export function getChangedRoutesFromDiff(dir: string): string[] {
+  const status = exec("git status --porcelain", { cwd: dir, silent: true });
+  if (!status.trim()) return [];
+
+  const routes: string[] = [];
+
+  for (const line of status.split("\n").filter(Boolean)) {
+    // git status --porcelain: XY filename (e.g. "M  app/(es)/blog/page.tsx")
+    const fp = line.slice(3).trim().replace(/^"(.*)"$/, "$1");
+    if (!fp) continue;
+
+    // Next.js App Router pages
+    const pageMatch = fp.match(/^(?:src\/)?app\/(.+)\/page\.(tsx|jsx|mdx)$/);
+    if (pageMatch) {
+      const route = "/" + pageMatch[1].replace(/\([^)]+\)\//g, "");
+      routes.push(route);
+      continue;
+    }
+
+    // Blog MDX content files
+    const mdxMatch = fp.match(/^(?:src\/)?content\/blog\/([^/]+)\.mdx$/);
+    if (mdxMatch) {
+      routes.push(`/blog/${mdxMatch[1]}`);
+      continue;
+    }
+  }
+
+  return Array.from(new Set(routes));
+}
+
+/**
+ * Verifies that specific routes appear in the Next.js build output.
+ * Reads .next/routes-manifest.json and .next/prerender-manifest.json.
+ * Returns routes that are missing from the build.
+ */
+export function verifyRoutesInBuild(dir: string, expectedRoutes: string[]): string[] {
+  if (expectedRoutes.length === 0) return [];
+
+  const buildRoutes = new Set<string>();
+
+  // Read routes-manifest.json (dynamic + static routes)
+  const routesManifestPath = join(dir, ".next", "routes-manifest.json");
+  if (existsSync(routesManifestPath)) {
+    try {
+      const manifest = JSON.parse(readFileSync(routesManifestPath, "utf-8")) as {
+        staticRoutes?: Array<{ page: string }>;
+        dynamicRoutes?: Array<{ page: string }>;
+      };
+      for (const r of manifest.staticRoutes ?? []) buildRoutes.add(r.page);
+      for (const r of manifest.dynamicRoutes ?? []) buildRoutes.add(r.page);
+    } catch { /* corrupt manifest */ }
+  }
+
+  // Read prerender-manifest.json (SSG pages with actual slugs)
+  const prerenderPath = join(dir, ".next", "prerender-manifest.json");
+  if (existsSync(prerenderPath)) {
+    try {
+      const prerender = JSON.parse(readFileSync(prerenderPath, "utf-8")) as {
+        routes?: Record<string, unknown>;
+      };
+      for (const route of Object.keys(prerender.routes ?? {})) {
+        buildRoutes.add(route);
+      }
+    } catch { /* corrupt manifest */ }
+  }
+
+  // Check which expected routes are missing
+  const missing: string[] = [];
+  for (const route of expectedRoutes) {
+    if (!buildRoutes.has(route)) {
+      missing.push(route);
+    }
+  }
+
+  return missing;
+}
+
+/**
+ * Strips draft-marking fields from MDX frontmatter in the working tree.
+ * Removes: borrador, draft, published (when false).
+ * Scans all .mdx files in the repo (content and src/content).
+ * Returns the list of files that were cleaned.
+ */
+export function stripDraftFrontmatter(dir: string): string[] {
+  const mdxFiles = globSync("**/*.mdx", { cwd: dir, nodir: true, ignore: ["node_modules/**", ".next/**"] });
+  const cleaned: string[] = [];
+
+  for (const fp of mdxFiles) {
+    const fullPath = join(dir, fp);
+    if (!existsSync(fullPath)) continue;
+
+    const content = readFileSync(fullPath, "utf-8");
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) continue;
+
+    const frontmatter = fmMatch[1];
+    const cleanedFm = frontmatter
+      .split("\n")
+      .filter((line) => {
+        if (/^borrador\s*:/.test(line)) return false;
+        if (/^draft\s*:/.test(line)) return false;
+        if (/^published\s*:\s*false/.test(line)) return false;
+        return true;
+      })
+      .join("\n");
+
+    if (cleanedFm !== frontmatter) {
+      const updatedContent = content.replace(
+        /^---\n[\s\S]*?\n---/,
+        `---\n${cleanedFm}\n---`
+      );
+      writeFileSync(fullPath, updatedContent, "utf-8");
+      cleaned.push(fp);
+    }
+  }
+
+  return cleaned;
+}
+
 export interface PreviewStatus {
   url: string | null;
   dashboardUrl: string | null;

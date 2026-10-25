@@ -630,7 +630,7 @@ export async function actionActivatePlan(
 
 export async function actionMergePlan(
   planId: string
-): Promise<{ ok: true; mergedAt: string; warnings: string[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; mergedAt: string; warnings: string[]; published?: boolean } | { ok: false; error: string }> {
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
     return { ok: false, error: "Solo administradores." };
@@ -730,15 +730,45 @@ export async function actionMergePlan(
   }
 
   const resultUrls: string[] = [];
+  const failedUrls: string[] = [];
   if (site.url && allRoutes.length > 0) {
     const baseUrl = site.url.startsWith("http") ? site.url.replace(/\/$/, "") : `https://${site.url}`;
-    for (const route of Array.from(new Set(allRoutes))) {
+
+    // Wait for deploy to propagate (Vercel typically takes 30-90s after merge)
+    // We check immediately first, then retry failed ones after a delay
+    const uniqueRoutes = Array.from(new Set(allRoutes));
+
+    for (const route of uniqueRoutes) {
       const url = `${baseUrl}${route}`;
       try {
         const res = await fetch(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(10_000) });
-        if (res.ok) resultUrls.push(url);
-      } catch { /* URL not live yet */ }
+        if (res.ok) {
+          resultUrls.push(url);
+        } else {
+          failedUrls.push(`${url} (${res.status})`);
+        }
+      } catch {
+        failedUrls.push(`${url} (timeout/error)`);
+      }
     }
+  }
+
+  // If any URL failed, don't mark as PUBLISHED — keep IN_REVIEW so the user retries
+  const hasUrlFailures = failedUrls.length > 0 && allRoutes.length > 0;
+
+  if (hasUrlFailures) {
+    mergeWarnings.push(
+      `${failedUrls.length} URL(s) no respondieron 200 en producción: ${failedUrls.join(", ")}. ` +
+      `El PR fue mergeado pero el plan NO queda como PUBLISHED. ` +
+      `Espera a que el deploy se complete y vuelve a verificar.`
+    );
+    // Don't update status — the merge already happened on GitHub,
+    // but we record mergedAt so the user knows when it was merged.
+    await prisma.monthlyPlan.update({
+      where: { id: planId },
+      data: { mergedAt: now, mergedById: session.user.email },
+    });
+    return { ok: true, mergedAt: now.toISOString(), warnings: mergeWarnings, published: false };
   }
 
   await prisma.monthlyPlan.update({

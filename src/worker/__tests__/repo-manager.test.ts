@@ -16,7 +16,11 @@ vi.mock("../env", () => ({
   },
 }));
 
-import { scanExistingRoutes } from "../repo-manager";
+import {
+  scanExistingRoutes,
+  verifyRoutesInBuild,
+  stripDraftFrontmatter,
+} from "../repo-manager";
 
 // Import only pure functions that don't depend on workerEnv
 // branchName and sanitizePat are tested here; repo operations need integration tests
@@ -141,5 +145,159 @@ describe("scanExistingRoutes", () => {
     const routes = scanExistingRoutes(dir);
     // Route exists (no crash, deterministic)
     expect(routes.has("/contacto")).toBe(true);
+  });
+});
+
+// ─── verifyRoutesInBuild ──────────────────────────────────────────────────────
+
+describe("verifyRoutesInBuild", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "verify-build-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("returns empty when all routes found in prerender-manifest", () => {
+    const nextDir = join(dir, ".next");
+    mkdirSync(nextDir, { recursive: true });
+    writeFileSync(
+      join(nextDir, "prerender-manifest.json"),
+      JSON.stringify({
+        routes: {
+          "/blog/cctv-para-empresas": {},
+          "/blog/control-de-acceso": {},
+          "/servicios": {},
+        },
+      })
+    );
+    const missing = verifyRoutesInBuild(dir, ["/blog/cctv-para-empresas", "/blog/control-de-acceso"]);
+    expect(missing).toEqual([]);
+  });
+
+  it("returns missing routes not in any manifest", () => {
+    const nextDir = join(dir, ".next");
+    mkdirSync(nextDir, { recursive: true });
+    writeFileSync(
+      join(nextDir, "prerender-manifest.json"),
+      JSON.stringify({
+        routes: { "/blog/existing-post": {} },
+      })
+    );
+    writeFileSync(
+      join(nextDir, "routes-manifest.json"),
+      JSON.stringify({
+        staticRoutes: [{ page: "/about" }],
+        dynamicRoutes: [{ page: "/blog/[slug]" }],
+      })
+    );
+    const missing = verifyRoutesInBuild(dir, ["/blog/missing-post", "/about"]);
+    expect(missing).toEqual(["/blog/missing-post"]);
+  });
+
+  it("returns empty when no routes to check", () => {
+    const missing = verifyRoutesInBuild(dir, []);
+    expect(missing).toEqual([]);
+  });
+
+  it("returns all routes when .next doesn't exist", () => {
+    const missing = verifyRoutesInBuild(dir, ["/blog/post-1"]);
+    expect(missing).toEqual(["/blog/post-1"]);
+  });
+
+  it("handles routes-manifest staticRoutes", () => {
+    const nextDir = join(dir, ".next");
+    mkdirSync(nextDir, { recursive: true });
+    writeFileSync(
+      join(nextDir, "routes-manifest.json"),
+      JSON.stringify({
+        staticRoutes: [{ page: "/contacto" }, { page: "/servicios" }],
+      })
+    );
+    const missing = verifyRoutesInBuild(dir, ["/contacto"]);
+    expect(missing).toEqual([]);
+  });
+});
+
+// ─── stripDraftFrontmatter ────────────────────────────────────────────────────
+
+describe("stripDraftFrontmatter", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "strip-draft-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("strips borrador: true from MDX frontmatter", () => {
+    const mdxPath = join(dir, "content", "blog", "test.mdx");
+    mkdirSync(join(dir, "content", "blog"), { recursive: true });
+    writeFileSync(
+      mdxPath,
+      '---\ntitulo: "Test"\nslug: "test"\nborrador: true\nautor: "Bot"\n---\n\nContent here.'
+    );
+
+    const cleaned = stripDraftFrontmatter(dir);
+    expect(cleaned).toEqual(["content/blog/test.mdx"]);
+
+    const { readFileSync } = require("fs");
+    const result = readFileSync(mdxPath, "utf-8");
+    expect(result).not.toContain("borrador");
+    expect(result).toContain('titulo: "Test"');
+    expect(result).toContain('autor: "Bot"');
+  });
+
+  it("strips draft: true from MDX frontmatter", () => {
+    const mdxPath = join(dir, "post.mdx");
+    writeFileSync(
+      mdxPath,
+      '---\ntitle: "Post"\ndraft: true\nauthor: "AI"\n---\n\nBody.'
+    );
+
+    const cleaned = stripDraftFrontmatter(dir);
+    expect(cleaned).toEqual(["post.mdx"]);
+
+    const { readFileSync } = require("fs");
+    const result = readFileSync(mdxPath, "utf-8");
+    expect(result).not.toContain("draft");
+  });
+
+  it("strips published: false from MDX frontmatter", () => {
+    const mdxPath = join(dir, "article.mdx");
+    writeFileSync(
+      mdxPath,
+      '---\ntitle: "Article"\npublished: false\n---\n\nBody.'
+    );
+
+    const cleaned = stripDraftFrontmatter(dir);
+    expect(cleaned).toEqual(["article.mdx"]);
+
+    const { readFileSync } = require("fs");
+    const result = readFileSync(mdxPath, "utf-8");
+    expect(result).not.toContain("published");
+  });
+
+  it("does not modify files without draft fields", () => {
+    const mdxPath = join(dir, "clean.mdx");
+    writeFileSync(
+      mdxPath,
+      '---\ntitle: "Clean"\nauthor: "Human"\n---\n\nBody.'
+    );
+
+    const cleaned = stripDraftFrontmatter(dir);
+    expect(cleaned).toEqual([]);
+  });
+
+  it("ignores non-mdx files", () => {
+    writeFileSync(join(dir, "style.css"), "body { borrador: true; }");
+
+    const cleaned = stripDraftFrontmatter(dir);
+    expect(cleaned).toEqual([]);
   });
 });

@@ -46,6 +46,9 @@ import {
   getPreviewUrl,
   sanitizePat,
   scanExistingRoutes,
+  getChangedRoutesFromDiff,
+  verifyRoutesInBuild,
+  stripDraftFrontmatter,
 } from "./repo-manager";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
 
@@ -310,6 +313,15 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           data: { agentSessionId: agentResult.sessionId },
         });
 
+        // Strip draft frontmatter (borrador/draft/published:false) from any MDX files
+        const cleanedFiles = stripDraftFrontmatter(dir);
+        if (cleanedFiles.length > 0) {
+          console.log(`[plan-task] Stripped draft frontmatter from: ${cleanedFiles.join(", ")}`);
+        }
+
+        // Derive changedRoutes from actual git diff BEFORE build
+        const diffRoutes = getChangedRoutesFromDiff(dir);
+
         // Build check
         const buildResult = await withBuildSemaphore(() => verifyBuild(dir));
         await prisma.taskRun.update({
@@ -319,6 +331,17 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
 
         if (!buildResult.passed) {
           throw new Error(`BUILD_FAILED: ${(buildResult.logTail ?? "").slice(0, 200)}`);
+        }
+
+        // Verify that changed routes actually appear in the build output
+        if (diffRoutes.length > 0) {
+          const missingRoutes = verifyRoutesInBuild(dir, diffRoutes);
+          if (missingRoutes.length > 0) {
+            throw new Error(
+              `ROUTES_MISSING_IN_BUILD: Las siguientes rutas no aparecen en el build: ${missingRoutes.join(", ")}. ` +
+              `Verifica que el frontmatter sea correcto y que generateStaticParams incluya estos slugs.`
+            );
+          }
         }
 
         // Placeholder guard — only for pure AI tasks.
@@ -333,7 +356,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           }
         }
 
-        // Parse structured result
+        // Parse structured result (for summary + noChangeReason only; routes come from git diff)
         const structured = parseAgentResult(agentResult.resultText);
 
         // Commit if there are changes
@@ -360,7 +383,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
             inputTokens: agentResult.inputTokens,
             outputTokens: agentResult.outputTokens,
             logTail: structured.summary.slice(0, 2000),
-            changedRoutes: structured.changedRoutes,
+            changedRoutes: diffRoutes,
             finishedAt: new Date(),
           },
         });
