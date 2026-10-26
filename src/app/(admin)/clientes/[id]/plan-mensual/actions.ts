@@ -794,6 +794,11 @@ export async function actionMergePlan(
     }
   }
 
+  // Fire-and-forget: log to Notion Bitácora via Cerebro web
+  import("@/lib/notion-bitacora").then(({ logPlanToBitacora }) =>
+    logPlanToBitacora(planId, session.user.email ?? "cerebro-seo").catch(() => {})
+  );
+
   return { ok: true, mergedAt: now.toISOString(), warnings: mergeWarnings };
 }
 
@@ -894,6 +899,11 @@ export async function actionPublishNextjsBlog(
         resultUrls: [fullUrl],
       },
     });
+
+    // Fire-and-forget: log to Notion Bitácora
+    import("@/lib/notion-bitacora").then(({ logBlogToBitacora }) =>
+      logBlogToBitacora(task.site.clientId, staged.titulo, fullUrl, session.user.email ?? "cerebro-seo").catch(() => {})
+    );
 
     return { ok: true, sha: result.sha, url: fullUrl };
   } catch (err) {
