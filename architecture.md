@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-10-13 (v7 — Plan Mensual completo, Terminal Web, Add-to-Plan)
+**Última actualización:** 2026-10-26 (v8 — Tres carriles de ejecución, data steps, humanReason)
 
 ---
 

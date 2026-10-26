@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-25 (CONTENT-LANE — carril de contenido separado para blogs Next.js)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Probar content lane con Quicsa (Next.js). Resetear plan conflictivo y re-ejecutar blog por carril nuevo.
+**Última actualización:** 2026-10-26 (DATA-STEPS + CONTENT-LANE + BUILD-GUARDS)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Deploy de los 4 commits pendientes. Probar content lane + data steps con Quicsa. Resetear plan conflictivo de Quicsa.
 
 ### ✅ CONTENT-LANE — Carril de contenido para blogs Next.js (2026-10-25)
 
