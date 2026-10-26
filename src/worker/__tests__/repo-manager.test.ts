@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -246,7 +246,6 @@ describe("stripDraftFrontmatter", () => {
     const cleaned = stripDraftFrontmatter(dir);
     expect(cleaned).toEqual(["content/blog/test.mdx"]);
 
-    const { readFileSync } = require("fs");
     const result = readFileSync(mdxPath, "utf-8");
     expect(result).not.toContain("borrador");
     expect(result).toContain('titulo: "Test"');
@@ -263,7 +262,6 @@ describe("stripDraftFrontmatter", () => {
     const cleaned = stripDraftFrontmatter(dir);
     expect(cleaned).toEqual(["post.mdx"]);
 
-    const { readFileSync } = require("fs");
     const result = readFileSync(mdxPath, "utf-8");
     expect(result).not.toContain("draft");
   });
@@ -278,7 +276,6 @@ describe("stripDraftFrontmatter", () => {
     const cleaned = stripDraftFrontmatter(dir);
     expect(cleaned).toEqual(["article.mdx"]);
 
-    const { readFileSync } = require("fs");
     const result = readFileSync(mdxPath, "utf-8");
     expect(result).not.toContain("published");
   });
