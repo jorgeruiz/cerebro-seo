@@ -353,6 +353,12 @@ function StepRow({
           <ContentPackageBlock pkg={step.stagedChange as ContentPackage} />
         )}
 
+        {/* Keyword research table — shown when keyword_research step is DONE */}
+        {step.status === "DONE" &&
+          (step.stagedChange as { type?: string } | null)?.type === "keyword_research" && (
+          <KeywordResearchTable data={step.stagedChange as KeywordResearchStaged} />
+        )}
+
         {/* Step result (from AI step runs) — expandable */}
         {stepResult && step.status === "DONE" &&
           (step.stagedChange as { type?: string } | null)?.type !== "content_package" && (
@@ -389,6 +395,82 @@ function StepRow({
             )}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Keyword Research Table ──────────────────────────────────────────────────
+
+interface KeywordResearchStaged {
+  type: "keyword_research";
+  rows: Array<{
+    keyword: string;
+    category: string;
+    searchVolume: number | null;
+    keywordDifficulty: number | null;
+    cpc: number | null;
+    intent: string | null;
+    gscClicks: number;
+    gscImpressions: number;
+    gscPosition: number | null;
+    targetUrl: string | null;
+    priority: number;
+  }>;
+  criteria: { total: number };
+  costUsd: number;
+}
+
+function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
+  const sorted = [...data.rows].sort((a, b) => a.priority - b.priority);
+  return (
+    <div className="mt-2 border border-border rounded overflow-hidden">
+      <div className="px-3 py-2 bg-muted/20 flex items-center justify-between">
+        <span className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">
+          Keywords seleccionadas ({data.rows.length}/{data.criteria.total})
+        </span>
+        <span className="font-mono text-[0.55rem] text-muted-foreground">
+          ${data.costUsd.toFixed(4)}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[0.65rem] font-mono">
+          <thead>
+            <tr className="border-b border-border bg-muted/10">
+              <th className="px-2 py-1.5 text-left text-muted-foreground">P</th>
+              <th className="px-2 py-1.5 text-left text-muted-foreground">Keyword</th>
+              <th className="px-2 py-1.5 text-left text-muted-foreground">Cat.</th>
+              <th className="px-2 py-1.5 text-right text-muted-foreground">Vol</th>
+              <th className="px-2 py-1.5 text-right text-muted-foreground">KD</th>
+              <th className="px-2 py-1.5 text-right text-muted-foreground">GSC</th>
+              <th className="px-2 py-1.5 text-left text-muted-foreground">URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => (
+              <tr key={i} className="border-b border-border/50 hover:bg-muted/10">
+                <td className="px-2 py-1 text-muted-foreground">{row.priority}</td>
+                <td className="px-2 py-1 font-medium text-foreground">{row.keyword}</td>
+                <td className="px-2 py-1 text-muted-foreground">{row.category}</td>
+                <td className="px-2 py-1 text-right">{row.searchVolume?.toLocaleString() ?? "—"}</td>
+                <td className="px-2 py-1 text-right">
+                  <span className={
+                    (row.keywordDifficulty ?? 100) <= 30 ? "text-emerald-500" :
+                    (row.keywordDifficulty ?? 100) <= 60 ? "text-yellow-500" : "text-destructive"
+                  }>
+                    {row.keywordDifficulty ?? "—"}
+                  </span>
+                </td>
+                <td className="px-2 py-1 text-right text-muted-foreground">
+                  {row.gscClicks > 0 ? `${row.gscClicks}c/${row.gscImpressions}i` : "—"}
+                </td>
+                <td className="px-2 py-1 text-muted-foreground truncate max-w-[200px]">
+                  {row.targetUrl ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

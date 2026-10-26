@@ -532,8 +532,71 @@ export class DataForSeoProvider implements SeoDataProvider {
     throw new Error("getKeywordSuggestions: not implemented yet — Fase 2");
   }
 
-  async getKeywordVolume(_keywords: string[], _country: string): Promise<KeywordVolume[]> {
-    throw new Error("getKeywordVolume: not implemented yet — Fase 2");
+  /**
+   * Fetches search volume + KD for a list of keywords.
+   * Uses DataForSEO Labs — Search Volume (live).
+   * Cost: ~$0.02/req (batch up to 700 keywords per request).
+   * Cache: 30 days per batch hash.
+   */
+  async getKeywordVolume(
+    keywords: string[],
+    country = "MX",
+    clientId?: string
+  ): Promise<KeywordVolume[]> {
+    if (keywords.length === 0) return [];
+
+    const locationName = country === "MX" ? "Mexico" : country === "US" ? "United States" : "Mexico";
+    const sorted = [...keywords].sort();
+    const batchHash = sorted.join("|").slice(0, 200);
+    const cacheKey = `cache:dataforseo:keyword-volume:${batchHash}:${country}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) return JSON.parse(cached) as KeywordVolume[];
+    } catch { /* Redis down */ }
+
+    // DataForSEO Labs — Search Volume (live) — up to 700 keywords per task
+    const batches: string[][] = [];
+    for (let i = 0; i < sorted.length; i += 700) {
+      batches.push(sorted.slice(i, i + 700));
+    }
+
+    const allResults: KeywordVolume[] = [];
+    let totalCost = 0;
+
+    for (const batch of batches) {
+      const { data, cost } = await dfsPost<DfsSearchVolumeResult>(
+        "/dataforseo_labs/google/search_volume/live",
+        [{
+          keywords: batch,
+          location_name: locationName,
+          language_name: "Spanish",
+        }]
+      );
+      totalCost += cost || 0.02;
+
+      for (const task of data.tasks ?? []) {
+        for (const result of task.result ?? []) {
+          for (const item of (result as DfsSearchVolumeResult).items ?? []) {
+            allResults.push({
+              keyword: item.keyword ?? "",
+              searchVolume: item.search_volume ?? null,
+              cpc: item.cpc ?? null,
+              competition: item.competition ?? null,
+              keywordDifficulty: item.keyword_difficulty ?? null,
+            });
+          }
+        }
+      }
+    }
+
+    void logUsage({ endpoint: "labs/search_volume", cost: totalCost, clientId });
+
+    try {
+      await redis.set(cacheKey, JSON.stringify(allResults), "EX", 30 * 24 * 3600);
+    } catch { /* Redis down */ }
+
+    return allResults;
   }
 
   async getCompetitorOverview(_domain: string, _referenceKeywords: string[]): Promise<CompetitorData> {
@@ -1093,6 +1156,18 @@ interface DfsKeywordSuggestionsItem {
 
 interface DfsKeywordSuggestionsResult {
   items?: DfsKeywordSuggestionsItem[];
+}
+
+interface DfsSearchVolumeItem {
+  keyword?: string;
+  search_volume?: number | null;
+  cpc?: number | null;
+  competition?: number | null;
+  keyword_difficulty?: number | null;
+}
+
+interface DfsSearchVolumeResult {
+  items?: DfsSearchVolumeItem[];
 }
 
 // ─── Ranked Keywords types ───────────────────────────────────────────────

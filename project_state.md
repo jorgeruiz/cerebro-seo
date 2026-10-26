@@ -26,6 +26,33 @@ Blogs Next.js ahora usan un carril separado que NO pasa por la rama del plan:
 - `src/app/(admin)/clientes/[id]/plan-mensual/actions.ts` — actionPublishNextjsBlog
 - `src/app/(admin)/clientes/[id]/plan-mensual/PlanMensualPanel.tsx` — NextjsBlogPublishBlock UI
 
+### ✅ DATA-STEPS — Pasos de datos (keyword_research) + humanReason (2026-10-26)
+
+Nuevo tipo de paso AI ejecutado dentro de Cerebro SEO (sin terminal ni repo):
+- **keyword_research**: getKeywordIdeas + getKeywordVolume (Labs search volume, implementado) + cruce GSC + Claude → tabla de keywords en stagedChange
+- **apply_keywords**: upsert Keyword (isPriority, targetUrl, category) desde datos aprobados
+- **getKeywordVolume** implementado: Labs search volume endpoint, batch 700 kw, cache 30d
+- **Keyword.category** agregado (migración `add_keyword_category`)
+
+Decomposer overhaul:
+- **AI por defecto**: todo lo que se resuelva con APIs internas
+- **HUMAN solo con humanReason**: `terminal` | `config` | `external_tool` | `wp_manual`
+- PROHIBIDO: pedir al equipo usar DataForSEO, CSV, Drive, hojas de cálculo
+- Platform validation: WP no acepta "terminal"; MIGRACION/null → task BLOCKED
+- Tarea IYPIG: [AI keyword_research] → [HUMAN config: aprobar] → [AI apply_keywords]
+
+**Archivos nuevos:**
+- `src/worker/data-step-executor.ts` — executeKeywordResearch, executeApplyKeywords
+- `src/server/jobs/processors/__tests__/task-decomposer-humanreason.test.ts` — 12 tests
+
+**Archivos modificados:**
+- `prisma/schema.prisma` — Keyword.category String?
+- `src/server/providers/dataforseo.ts` — getKeywordVolume (real impl)
+- `src/server/providers/seo-data.ts` — KeywordVolume.keywordDifficulty
+- `src/server/jobs/processors/task-decomposer.ts` — humanReason schema, platform validation, data step templates
+- `src/worker/task-processor.ts` — parseDataAction, parseApplyAction routing
+- `src/app/.../PlanMensualPanel.tsx` — KeywordResearchTable component
+
 **Quicsa (conflicto MERGE_CONFLICT):** No resolver el conflicto. Resetear plan y re-ejecutar blog por carril nuevo:
 1. Archivar el plan actual desde la UI (botón Archivar)
 2. Crear nuevo plan para el mismo mes

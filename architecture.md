@@ -182,9 +182,16 @@ scripts/
 └── normalize-catalog-schemas.ts  # Normaliza headings ## Blog/Landing/Micrositios (dry-run/--apply)
 ```
 
-Dos carriles de ejecución:
+**Data steps (ejecutados dentro de Cerebro SEO, sin terminal ni repo):**
+```
+src/worker/
+└── data-step-executor.ts       # keyword_research, apply_keywords
+```
+
+Tres carriles de ejecución:
 - **Carril de código** (meta tags, landings, técnico): rama del plan → agente con repo → build → PR → merge.
 - **Carril de contenido** (blogs Next.js): Claude genera datos del artículo → staged en PlanStep → user revisa → "Publicar" → commit atómico a main vía GitHub API. Sin rama, sin PR, sin merge.
+- **Carril de datos** (keyword research, análisis): APIs internas (DataForSEO, GSC, GA4) + Claude → stagedChange → HUMAN aprueba → AI aplica a BD. Sin terminal ni repo.
   - Preflight: catalog-schemas.md debe tener `## Blog` activo (no "No implementado").
   - Guard: slug no puede ya existir en main.
   - Detección tolerante: `hasSection(schemas, "Blog")` acepta decoradores pero rechaza "## Blog Post" y "## Blogs".

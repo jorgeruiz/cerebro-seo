@@ -56,6 +56,7 @@ export interface KeywordVolume {
   searchVolume: number | null;
   cpc: number | null;
   competition: number | null;
+  keywordDifficulty: number | null;
 }
 
 export interface CompetitorData {

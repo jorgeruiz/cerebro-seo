@@ -16,6 +16,8 @@ import { getWpSiteProfile } from "@/lib/wp-site-profile";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+const VALID_HUMAN_REASONS_NEXTJS = ["terminal", "config", "external_tool"] as const;
+const VALID_HUMAN_REASONS_WORDPRESS = ["wp_manual", "config", "external_tool"] as const;
 const stepSchema = z.object({
   title: z.string().min(2).max(200).transform((s) => s.slice(0, 120)),
   type: z.enum(["AI", "HUMAN", "HYBRID"]).transform((t) => t === "HYBRID" ? "HUMAN" : t),
@@ -25,6 +27,7 @@ const stepSchema = z.object({
   ),
   acceptanceCriteria: z.array(z.string()).default([]),
   complexity: z.enum(["low", "medium", "high"]).optional().default("medium"),
+  humanReason: z.enum(["terminal", "config", "external_tool", "wp_manual"]).nullable().optional(),
 });
 
 interface DecompositionJobData {
@@ -147,21 +150,37 @@ const SYSTEM_PROMPT = `Eres un planificador de tareas SEO. Tu trabajo: descompon
 
 REGLAS GENERALES:
 1. Cada paso AI debe tener un prompt AUTOSUFICIENTE (JSON) con qué ejecutar exactamente.
-2. Cada paso HUMAN debe tener un "prompt" con instrucciones claras y completas: texto numerado, paso a paso, listo para ejecutar sin adivinar.
-3. Tareas mode=AI: solo pasos type=AI.
-4. Tareas mode=HYBRID: pasos AI primero, luego HUMAN (revisión/validación). En WordPress, blogs y landings son siempre HYBRID: AI crea el borrador/paquete, HUMAN revisa y publica.
-5. Tareas mode=HUMAN o kind=SETUP: solo pasos type=HUMAN.
-6. Entre 1 y 5 pasos por tarea. Máximo 5. Un paso = una acción atómica.
-7. Los prompts de pasos AI deben mencionar CLAUDE.md y DESIGN.md si existen en el repo.
+2. Entre 1 y 5 pasos por tarea. Máximo 5. Un paso = una acción atómica.
+3. Los prompts de pasos AI deben mencionar CLAUDE.md y DESIGN.md si existen en el repo.
+
+TIPO DE PASO — AI POR DEFECTO:
+- AI: todo lo que se resuelva con integraciones internas (DataForSEO, GSC, GA4 vía API, sitemap, repo) o con el agente en Next.js. Incluye pasos de datos (keyword_research, apply_keywords).
+- HUMAN: solo en estos 3 casos, y el paso DEBE incluir "humanReason":
+  a) "terminal": incluye un prompt listo para correr en la terminal de Cerebro SEO, dirigido al agente.
+  b) "config": configurar keywords o competidores en Cerebro SEO. Si la IA puede proponer la lista, va antes un paso AI que la deja en stagedChange y el HUMAN solo aprueba/edita.
+  c) "external_tool": GA4, GSC (verificación, sitemaps, indexación) y Google Business Profile. Instrucciones paso a paso para la persona.
+  En WordPress, "wp_manual" reemplaza a "terminal" (WP Admin, Elementor, Yoast).
+- PROHIBIDO en HUMAN: pedir entrar a DataForSEO, exportar CSV, hojas de cálculo, Drive, o "investigar" algo que una API interna resuelve.
+- Revisión/publicación/merge no son pasos de la tarea (los cubre la UI del plan).
+- Un paso HUMAN sin humanReason válido será RECHAZADO.
+
+PASOS DE DATOS (type=AI, ejecutados dentro de Cerebro SEO):
+- keyword_research: investigación y selección de keywords.
+  Prompt JSON: { "action": "keyword_research", "categories": [{"name": "...", "seeds": ["..."]}], "criteria": { "minVolume": 100, "maxKD": 60, "total": 25, "distribution": {"Categoría A": 10, "Categoría B": 15} } }
+  Genera tabla de keywords con volumen, KD, GSC data, URL objetivo y prioridad.
+- apply_keywords: upsert keywords aprobadas en BD + encolar tracking.
+  Prompt JSON: { "action": "apply_keywords" }
+  Solo ejecuta si hay un paso previo keyword_research con stagedChange aprobado.
+- Para tareas de "investigar y seleccionar keywords", usa la plantilla: [AI keyword_research] → [HUMAN config: aprobar/editar tabla] → [AI apply_keywords].
 
 HERRAMIENTAS DISPONIBLES EN CEREBRO SEO (solo estas):
 - PageSpeed Insights: https://pagespeed.web.dev/ — velocidad y Core Web Vitals (web, gratis)
-- Google Search Console: clicks, impresiones, posiciones, páginas top, queries top
-- Google Analytics 4: sesiones, usuarios, rebote, conversiones
-- DataForSEO: rankings, backlinks, auditoría técnica, keywords
+- Google Search Console: clicks, impresiones, posiciones, páginas top, queries top (API interna)
+- Google Analytics 4: sesiones, usuarios, rebote, conversiones (API interna)
+- DataForSEO: rankings, backlinks, auditoría técnica, keywords (API interna — NO manual)
 - Elementor: editor visual para WordPress
 - Yoast SEO / Rank Math: meta tags, schema, sitemap
-PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest.
+PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest, hojas de cálculo, Drive, interfaz web de DataForSEO.
 
 REGLA ANTI-INVENCIÓN (CRÍTICA):
 - PROHIBIDO inventar: casos de éxito, certificaciones, precios, capacidades, testimonios, estadísticas del cliente.
@@ -288,10 +307,12 @@ RESPONDE ÚNICAMENTE con un JSON array:
     "type": "AI|HUMAN",
     "complexity": "low|medium|high",
     "prompt": "Para AI: JSON estructurado exacto. Para HUMAN: instrucciones completas paso a paso.",
-    "acceptanceCriteria": ["Criterio verificable 1", "Criterio 2"]
+    "acceptanceCriteria": ["Criterio verificable 1", "Criterio 2"],
+    "humanReason": null | "terminal" | "config" | "external_tool" | "wp_manual"
   }
 ]
 
+humanReason es OBLIGATORIO para pasos HUMAN y PROHIBIDO para pasos AI.
 Sin texto fuera del JSON. El primer elemento del array siempre es el primer paso (orden ascendente).`;
 
 // Exported for testing
@@ -314,6 +335,19 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   }
 
   const platform = task.site?.platform ?? "OTRO";
+
+  // MIGRACION or null platform: block decomposition
+  if (platform === "MIGRACION" || platform === null || platform === "OTRO") {
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "WAITING_HUMAN",
+        failureReason: `Plataforma "${platform ?? "desconocida"}" no soporta descomposición automática. Configura la plataforma del sitio primero.`,
+      },
+    });
+    console.log(`[task-decomposer] ${task.title} → BLOCKED (platform=${platform})`);
+    return;
+  }
   const cerebroClientId = task.site?.client?.cerebroClientId ?? null;
 
   // ── WP: capabilities + site profile + anti-cannibalization ──────────────────
@@ -321,7 +355,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   let wpCannibalContext = "";
   let wpPagesContext = "";
 
-  if ((platform === "WORDPRESS" || platform === "MIGRACION") && cerebroClientId) {
+  if (platform === "WORDPRESS" && cerebroClientId) {
     // Capabilities
     const capsResult = await getWpCapabilities(cerebroClientId, taskId);
     if (capsResult.ok && (capsResult.data.endpoints ?? []).length > 0) {
@@ -410,15 +444,43 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
       throw new Error("Claude devolvió 0 pasos");
     }
 
-    // Validate each step with Zod, skip invalid ones
+    // Validate each step with Zod + humanReason platform rules
+    const validReasons = platform === "WORDPRESS"
+      ? VALID_HUMAN_REASONS_WORDPRESS
+      : VALID_HUMAN_REASONS_NEXTJS;
+
     const validSteps: z.infer<typeof stepSchema>[] = [];
     for (const raw of parsedSteps) {
       const result = stepSchema.safeParse(raw);
-      if (result.success) {
-        validSteps.push(result.data);
-      } else {
+      if (!result.success) {
         console.warn("[task-decomposer] Step inválido descartado:", JSON.stringify(raw).slice(0, 200));
+        continue;
       }
+      const step = result.data;
+
+      // HUMAN steps MUST have a valid humanReason for the platform
+      if (step.type === "HUMAN") {
+        if (!step.humanReason) {
+          console.warn(`[task-decomposer] Step HUMAN sin humanReason descartado: "${step.title}"`);
+          continue;
+        }
+        if (!(validReasons as readonly string[]).includes(step.humanReason)) {
+          console.warn(`[task-decomposer] humanReason "${step.humanReason}" inválido para ${platform}, descartado: "${step.title}"`);
+          continue;
+        }
+        // WP: "terminal" is forbidden
+        if (platform === "WORDPRESS" && step.humanReason === "terminal") {
+          console.warn(`[task-decomposer] "terminal" prohibido en WordPress, descartado: "${step.title}"`);
+          continue;
+        }
+      }
+
+      // AI steps must NOT have humanReason
+      if (step.type === "AI" && step.humanReason) {
+        step.humanReason = null;
+      }
+
+      validSteps.push(step);
     }
 
     if (validSteps.length === 0) {
@@ -434,6 +496,7 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
           `Cuando esté completada, marca este paso como hecho.`,
         acceptanceCriteria: ["Tarea completada según el objetivo"],
         complexity: "medium" as const,
+        humanReason: platform === "WORDPRESS" ? "wp_manual" : "terminal",
       });
     }
 
@@ -449,7 +512,10 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
           prompt: step.prompt ?? null, // both AI and HUMAN steps have prompts now
           acceptanceCriteria: step.acceptanceCriteria,
           status: "PENDING",
-          notes: step.type === "AI" ? `complexity:${step.complexity ?? "medium"}` : null,
+          notes: [
+            step.type === "AI" ? `complexity:${step.complexity ?? "medium"}` : null,
+            step.humanReason ? `humanReason:${step.humanReason}` : null,
+          ].filter(Boolean).join(" ") || null,
         },
       });
     }

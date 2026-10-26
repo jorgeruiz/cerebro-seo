@@ -188,6 +188,7 @@ model Keyword {
   language   String    @default("es")
   targetUrl  String?
   isPriority Boolean   @default(false)
+  category   String?   // e.g. "Seguridad", "Redes" — assigned during keyword research
   createdAt  DateTime  @default(now())
   deletedAt  DateTime?
 

@@ -316,6 +316,85 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
         }
       }
 
+      // ── Data step shortcut (keyword_research, etc.) ────────
+      const dataAction = parseDataAction(step.prompt);
+      if (dataAction) {
+        try {
+          const { executeKeywordResearch } = await import("./data-step-executor");
+          if (dataAction.action === "keyword_research") {
+            const result = await executeKeywordResearch(dataAction, task.site.id, plan.clientId);
+            await prisma.planStep.update({
+              where: { id: step.id },
+              data: {
+                status: "DONE",
+                notes: result.notes,
+                ...(result.stagedChange
+                  ? { stagedChange: result.stagedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"] }
+                  : {}),
+              },
+            });
+            await prisma.taskRun.update({
+              where: { id: run.id },
+              data: {
+                status: "SUCCEEDED",
+                costUsd: new Decimal(result.costUsd.toFixed(6)),
+                logTail: result.notes.slice(0, 2000),
+                finishedAt: new Date(),
+              },
+            });
+            console.log(`[plan-task] Data step ${step.order} done: ${result.notes.slice(0, 80)}`);
+            continue;
+          }
+        } catch (dataErr) {
+          const errMsg = dataErr instanceof Error ? dataErr.message : String(dataErr);
+          console.error(`[plan-task] Data step ${step.order} failed: ${errMsg}`);
+          await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "FAILED", logTail: errMsg.slice(0, 2000), finishedAt: new Date() },
+          });
+          await failTask(taskId, `Data step ${step.order} falló: ${errMsg}`);
+          return;
+        }
+      }
+
+      // ── Apply keywords step (post-approval) ────────────────
+      const applyAction = parseApplyAction(step.prompt);
+      if (applyAction) {
+        try {
+          const { executeApplyKeywords } = await import("./data-step-executor");
+          // Find the keyword_research stagedChange from a previous step
+          const kwStep = task.steps.find(
+            (s) => s.status === "DONE" && s.stagedChange &&
+              (s.stagedChange as Record<string, unknown>).type === "keyword_research"
+          );
+          if (!kwStep?.stagedChange) {
+            throw new Error("No se encontró keyword_research staged para aplicar");
+          }
+          const staged = kwStep.stagedChange as unknown as { rows: Array<{ keyword: string; category: string; targetUrl: string; priority: number; searchVolume: number | null; keywordDifficulty: number | null; cpc: number | null; intent: string | null; gscClicks: number; gscImpressions: number; gscPosition: number | null }> };
+          const result = await executeApplyKeywords(staged.rows, plan.clientId);
+          await prisma.planStep.update({
+            where: { id: step.id },
+            data: { status: "DONE", notes: result.notes },
+          });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "SUCCEEDED", logTail: result.notes.slice(0, 2000), finishedAt: new Date() },
+          });
+          console.log(`[plan-task] Apply keywords step done: ${result.notes.slice(0, 80)}`);
+          continue;
+        } catch (applyErr) {
+          const errMsg = applyErr instanceof Error ? applyErr.message : String(applyErr);
+          await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "FAILED", logTail: errMsg.slice(0, 2000), finishedAt: new Date() },
+          });
+          await failTask(taskId, `Apply keywords falló: ${errMsg}`);
+          return;
+        }
+      }
+
       try {
         const agentResult = await runAgent(dir, task, step);
 
@@ -1352,6 +1431,34 @@ function parseImageAction(prompt: string | null): ImageStepAction | null {
   } catch {
     // Not JSON or not an image action
   }
+  return null;
+}
+
+/**
+ * Intenta parsear el prompt como una acción de datos (keyword_research, etc.).
+ */
+function parseDataAction(prompt: string | null): import("./data-step-executor").KeywordResearchInput | null {
+  if (!prompt) return null;
+  try {
+    const cleaned = prompt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (parsed.action === "keyword_research") return parsed as unknown as import("./data-step-executor").KeywordResearchInput;
+  } catch {
+    // Not JSON or not a data action
+  }
+  return null;
+}
+
+/**
+ * Intenta parsear el prompt como una acción apply_keywords.
+ */
+function parseApplyAction(prompt: string | null): import("./data-step-executor").ApplyKeywordsInput | null {
+  if (!prompt) return null;
+  try {
+    const cleaned = prompt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (parsed.action === "apply_keywords") return parsed as unknown as import("./data-step-executor").ApplyKeywordsInput;
+  } catch { /* */ }
   return null;
 }
 
