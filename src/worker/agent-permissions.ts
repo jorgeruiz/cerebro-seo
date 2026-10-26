@@ -60,11 +60,22 @@ function isEnvFile(filePath: string): boolean {
   return FORBIDDEN_PATH_PATTERNS.some((p) => name.startsWith(p.split("/").pop()!));
 }
 
+/** Paths allowed for content-only tasks (blog articles) */
+const CONTENT_ALLOWED_PREFIXES = ["content/blog/", "public/blog/"];
+
+function isContentAllowedPath(filePath: string, repoCwd: string): boolean {
+  const resolved = resolve(repoCwd, filePath);
+  const rel = relative(repoCwd, normalize(resolved));
+  return CONTENT_ALLOWED_PREFIXES.some((prefix) => rel.startsWith(prefix));
+}
+
 /**
  * Crea el callback canUseTool con la firma real del Agent SDK:
  *   (toolName: string, input: Record<string, unknown>, options: { signal }) => Promise<PermissionResult>
+ *
+ * @param contentOnly - If true, restricts writes to content/blog/** and public/blog/** only.
  */
-export function createCanUseTool(repoCwd: string) {
+export function createCanUseTool(repoCwd: string, contentOnly = false) {
   return async (
     toolName: string,
     toolInput: Record<string, unknown>,
@@ -85,6 +96,9 @@ export function createCanUseTool(repoCwd: string) {
       if (!editPath) return deny("Ruta de archivo vacía.");
       if (isEnvFile(editPath)) return deny(`Prohibido editar archivos .env: ${editPath}`);
       if (!isInsideRepo(editPath, repoCwd)) return deny(`Fuera del repo: ${editPath}`);
+      if (contentOnly && !isContentAllowedPath(editPath, repoCwd)) {
+        return deny(`Tarea de contenido: solo puede editar content/blog/** o public/blog/**. Ruta: ${editPath}`);
+      }
       return allow();
     }
 
@@ -93,6 +107,9 @@ export function createCanUseTool(repoCwd: string) {
       if (!filePath) return deny("Ruta de archivo vacía.");
       if (isEnvFile(filePath)) return deny(`Prohibido escribir archivos .env: ${filePath}`);
       if (!isInsideRepo(filePath, repoCwd)) return deny(`Fuera del repo: ${filePath}`);
+      if (contentOnly && !isContentAllowedPath(filePath, repoCwd)) {
+        return deny(`Tarea de contenido: solo puede escribir en content/blog/** o public/blog/**. Ruta: ${filePath}`);
+      }
       return allow();
     }
 

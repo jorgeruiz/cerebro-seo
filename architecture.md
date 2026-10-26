@@ -161,14 +161,33 @@ src/app/api/terminal/
 ```
 src/worker/
 ├── plan-runner.ts             # Entry point worker
-├── task-processor.ts          # Ejecución step-by-step con branch-per-plan
+├── task-processor.ts          # Ejecución step-by-step: código (branch) y contenido (directo)
 ├── terminal-handler.ts        # Worker terminal-sessions queue (Agent SDK multi-turn)
 ├── repo-manager.ts            # Git ops: branch, merge, commit, revert, PR, build, preview
 ├── plan-lock.ts               # Redis distributed locks: plan, repo, build semaphore
 ├── memory-classifier.ts       # Clasifica docs del repo (FULL/TEMPLATE/ABSENT)
-├── agent-permissions.ts       # Allowed bash prefixes para Agent SDK
-└── placeholder-guard.ts       # Detecta [COMPLETAR markers en changed files
+├── agent-permissions.ts       # Allowed bash prefixes + contentOnly guard
+├── placeholder-guard.ts       # Detecta [COMPLETAR markers en changed files
+├── image-executor.ts          # Generación de imágenes AI (Higgsfield + QA)
+└── wp-executor.ts             # Ejecución de tareas WordPress vía plugin proxy
 ```
+
+**Content lane (blog directo a main — sin plan branch):**
+```
+src/lib/
+├── github-blog-publisher.ts   # commitFiles, buildMdxContent, hasSection, publishBlogArticle
+└── wp-staged-change.ts        # Tipos NextjsStagedBlogChange (+ WP staged changes)
+
+scripts/
+└── normalize-catalog-schemas.ts  # Normaliza headings ## Blog/Landing/Micrositios (dry-run/--apply)
+```
+
+Dos carriles de ejecución:
+- **Carril de código** (meta tags, landings, técnico): rama del plan → agente con repo → build → PR → merge.
+- **Carril de contenido** (blogs Next.js): Claude genera datos del artículo → staged en PlanStep → user revisa → "Publicar" → commit atómico a main vía GitHub API. Sin rama, sin PR, sin merge.
+  - Preflight: catalog-schemas.md debe tener `## Blog` activo (no "No implementado").
+  - Guard: slug no puede ya existir en main.
+  - Detección tolerante: `hasSection(schemas, "Blog")` acepta decoradores pero rechaza "## Blog Post" y "## Blogs".
 
 **Lógica AEO/GEO y análisis:**
 ```

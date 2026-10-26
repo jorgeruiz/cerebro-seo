@@ -2,9 +2,35 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-17 (IMG — imágenes AI con Higgsfield + correcciones flujo WP)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Probar generación de imagen en Quicsa (Next.js) y Navalsa (WordPress) con API key Higgsfield configurada. Luego S4d (límites + bitácora visible).
+**Última actualización:** 2026-10-25 (CONTENT-LANE — carril de contenido separado para blogs Next.js)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Probar content lane con Quicsa (Next.js). Resetear plan conflictivo y re-ejecutar blog por carril nuevo.
+
+### ✅ CONTENT-LANE — Carril de contenido para blogs Next.js (2026-10-25)
+
+Blogs Next.js ahora usan un carril separado que NO pasa por la rama del plan:
+- Claude genera datos del artículo (título, categoría, tags, extracto, cuerpo Markdown)
+- Se guarda como `NextjsStagedBlogChange` en PlanStep.stagedChange
+- El usuario revisa el texto + portada y hace clic en "Publicar en main"
+- Commit atómico directo a main vía GitHub API (blobs → tree → commit → update ref)
+- Sin rama, sin PR, sin merge, sin conflictos de plantilla
+
+**Archivos nuevos:**
+- `src/lib/github-blog-publisher.ts` — commitFiles, buildMdxContent, hasSection, publishBlogArticle
+- `src/lib/__tests__/github-blog-publisher.test.ts` — 27 tests
+- `scripts/normalize-catalog-schemas.ts` — normaliza headings en catalog-schemas.md
+
+**Archivos modificados:**
+- `src/worker/task-processor.ts` — router: blog CONTENT → processNextjsBlogTask
+- `src/worker/agent-permissions.ts` — contentOnly guard para Write/Edit
+- `src/app/(admin)/clientes/[id]/plan-mensual/actions.ts` — actionPublishNextjsBlog
+- `src/app/(admin)/clientes/[id]/plan-mensual/PlanMensualPanel.tsx` — NextjsBlogPublishBlock UI
+
+**Quicsa (conflicto MERGE_CONFLICT):** No resolver el conflicto. Resetear plan y re-ejecutar blog por carril nuevo:
+1. Archivar el plan actual desde la UI (botón Archivar)
+2. Crear nuevo plan para el mismo mes
+3. Los blogs irán por el carril de contenido automáticamente (kind=CONTENT, category=blog)
+4. Las tareas de código (meta tags, landings) seguirán usando la rama del plan
 
 ---
 

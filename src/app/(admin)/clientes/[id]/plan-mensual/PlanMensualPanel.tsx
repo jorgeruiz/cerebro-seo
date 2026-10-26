@@ -21,6 +21,7 @@ import {
   actionRunWatchdog,
   actionSubmitForReview,
   actionMergePlan,
+  actionPublishNextjsBlog,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -393,6 +394,97 @@ function StepRow({
   );
 }
 
+// ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+function NextjsBlogPublishBlock({ task }: { task: PlanTaskFullView }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const blogStep = task.steps.find(
+    (s) => (s.stagedChange as { type?: string } | null)?.type === "nextjs_blog"
+  );
+  if (!blogStep) return null;
+
+  const staged = blogStep.stagedChange as {
+    type: "nextjs_blog";
+    titulo: string;
+    slug: string;
+    categoria: string;
+    tags: string[];
+    extracto: string;
+    cuerpo: string;
+    autor: string;
+  };
+
+  const handlePublish = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await actionPublishNextjsBlog(task.id);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setSuccess(`Publicado: ${result.url} (sha: ${result.sha.slice(0, 7)})`);
+      }
+    });
+  };
+
+  return (
+    <div className="border-t border-border">
+      <div className="px-4 py-3 bg-emerald-500/5">
+        <p className="font-mono text-[0.6rem] uppercase tracking-wider text-emerald-600 mb-2">
+          Artículo listo para publicar
+        </p>
+        <div className="space-y-1 mb-3">
+          <p className="text-sm font-semibold">{staged.titulo}</p>
+          <p className="font-mono text-[0.65rem] text-muted-foreground">
+            /blog/{staged.slug} · {staged.categoria} · {staged.autor}
+          </p>
+          {staged.tags.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {staged.tags.map((tag) => (
+                <span key={tag} className="font-mono text-[0.55rem] px-1.5 py-0.5 bg-muted rounded">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[0.7rem] text-muted-foreground mt-1">{staged.extracto}</p>
+          <details className="mt-2">
+            <summary className="font-mono text-[0.6rem] text-ds-blue cursor-pointer hover:underline">
+              Ver cuerpo del artículo ({staged.cuerpo.length} chars)
+            </summary>
+            <pre className="mt-1 text-[0.65rem] text-muted-foreground whitespace-pre-wrap max-h-60 overflow-y-auto bg-muted/30 p-2 rounded">
+              {staged.cuerpo}
+            </pre>
+          </details>
+        </div>
+
+        {error && (
+          <p className="font-mono text-[0.65rem] text-destructive mb-2">{error}</p>
+        )}
+        {success && (
+          <p className="font-mono text-[0.65rem] text-emerald-600 mb-2">{success}</p>
+        )}
+
+        {!success && (
+          <button
+            onClick={handlePublish}
+            disabled={isPending}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}
+          >
+            {isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <><Send className="h-3 w-3" /> Publicar en main</>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Task Card ──────────────────────────────────────────────────────────────
 
 function TaskCard({
@@ -613,6 +705,12 @@ function TaskCard({
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Next.js blog preview + publish */}
+          {task.status === "WAITING_HUMAN" &&
+            task.steps.some((s) => (s.stagedChange as { type?: string } | null)?.type === "nextjs_blog") && (
+            <NextjsBlogPublishBlock task={task} />
           )}
 
           {/* Actions */}

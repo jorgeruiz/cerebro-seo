@@ -796,3 +796,98 @@ export async function actionMergePlan(
 
   return { ok: true, mergedAt: now.toISOString(), warnings: mergeWarnings };
 }
+
+// ─── Publish Next.js blog article (content lane) ───────────────────────────
+
+export async function actionPublishNextjsBlog(
+  taskId: string
+): Promise<{ ok: true; sha: string; url: string } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "No autenticado." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: {
+      site: true,
+      steps: { orderBy: { order: "asc" } },
+    },
+  });
+
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+  if (task.status !== "WAITING_HUMAN") {
+    return { ok: false, error: `Tarea no está lista para publicar (status: ${task.status}).` };
+  }
+
+  // Find the step with NextjsStagedBlogChange
+  const blogStep = task.steps.find(
+    (s) => s.stagedChange && (s.stagedChange as Record<string, unknown>).type === "nextjs_blog"
+  );
+
+  if (!blogStep?.stagedChange) {
+    return { ok: false, error: "No se encontró el artículo staged para publicar." };
+  }
+
+  const staged = blogStep.stagedChange as unknown as {
+    type: "nextjs_blog";
+    titulo: string;
+    slug: string;
+    categoria: string;
+    tags: string[];
+    extracto: string;
+    cuerpo: string;
+    autor: string;
+    coverImageBase64: string | null;
+  };
+
+  if (!task.site.githubRepo) {
+    return { ok: false, error: "Site no tiene repositorio GitHub." };
+  }
+
+  const GH_PAT = process.env.GITHUB_PAT_CLIENT_REPOS;
+  if (!GH_PAT) return { ok: false, error: "GITHUB_PAT no configurado." };
+
+  // Validate: no placeholders
+  if (/\[COMPLETAR/i.test(staged.cuerpo)) {
+    return { ok: false, error: "El artículo contiene marcadores [COMPLETAR]. Edita antes de publicar." };
+  }
+
+  try {
+    const { publishBlogArticle } = await import("@/lib/github-blog-publisher");
+
+    const result = await publishBlogArticle(
+      task.site.githubRepo,
+      task.site.defaultBranch,
+      {
+        titulo: staged.titulo,
+        slug: staged.slug,
+        categoria: staged.categoria,
+        tags: staged.tags,
+        extracto: staged.extracto,
+        cuerpo: staged.cuerpo,
+        autor: staged.autor,
+      },
+      staged.coverImageBase64,
+      GH_PAT
+    );
+
+    // Update task to DONE with result
+    const siteUrl = task.site.url.startsWith("http") ? task.site.url.replace(/\/$/, "") : `https://${task.site.url}`;
+    const fullUrl = `${siteUrl}${result.url}`;
+
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "DONE",
+        completedAt: new Date(),
+        completedById: session.user.email,
+        commitShas: [result.sha],
+        resultUrls: [fullUrl],
+      },
+    });
+
+    return { ok: true, sha: result.sha, url: fullUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}

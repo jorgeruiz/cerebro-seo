@@ -51,6 +51,11 @@ import {
   stripDraftFrontmatter,
 } from "./repo-manager";
 import type { PlanTaskJobData } from "@/server/jobs/queues";
+import {
+  hasSection,
+  readGitHubFile,
+  type NextjsStagedBlogChange,
+} from "@/lib/github-blog-publisher";
 
 // ─── Main entry ──────────────────────────────────────────────────────────────
 
@@ -77,6 +82,12 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
   // ── WordPress path — no repo needed, executes via WP plugin proxy ──────
   if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
     await processWpTask(taskId, task, plan);
+    return;
+  }
+
+  // ── Content lane: Next.js blog tasks skip the plan branch entirely ──────
+  if (isNextjsBlogTask(task.kind, task.category)) {
+    await processNextjsBlogTask(taskId, task, plan);
     return;
   }
 
@@ -978,6 +989,334 @@ async function processWpTask(
   } finally {
     await lock.release();
   }
+}
+
+// ─── Next.js Blog Content Lane ────────────────────────────────────────────────
+// Blog articles skip the plan branch. Claude generates the article data,
+// stores it in stagedChange, and the user publishes via direct commit to main.
+
+function isNextjsBlogTask(kind: string, category: string): boolean {
+  return kind === "CONTENT" && ["blog", "articulo", "article"].includes(category.toLowerCase());
+}
+
+/**
+ * Process a Next.js blog task in the content lane.
+ *
+ * Flow:
+ * 1. Preflight: check catalog-schemas has ## Blog section.
+ * 2. For each AI step: generate article content with Claude.
+ * 3. Stage the result in PlanStep.stagedChange as NextjsStagedBlogChange.
+ * 4. Task stays WAITING_HUMAN until user clicks "Publicar" (direct commit to main).
+ */
+async function processNextjsBlogTask(
+  taskId: string,
+  task: {
+    title: string;
+    kind: string;
+    category: string;
+    mode: string;
+    objective: string;
+    steps: Array<{
+      id: string;
+      order: number;
+      title: string;
+      type: string;
+      status: string;
+      prompt: string | null;
+      acceptanceCriteria: string[];
+      notes: string | null;
+    }>;
+    site: {
+      url: string;
+      githubRepo: string | null;
+      defaultBranch: string;
+      platform: string | null;
+      client: { cerebroClientId: string | null; name: string } | null;
+    };
+  },
+  plan: { id: string; clientId: string },
+): Promise<void> {
+  const site = task.site;
+  if (!site.githubRepo) {
+    await failTask(taskId, "Site no tiene githubRepo configurado.");
+    return;
+  }
+
+  const lock = await acquirePlanLock(plan.id);
+  if (!lock.acquired) {
+    throw new Error("PLAN_LOCKED");
+  }
+
+  await prisma.planTask.update({ where: { id: taskId }, data: { status: "RUNNING" } });
+
+  try {
+    // ── Preflight: check blog bootstrap ──────────────────────────────
+    const pat = workerEnv.GITHUB_PAT_CLIENT_REPOS;
+    const [owner, repo] = site.githubRepo.split("/");
+    const catalogSchemas = await readGitHubFile(owner, repo, "docs/catalog-schemas.md", pat, site.defaultBranch);
+
+    if (!hasSection(catalogSchemas, "Blog")) {
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: {
+          status: "WAITING_HUMAN",
+          failureReason: "Blog no inicializado (bootstrap pendiente). catalog-schemas.md no tiene sección ## Blog activa.",
+        },
+      });
+      console.log(`[blog-task] ${task.title} → WAITING_HUMAN (no blog bootstrap)`);
+      return;
+    }
+
+    // ── Process steps ────────────────────────────────────────────────
+    for (const step of task.steps) {
+      if (step.status === "DONE" || step.status === "SKIPPED") continue;
+
+      if (step.type === "HUMAN") {
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: { status: "WAITING_HUMAN" },
+        });
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: { status: "WAITING_HUMAN" },
+        });
+        return;
+      }
+
+      // AI step: generate article content or image
+      await prisma.planStep.update({ where: { id: step.id }, data: { status: "RUNNING" } });
+
+      const run = await prisma.taskRun.create({
+        data: { taskId, stepId: step.id, kind: "AUTO", status: "RUNNING" },
+      });
+
+      try {
+        // Check if this is an image step
+        const imageAction = parseImageAction(step.prompt);
+        if (imageAction) {
+          // Image generation (same as code lane)
+          const { executeImage } = await import("./image-executor");
+          const cerebroClientId = task.site.client?.cerebroClientId ?? "";
+          const imgResult = await executeImage(imageAction, {
+            cerebroClientId,
+            taskId: taskId,
+            articleSlug: extractSlugFromObjective(task.objective),
+            clientId: plan.clientId,
+            imageCount: 0,
+            taskKind: task.kind,
+            taskCategory: task.category,
+          });
+
+          // If image was generated, store base64 for later commit
+          const notes = imgResult.notes;
+          await prisma.planStep.update({
+            where: { id: step.id },
+            data: { status: "DONE", notes },
+          });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "SUCCEEDED", logTail: notes.slice(0, 2000), finishedAt: new Date() },
+          });
+          continue;
+        }
+
+        // Content generation step: use Claude to generate article data
+        const articleData = await generateBlogArticleData(task, step, plan.clientId);
+
+        // Stage the article as NextjsStagedBlogChange
+        const stagedChange: NextjsStagedBlogChange = {
+          type: "nextjs_blog",
+          titulo: articleData.titulo,
+          slug: articleData.slug,
+          categoria: articleData.categoria,
+          tags: articleData.tags ?? [],
+          extracto: articleData.extracto,
+          cuerpo: articleData.cuerpo,
+          autor: articleData.autor,
+          coverImageBase64: null, // filled by image step if present
+          coverImagePath: null,
+          staged_at: new Date().toISOString(),
+        };
+
+        await prisma.planStep.update({
+          where: { id: step.id },
+          data: {
+            status: "DONE",
+            stagedChange: stagedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"],
+            notes: `Blog staged: "${articleData.titulo}" → /blog/${articleData.slug}`,
+          },
+        });
+
+        await prisma.taskRun.update({
+          where: { id: run.id },
+          data: {
+            status: "SUCCEEDED",
+            costUsd: new Decimal(articleData.costUsd.toFixed(6)),
+            inputTokens: articleData.inputTokens,
+            outputTokens: articleData.outputTokens,
+            logTail: `Artículo generado: "${articleData.titulo}" (${articleData.cuerpo.length} chars)`,
+            changedRoutes: [`/blog/${articleData.slug}`],
+            finishedAt: new Date(),
+          },
+        });
+
+        await logApiUsage({
+          provider: "anthropic",
+          endpoint: "blog-content-gen",
+          cost: articleData.costUsd,
+          clientId: plan.clientId,
+        });
+
+        console.log(`[blog-task] Step ${step.order} ✓ staged "${articleData.titulo}"`);
+      } catch (stepErr) {
+        const errMsg = stepErr instanceof Error ? stepErr.message : String(stepErr);
+        console.error(`[blog-task] Step ${step.order} ✗: ${errMsg}`);
+
+        await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+        await failRun(run.id, errMsg);
+        await failTask(taskId, `Paso blog ${step.order} falló: ${errMsg}`);
+        return;
+      }
+    }
+
+    // All AI steps done → WAITING_HUMAN for review + publish
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "WAITING_HUMAN" },
+    });
+    console.log(`[blog-task] ✓ Task "${task.title}" → WAITING_HUMAN (pendiente publicación)`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg === "PLAN_LOCKED") throw err;
+    console.error(`[blog-task] ✗ Task "${task.title}" failed:`, errMsg);
+    await failTask(taskId, errMsg);
+  } finally {
+    await lock.release();
+  }
+}
+
+/**
+ * Generate blog article data using Claude.
+ * Returns structured article data ready for staging.
+ */
+async function generateBlogArticleData(
+  task: { title: string; objective: string },
+  step: { prompt: string | null; acceptanceCriteria: string[] },
+  _clientId: string,
+): Promise<{
+  titulo: string;
+  slug: string;
+  categoria: string;
+  tags: string[];
+  extracto: string;
+  cuerpo: string;
+  autor: string;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+}> {
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const { CLAUDE_MODEL } = await import("@/lib/anthropic-config");
+
+  const client = new Anthropic({ apiKey: workerEnv.ANTHROPIC_API_KEY });
+
+  const systemPrompt = `Eres un redactor SEO experto para Click Society. Generas artículos de blog optimizados.
+
+REGLAS:
+- NUNCA incluyas HTML en el cuerpo. Solo Markdown puro.
+- NUNCA incluyas H1 (# título). El título va en el frontmatter.
+- NUNCA inventes datos del cliente (precios, certificaciones, casos de éxito).
+- Si no conoces un dato, escribe [COMPLETAR: descripción de qué falta].
+- Usa H2 (##) y H3 (###) para estructura.
+- El extracto debe tener entre 120-160 caracteres.
+- El slug debe ser URL-safe: minúsculas, guiones, sin acentos ni caracteres especiales.
+- Responde SOLO con el JSON estructurado, sin explicaciones.`;
+
+  const userPrompt = `Genera un artículo de blog basado en esta tarea:
+
+Tarea: ${task.title}
+Objetivo: ${task.objective}
+${step.prompt ? `\nInstrucciones del paso:\n${step.prompt}` : ""}
+${step.acceptanceCriteria.length > 0 ? `\nCriterios de aceptación:\n${step.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}` : ""}
+
+Responde con este JSON exacto:
+{
+  "titulo": "Título del artículo (50-60 chars ideal)",
+  "slug": "slug-url-safe-sin-acentos",
+  "categoria": "Categoría del blog",
+  "tags": ["tag1", "tag2", "tag3"],
+  "extracto": "Extracto SEO 120-160 chars",
+  "cuerpo": "Contenido completo en Markdown (sin H1, sin HTML)",
+  "autor": "Nombre del autor o empresa"
+}`;
+
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 8192,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const text = response.content
+    .filter((b) => b.type === "text")
+    .map((b) => ("text" in b ? b.text : ""))
+    .join("");
+
+  // Parse JSON from response
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*"titulo"[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("BLOG_GEN_FAILED: Claude no devolvió JSON válido");
+  }
+
+  const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]) as {
+    titulo: string;
+    slug: string;
+    categoria: string;
+    tags?: string[];
+    extracto: string;
+    cuerpo: string;
+    autor: string;
+  };
+
+  // Validate: no HTML in body
+  if (/<[a-z][\s\S]*>/i.test(parsed.cuerpo)) {
+    throw new Error("BLOG_GEN_INVALID: El cuerpo contiene HTML");
+  }
+  // Validate: no H1
+  if (/^# /m.test(parsed.cuerpo)) {
+    throw new Error("BLOG_GEN_INVALID: El cuerpo contiene H1 (# título)");
+  }
+
+  const inputTokens = response.usage.input_tokens;
+  const outputTokens = response.usage.output_tokens;
+  // Approximate cost: sonnet pricing
+  const costUsd = (inputTokens * 3 + outputTokens * 15) / 1_000_000;
+
+  return {
+    titulo: parsed.titulo,
+    slug: parsed.slug,
+    categoria: parsed.categoria,
+    tags: parsed.tags ?? [],
+    extracto: parsed.extracto,
+    cuerpo: parsed.cuerpo,
+    autor: parsed.autor || "Equipo editorial",
+    costUsd,
+    inputTokens,
+    outputTokens,
+  };
+}
+
+function extractSlugFromObjective(objective: string): string {
+  // Try to extract a slug-like string from the objective
+  const slugMatch = objective.match(/\/blog\/([a-z0-9-]+)/);
+  if (slugMatch) return slugMatch[1];
+  // Fallback: slugify the first 50 chars
+  return objective
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
