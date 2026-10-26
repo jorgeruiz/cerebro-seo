@@ -851,6 +851,16 @@ export async function actionPublishNextjsBlog(
     return { ok: false, error: "El artículo contiene marcadores [COMPLETAR]. Edita antes de publicar." };
   }
 
+  // Validate: no block HTML
+  if (/<(h[1-6]|p|div|ul|ol|blockquote)\b/i.test(staged.cuerpo)) {
+    return { ok: false, error: "El cuerpo contiene HTML de bloque (<h1>, <p>, <div>, etc.). Solo se permite Markdown puro." };
+  }
+
+  // Validate: no H1 in Markdown
+  if (/^# /m.test(staged.cuerpo)) {
+    return { ok: false, error: "El cuerpo contiene un H1 (# título). El título va en el frontmatter, no en el cuerpo." };
+  }
+
   try {
     const { publishBlogArticle } = await import("@/lib/github-blog-publisher");
 

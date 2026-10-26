@@ -139,8 +139,18 @@ describe("hasSection", () => {
     expect(hasSection(schemas, "Blog")).toBe(false);
   });
 
-  it("returns false when section contains 'Pendiente'", () => {
-    const schemas = "## Blog\nPendiente de bootstrap.\n\n## Landing Pages";
+  it("returns false when **Estado:** says Pendiente", () => {
+    const schemas = "## Blog\n**Estado:** Pendiente\n\n## Landing Pages";
+    expect(hasSection(schemas, "Blog")).toBe(false);
+  });
+
+  it("returns true when body has 'pendientes' but Estado is not Pendiente", () => {
+    const schemas = "## Blog\n**Estado:** Implementado\n\n**Categorías existentes:**\n- categorías pendientes de definir\n\n## Landing Pages";
+    expect(hasSection(schemas, "Blog")).toBe(true);
+  });
+
+  it("returns false when heading itself says Pendiente", () => {
+    const schemas = "## Blog — Pendiente\n\nAlgo aquí.";
     expect(hasSection(schemas, "Blog")).toBe(false);
   });
 
@@ -233,6 +243,55 @@ describe("updateSiteState", () => {
     const result = updateSiteState(existing, "Nuevo", "nuevo", "REQ-1");
     expect(result).toContain("- [2026-10-01] Algo previo");
     expect(result).toContain('Blog: "Nuevo" → /blog/nuevo (REQ-1)');
+  });
+});
+
+// ─── Blog body validation (mirrors actionPublishNextjsBlog guards) ───────────
+
+describe("blog body validation", () => {
+  const htmlBlockRegex = /<(h[1-6]|p|div|ul|ol|blockquote)\b/i;
+  const h1Regex = /^# /m;
+
+  it("rejects body with <h1> tag", () => {
+    expect(htmlBlockRegex.test("<h1>Title</h1>\n\nContent")).toBe(true);
+  });
+
+  it("rejects body with <p> tag", () => {
+    expect(htmlBlockRegex.test("Some text\n<p>Paragraph</p>")).toBe(true);
+  });
+
+  it("rejects body with <div> tag", () => {
+    expect(htmlBlockRegex.test('<div class="container">Content</div>')).toBe(true);
+  });
+
+  it("rejects body with <ul> tag", () => {
+    expect(htmlBlockRegex.test("<ul><li>Item</li></ul>")).toBe(true);
+  });
+
+  it("rejects body with <blockquote>", () => {
+    expect(htmlBlockRegex.test("<blockquote>Quote</blockquote>")).toBe(true);
+  });
+
+  it("allows inline HTML like <strong>, <em>, <a>", () => {
+    const body = "Text with <strong>bold</strong> and <em>italic</em> and <a href='/'>link</a>.";
+    expect(htmlBlockRegex.test(body)).toBe(false);
+  });
+
+  it("allows pure Markdown", () => {
+    const body = "## Section\n\n**Bold** text with [link](/url).\n\n- Item 1\n- Item 2";
+    expect(htmlBlockRegex.test(body)).toBe(false);
+  });
+
+  it("rejects Markdown H1", () => {
+    expect(h1Regex.test("# My Title\n\n## Section")).toBe(true);
+  });
+
+  it("allows ## H2 and ### H3", () => {
+    expect(h1Regex.test("## Section\n\n### Subsection")).toBe(false);
+  });
+
+  it("does not false-positive on # inside text", () => {
+    expect(h1Regex.test("Use C# for development")).toBe(false);
   });
 });
 

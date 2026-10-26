@@ -117,9 +117,17 @@ export function hasSection(schemas: string | null, sectionName: string): boolean
     ? rest.slice(0, nextHeading.index!)
     : rest;
 
-  // Check for "not implemented" markers
-  if (/no implementado|pendiente/i.test(sectionContent)) {
+  // Only check the heading line and **Estado:** line for "not implemented" markers.
+  // Body text like "categorías pendientes de definir" should NOT block.
+  const sectionLines = sectionContent.split("\n");
+  const headingLine = sectionLines[0] ?? "";
+  if (/no implementado|pendiente/i.test(headingLine)) {
     return false;
+  }
+  for (const line of sectionLines) {
+    if (/^\*\*Estado:\*\*/i.test(line.trim()) && /no implementado|pendiente/i.test(line)) {
+      return false;
+    }
   }
 
   return true;
