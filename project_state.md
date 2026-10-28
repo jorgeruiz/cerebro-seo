@@ -2,9 +2,30 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-26 (DATA-STEPS + CONTENT-LANE + BUILD-GUARDS)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Deploy de los 4 commits pendientes. Probar content lane + data steps con Quicsa. Resetear plan conflictivo de Quicsa.
+**Última actualización:** 2026-10-28 (PLAN-FIXES — templates, secuencia, filtros, bitácora, generatorVersion)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Deploy. Probar plantillas con Quicsa (Next.js) y Química Ecológica (WP). Verificar Bitácora de Notion.
+
+### ✅ PLAN-FIXES — Correcciones Plan Mensual (2026-10-28)
+
+1. **actionExecuteTask**: githubRepo solo requerido para NEXTJS. WP ejecuta sin repo. MIGRACION/OTRO → error claro.
+2. **task-templates.ts**: catálogo determinístico por (actionType × platform). resolveTaskMode = única fuente de verdad. Reemplaza enforceModeRules para modo. 10 actionTypes × 2 plataformas.
+3. **Secuencia de pasos**: solo el primer paso pendiente es accionable. Ordering enforcement en actionCompleteHumanStep. Double-execution guard.
+4. **Filtro lighthouse/auditorías**: descarta candidatas y pasos de "auditar velocidad/Lighthouse/PageSpeed". Prompt reforzado con "PROHIBIDO proponer auditar".
+5. **Plugin compat < 1.6.0**: "seo" mapeado como equivalente de "seo_write" en isActionExecutable y applyCapabilities.
+6. **generatorVersion**: PlanTask.generatorVersion almacena DECOMPOSER_VERSION al crear pasos. Migración add_generator_version.
+
+**Archivos nuevos:**
+- `src/lib/task-templates.ts` — getTemplate, applyCapabilities, resolveTaskMode, buildModeReason, DECOMPOSER_VERSION
+- `src/lib/__tests__/task-templates.test.ts` — 14 tests
+
+**Archivos modificados:**
+- `prisma/schema.prisma` — PlanTask.generatorVersion
+- `src/app/.../actions.ts` — actionExecuteTask (platform guards), actionCompleteHumanStep (ordering)
+- `src/app/.../PlanMensualPanel.tsx` — Ejecutar basado en pasos, StepRow.isActionable
+- `src/server/jobs/processors/task-decomposer.ts` — template path, resolveTaskMode, anti-audit filter
+- `src/lib/claude-analysis.ts` — audit candidate filter, prompt prohibition
+- `src/lib/analysis-candidates.ts` — isActionExecutable seo→seo_write compat
 
 ### ✅ CONTENT-LANE — Carril de contenido para blogs Next.js (2026-10-25)
 

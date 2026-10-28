@@ -13,6 +13,15 @@ import { prisma } from "@/lib/db";
 import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
 import { getWpCapabilities } from "@/lib/wp-proxy-client";
 import { getWpSiteProfile } from "@/lib/wp-site-profile";
+import {
+  getTemplate,
+  applyCapabilities,
+  resolveTaskMode,
+  buildModeReason,
+  DECOMPOSER_VERSION,
+  type ActionType,
+  type Platform,
+} from "@/lib/task-templates";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +190,16 @@ HERRAMIENTAS DISPONIBLES EN CEREBRO SEO (solo estas):
 - Elementor: editor visual para WordPress
 - Yoast SEO / Rank Math: meta tags, schema, sitemap
 PROHIBIDO sugerir: Lighthouse CLI, Screaming Frog, Ahrefs, Semrush, WebPageTest, hojas de cálculo, Drive, interfaz web de DataForSEO.
+
+REGLA ANTI-CANIBALIZACIÓN:
+- Si el contexto incluye "PÁGINA EXISTENTE:", OPTIMIZAR la página existente — NUNCA crear una nueva.
+- Revisa las rutas existentes del sitio antes de proponer páginas nuevas.
+- Si la keyword ya tiene una URL posicionada → optimizar, no duplicar.
+
+SERVICIOS VERIFICADOS (site-spec):
+- Antes de proponer contenido sobre un servicio/producto, verificar que aparece en site-spec.md o en la lista de servicios del cliente.
+- Si no existe: Confirmar con el cliente si ofrece ese servicio. Marcar como mode=HUMAN.
+- ¿El cliente ofrece este servicio? → Si no está en site-spec, preguntar antes de crear contenido.
 
 REGLA ANTI-INVENCIÓN (CRÍTICA):
 - PROHIBIDO inventar: casos de éxito, certificaciones, precios, capacidades, testimonios, estadísticas del cliente.
@@ -422,6 +441,57 @@ ${repoContext}
 
 Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${platform}.`;
 
+  // ── Template-based path: deterministic steps ──────────────────────────
+  const inferredActionType = inferActionType(task.category, task.title);
+  const templatePlatform = (platform === "NEXTJS" || platform === "WORDPRESS") ? platform as Platform : null;
+  const template = templatePlatform && inferredActionType
+    ? getTemplate(inferredActionType, templatePlatform)
+    : null;
+
+  if (template) {
+    const wpCaps = wpCapabilitiesContext ? extractCapsList(wpCapabilitiesContext) : null;
+    const finalSteps = applyCapabilities(template, wpCaps);
+    const mode = resolveTaskMode(finalSteps);
+    const modeReason = buildModeReason(finalSteps);
+
+    // Create steps from template
+    for (let i = 0; i < finalSteps.length; i++) {
+      const ts = finalSteps[i];
+      await prisma.planStep.create({
+        data: {
+          taskId,
+          order: i + 1,
+          title: ts.title,
+          type: ts.type as "AI" | "HUMAN",
+          prompt: ts.action ? JSON.stringify({ action: ts.action }) : null,
+          acceptanceCriteria: [],
+          status: "PENDING",
+          notes: [
+            ts.type === "AI" ? "complexity:medium" : null,
+            ts.humanReason ? `humanReason:${ts.humanReason}` : null,
+          ].filter(Boolean).join(" ") || null,
+        },
+      });
+    }
+
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "READY",
+        mode,
+        modeReason,
+        generatorVersion: DECOMPOSER_VERSION,
+        prompt: finalSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
+      },
+    });
+
+    console.log(
+      `[task-decomposer] ✓ "${task.title}" — template ${inferredActionType}/${templatePlatform} → ${finalSteps.length} steps (${mode})`
+    );
+    return;
+  }
+
+  // ── Free-form LLM path (no template match) ──────────────────────────
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -480,6 +550,12 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
         step.humanReason = null;
       }
 
+      // Filter audit/lighthouse step titles
+      if (/lighthouse|auditor[ií]a de (velocidad|rendimiento)|correr pagespeed|medir velocidad/i.test(step.title)) {
+        console.warn(`[task-decomposer] Paso de auditoría filtrado: "${step.title}"`);
+        continue;
+      }
+
       validSteps.push(step);
     }
 
@@ -520,11 +596,20 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
       });
     }
 
+    // Recalculate mode from actual steps (single source of truth)
+    const derivedMode = resolveTaskMode(validSteps.map((s) => ({ type: s.type as "AI" | "HUMAN" })));
+    const derivedModeReason = buildModeReason(
+      validSteps.map((s) => ({ type: s.type as "AI" | "HUMAN", humanReason: s.humanReason }))
+    );
+
     // Update task prompt with a summary and set to READY
     await prisma.planTask.update({
       where: { id: taskId },
       data: {
         status: "READY",
+        mode: derivedMode,
+        modeReason: derivedModeReason,
+        generatorVersion: DECOMPOSER_VERSION,
         prompt: validSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
       },
     });
@@ -566,4 +651,30 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
       data: { status: "FAILED", failureReason: errMsg },
     });
   }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Infer actionType from task category and title. */
+function inferActionType(category: string, title: string): ActionType | null {
+  const cat = category.toLowerCase();
+  const t = title.toLowerCase();
+
+  if (cat === "blog" || cat === "articulo" || /\b(blog|artículo|articulo|post|redactar)\b/.test(t)) return "create_blog";
+  if (cat === "meta" || /\bmeta\s*(title|description|tag)/i.test(t) || /\byoast\b/i.test(t)) return "update_meta";
+  if (cat === "keyword" || /\bkeyword/i.test(t) || /\bpalabras?\s*clave/i.test(t)) return "keyword_research";
+  if (cat === "schema" || /\bschema\b/i.test(t) || /\bjson-?ld\b/i.test(t)) return "schema";
+  if (/\benlaces?\s*interno/i.test(t) || /\binternal\s*link/i.test(t)) return "internal_links";
+  if (cat === "landing" || /\blanding\b/i.test(t)) return "create_landing";
+  if (/\boptimizar\s*(texto|contenido|copy)/i.test(t) || /\beditar\s*(texto|contenido)/i.test(t)) return "edit_page_text";
+  if (/\bimagen\b/i.test(t) && /\bgenerar|crear|ai\b/i.test(t)) return "generate_image";
+
+  return null; // no template match → free-form
+}
+
+/** Extract capabilities list from the WP capabilities context string. */
+function extractCapsList(wpCapabilitiesContext: string): string[] | null {
+  const match = wpCapabilitiesContext.match(/Endpoints activos:\s*(.+)/);
+  if (!match) return null;
+  return match[1].split(",").map((s) => s.trim()).filter(Boolean);
 }

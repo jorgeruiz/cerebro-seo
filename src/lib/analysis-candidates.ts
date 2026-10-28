@@ -185,7 +185,11 @@ const WP_REGEX_FALLBACK: Array<{ pattern: RegExp; actionType: WpActionType }> = 
 function isActionExecutable(actionType: WpActionType, capabilities: string[]): boolean {
   const required = ACTION_TYPE_CAPABILITIES[actionType];
   if (required.length === 0) return false;
-  return required.every((cap) => capabilities.some((c) => c === cap || c.startsWith(`${cap}/`)));
+  return required.every((cap) => capabilities.some((c) =>
+    c === cap || c.startsWith(`${cap}/`)
+    // Compat: plugins < 1.6.0 report "seo" instead of "seo_write"
+    || (cap === "seo_write" && (c === "seo" || c.startsWith("seo/")))
+  ));
 }
 
 /**

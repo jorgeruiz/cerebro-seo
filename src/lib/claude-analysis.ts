@@ -71,6 +71,7 @@ PRINCIPIOS:
 - Cada oportunidad, riesgo y candidata debe estar respaldada por datos del contexto
 - Presta atención a las FECHAS de medición de cada dato — ignora datos vencidos
 - Prioriza por impacto real en tráfico y negocio
+- Los datos de PageSpeed/Core Web Vitals YA están incluidos en Site Audit. PROHIBIDO proponer "auditar", "correr Lighthouse/PageSpeed" o "medir velocidad" como candidata. Propón la corrección concreta basada en los datos ya disponibles.
 - Si un MonthlyCycle NO es del mes actual, trátalo como vencido: no uses sus deadlines, solo como antecedente histórico
 
 CANDIDATAS — PLATAFORMA (LEE ESTO PRIMERO, ES OBLIGATORIO):
@@ -615,6 +616,20 @@ export async function generateClientAnalysis(
   // Enforce mode rules: plataforma no-NEXTJS → HUMAN; performance en NEXTJS → HYBRID
   if (analysis.candidatas) {
     analysis.candidatas = analysis.candidatas.map((c) => enforceModeRules(c, platform, wpCapabilities));
+
+    // Filter out audit/lighthouse candidates — these are redundant with Site Audit data
+    const AUDIT_FILTER = /lighthouse|auditor[ií]a de (velocidad|rendimiento)|correr pagespeed|medir velocidad|auditar rendimiento/i;
+    const before = analysis.candidatas.length;
+    analysis.candidatas = analysis.candidatas.filter((c) => {
+      if (AUDIT_FILTER.test(c.titulo)) {
+        console.log(`[analysis] Filtrada candidata redundante: "${c.titulo}"`);
+        return false;
+      }
+      return true;
+    });
+    if (analysis.candidatas.length < before) {
+      console.log(`[analysis] ${before - analysis.candidatas.length} candidata(s) de auditoría filtradas`);
+    }
   }
 
   // Add setup candidates if preconditions are missing

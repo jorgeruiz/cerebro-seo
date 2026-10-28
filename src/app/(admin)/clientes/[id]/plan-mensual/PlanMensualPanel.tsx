@@ -265,15 +265,18 @@ function StepRow({
   onComplete,
   isCompleting,
   isWordPress = false,
+  isActionable = true,
 }: {
   step: PlanStepView;
   stepResult: string | null;
   onComplete: (stepId: string) => void;
   isCompleting: boolean;
   isWordPress?: boolean;
+  /** true if this step is the first pending step (can be acted on) */
+  isActionable?: boolean;
 }) {
   const statusCfg = STEP_STATUS[step.status] ?? STEP_STATUS.PENDING;
-  const isHumanPending = step.type === "HUMAN" && (step.status === "PENDING" || step.status === "WAITING_HUMAN");
+  const isHumanPending = step.type === "HUMAN" && (step.status === "PENDING" || step.status === "WAITING_HUMAN") && isActionable;
 
   return (
     <div className="flex items-start gap-2 py-1.5 px-2 rounded hover:bg-muted/30 group">
@@ -685,19 +688,25 @@ function TaskCard({
               <p className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground/60 px-2 pb-1">
                 Pasos ({task.steps.filter((s) => s.status === "DONE").length}/{task.steps.length})
               </p>
-              {task.steps.map((step) => {
-                const stepRun = task.runs.find((r) => r.stepId === step.id && r.status === "SUCCEEDED");
-                return (
-                  <StepRow
-                    key={step.id}
-                    step={step}
-                    stepResult={stepRun?.logTail ?? null}
-                    onComplete={onCompleteStep}
-                    isCompleting={isActing}
-                    isWordPress={isWordPress}
-                  />
+              {(() => {
+                const firstPendingIdx = task.steps.findIndex(
+                  (s) => s.status !== "DONE" && s.status !== "SKIPPED"
                 );
-              })}
+                return task.steps.map((step, idx) => {
+                  const stepRun = task.runs.find((r) => r.stepId === step.id && r.status === "SUCCEEDED");
+                  return (
+                    <StepRow
+                      key={step.id}
+                      step={step}
+                      stepResult={stepRun?.logTail ?? null}
+                      onComplete={onCompleteStep}
+                      isCompleting={isActing}
+                      isWordPress={isWordPress}
+                      isActionable={idx === firstPendingIdx}
+                    />
+                  );
+                });
+              })()}
             </div>
           )}
 
@@ -798,7 +807,13 @@ function TaskCard({
           {/* Actions */}
           {!isVoided && task.status !== "RUNNING" && (
             <div className="px-4 py-3 border-t border-border flex items-center gap-2 flex-wrap">
-              {task.status === "READY" && task.mode !== "HUMAN" && (
+              {(task.status === "READY" || task.status === "WAITING_HUMAN") &&
+                task.steps.some((s) => s.type === "AI" && (s.status === "PENDING" || s.status === "WAITING_HUMAN")) &&
+                (() => {
+                  // Only show if the FIRST pending step is AI
+                  const firstPending = task.steps.find((s) => s.status !== "DONE" && s.status !== "SKIPPED");
+                  return firstPending?.type === "AI";
+                })() && (
                 <button
                   onClick={() => onExecute(task.id)}
                   disabled={isActing}

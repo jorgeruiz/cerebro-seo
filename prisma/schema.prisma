@@ -724,6 +724,7 @@ model PlanTask {
   resultUrls         String[]       @default([])
   previewUrl         String?        // borrador WP (POST /publish draft_url) o preview Vercel de tarea
   modeReason         String?        @db.Text  // por qué se asignó este modo (AI/HYBRID/HUMAN)
+  generatorVersion   String?        // DECOMPOSER_VERSION al crear los pasos — para detectar reglas obsoletas
   failureReason      String?        @db.Text
   voidReason         String?        @db.Text
   completedById      String?

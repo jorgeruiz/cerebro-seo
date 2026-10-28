@@ -221,14 +221,27 @@ export async function actionExecuteTask(
   });
 
   if (!task) return { ok: false, error: "Tarea no encontrada." };
+  if (task.status === "RUNNING") {
+    return { ok: false, error: "La tarea ya está en ejecución." };
+  }
   if (task.status !== "READY" && task.status !== "WAITING_HUMAN") {
     return { ok: false, error: `Tarea no está lista (status: ${task.status}).` };
   }
-  if (task.mode === "HUMAN") {
-    return { ok: false, error: "Las tareas manuales no se ejecutan con el worker." };
+  // Check if task has any AI steps pending (mode-independent)
+  const aiStepsPending = await prisma.planStep.count({
+    where: { taskId, type: "AI", status: { in: ["PENDING", "WAITING_HUMAN"] } },
+  });
+  if (aiStepsPending === 0) {
+    return { ok: false, error: "No hay pasos AI pendientes para ejecutar." };
   }
-  if (!task.site.githubRepo) {
-    return { ok: false, error: "No hay repositorio GitHub configurado." };
+
+  // Platform-specific guards
+  const platform = task.site.platform;
+  if (platform === "NEXTJS" && !task.site.githubRepo) {
+    return { ok: false, error: "No hay repositorio GitHub configurado para este sitio Next.js." };
+  }
+  if (!platform || platform === "MIGRACION" || platform === "OTRO") {
+    return { ok: false, error: `Plataforma "${platform ?? "desconocida"}" no permite ejecución automática.` };
   }
 
   // Update status to RUNNING
@@ -270,6 +283,18 @@ export async function actionCompleteHumanStep(
     return { ok: false, error: "Paso ya completado." };
   }
 
+  // Enforce step ordering: reject if an earlier step is still pending
+  const allSteps = await prisma.planStep.findMany({
+    where: { taskId: step.task.id },
+    orderBy: { order: "asc" },
+  });
+  const earlierPending = allSteps.find(
+    (s) => s.order < step.order && s.status !== "DONE" && s.status !== "SKIPPED"
+  );
+  if (earlierPending) {
+    return { ok: false, error: `Hay un paso anterior pendiente: "${earlierPending.title}" (paso ${earlierPending.order}).` };
+  }
+
   await prisma.planStep.update({
     where: { id: stepId },
     data: {
@@ -279,11 +304,7 @@ export async function actionCompleteHumanStep(
     },
   });
 
-  // Check if there are remaining steps to process
-  const allSteps = await prisma.planStep.findMany({
-    where: { taskId: step.task.id },
-    orderBy: { order: "asc" },
-  });
+  // Check remaining steps
   const pendingSteps = allSteps.filter(
     (s) => s.id !== stepId && s.status !== "DONE" && s.status !== "SKIPPED"
   );
@@ -295,11 +316,26 @@ export async function actionCompleteHumanStep(
       data: { status: "DONE", completedAt: new Date(), completedById: session.user.email },
     });
   } else {
-    // Re-enqueue to continue with remaining steps
-    await planTaskQueue.add("execute", {
-      taskId: step.task.id,
-      triggeredById: session.user.email ?? undefined,
-    });
+    const nextStep = pendingSteps[0];
+    if (nextStep.type === "AI") {
+      // Guard: don't enqueue if task is already RUNNING
+      if (step.task.status !== "RUNNING") {
+        await prisma.planTask.update({
+          where: { id: step.task.id },
+          data: { status: "RUNNING" },
+        });
+        await planTaskQueue.add("execute", {
+          taskId: step.task.id,
+          triggeredById: session.user.email ?? undefined,
+        });
+      }
+    } else {
+      // Next step is HUMAN → keep task in WAITING_HUMAN
+      await prisma.planTask.update({
+        where: { id: step.task.id },
+        data: { status: "WAITING_HUMAN" },
+      });
+    }
   }
 
   return { ok: true };
