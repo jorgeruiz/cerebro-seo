@@ -30,6 +30,9 @@ import {
 import { TerminalPanel } from "./TerminalPanel";
 import { ContentPreviewModal } from "./ContentPreviewModal";
 
+/** Must match DECOMPOSER_VERSION in src/lib/task-templates.ts */
+const CURRENT_DECOMPOSER_VERSION = "2026-10-28-v1";
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const MODE_BADGE: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -604,6 +607,9 @@ function TaskCard({
   const KindIcon = KIND_ICON[task.kind] ?? Code;
   const progress = taskProgress(task);
   const isVoided = task.status === "VOIDED";
+  const isOutdatedVersion = task.generatorVersion !== null
+    && task.generatorVersion !== CURRENT_DECOMPOSER_VERSION
+    && task.status !== "DONE" && task.status !== "VOIDED";
 
   return (
     <div
@@ -675,6 +681,23 @@ function TaskCard({
       {/* Expanded content */}
       {open && (
         <div className="border-t border-border">
+          {/* Outdated version warning */}
+          {isOutdatedVersion && (
+            <div className="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+              <span className="font-mono text-[0.65rem] text-yellow-600 flex-1">
+                Generada con reglas anteriores ({task.generatorVersion ?? "sin versión"})
+              </span>
+              <button
+                onClick={() => onRedo(task.id)}
+                disabled={isActing}
+                className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1 text-yellow-600 border-yellow-500/30 h-6 text-[0.6rem]")}
+              >
+                <RefreshCw className="h-2.5 w-2.5" /> Rehacer
+              </button>
+            </div>
+          )}
+
           {/* Objective */}
           <div className="px-4 py-3 bg-muted/10">
             <p className="font-mono text-[0.65rem] text-muted-foreground leading-relaxed">

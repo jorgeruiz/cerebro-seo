@@ -53,6 +53,7 @@ export interface PlanTaskFullView {
   resultUrls: string[];
   failureReason: string | null;
   voidReason: string | null;
+  generatorVersion: string | null;
   completedAt: string | null;
   steps: PlanStepView[];
   runs: TaskRunView[];
@@ -173,6 +174,7 @@ export async function getPlanData(
       resultUrls: t.resultUrls,
       failureReason: t.failureReason,
       voidReason: t.voidReason,
+      generatorVersion: t.generatorVersion ?? null,
       completedAt: t.completedAt?.toISOString() ?? null,
       steps: t.steps.map((s) => ({
         id: s.id,

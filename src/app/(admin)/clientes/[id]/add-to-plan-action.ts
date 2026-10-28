@@ -15,13 +15,17 @@ import { resolveSite } from "@/server/sites/resolve-site";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
+import { getTemplate, applyCapabilities, resolveTaskMode, type ActionType, type Platform } from "@/lib/task-templates";
 
 export interface AddToPlanInput {
   clientId: string;
   title: string;
   objective: string;
   kind: "CONTENT" | "CODE" | "SETUP";
-  mode: "AI" | "HYBRID" | "HUMAN";
+  /** @deprecated Use actionType instead. Kept for backward compat — ignored if actionType is set. */
+  mode?: "AI" | "HYBRID" | "HUMAN";
+  /** Action type for template lookup. Determines mode via resolveTaskMode. */
+  actionType?: string;
   priority: number; // 1-5
   effort: "LOW" | "MEDIUM" | "HIGH";
   category: string; // "tecnico", "blog", "meta", "schema", etc.
@@ -47,7 +51,7 @@ export async function actionAddToPlan(
     return { ok: false, error: "Solo administradores pueden agregar al plan." };
   }
 
-  const { clientId, title, objective, kind, mode, priority, effort, category, sourceRef } = input;
+  const { clientId, title, objective, kind, priority, effort, category, sourceRef } = input;
 
   // Validate client
   const client = await prisma.client.findUnique({
@@ -105,17 +109,24 @@ export async function actionAddToPlan(
   // Create task
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
-  // Modo según plataforma:
-  // - NEXTJS: respetar el modo que pasó el módulo
-  // - WORDPRESS/MIGRACION: HYBRID no existe → HUMAN; AI y HUMAN se respetan (plugin tiene endpoints de escritura)
-  // - OTRO/null: todo HUMAN
-  let effectiveMode: "AI" | "HYBRID" | "HUMAN";
-  if (site.platform === "NEXTJS") {
-    effectiveMode = mode;
-  } else if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
-    effectiveMode = mode === "HYBRID" ? "HUMAN" : mode;
-  } else {
-    effectiveMode = "HUMAN";
+  // Derive mode from template if actionType is provided
+  const { actionType, mode } = input;
+  let effectiveMode: "AI" | "HYBRID" | "HUMAN" = mode ?? "HUMAN";
+
+  if (actionType && (site.platform === "NEXTJS" || site.platform === "WORDPRESS")) {
+    const template = getTemplate(actionType as ActionType, site.platform as Platform);
+    if (template) {
+      // For WP, we'd need capabilities — but at addToPlan time we don't have them.
+      // The decomposer will apply capabilities. For now, use template steps as-is.
+      effectiveMode = resolveTaskMode(template.steps);
+    }
+  } else if (!actionType) {
+    // Legacy: mode passed directly (backward compat)
+    if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
+      effectiveMode = mode === "HYBRID" ? "HUMAN" : (mode ?? "HUMAN");
+    } else if (!site.platform || site.platform === "OTRO") {
+      effectiveMode = "HUMAN";
+    }
   }
 
   const task = await prisma.planTask.create({
