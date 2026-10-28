@@ -15,7 +15,7 @@ import { resolveSite } from "@/server/sites/resolve-site";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
-import { getTemplate, applyCapabilities, resolveTaskMode, type ActionType, type Platform } from "@/lib/task-templates";
+import { getTemplate, resolveTaskMode, type ActionType, type Platform } from "@/lib/task-templates";
 
 export interface AddToPlanInput {
   clientId: string;
