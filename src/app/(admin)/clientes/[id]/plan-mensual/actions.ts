@@ -949,3 +949,51 @@ export async function actionPublishNextjsBlog(
     return { ok: false, error: msg };
   }
 }
+
+// ─── Upload plan to Notion (Bitácora + Estrategia) ─────────────────────────
+
+export async function actionUploadToNotion(
+  planId: string
+): Promise<{
+  ok: true;
+  bitacoraCount: number;
+  bitacoraTotal: number;
+  estrategia: { id: string; url: string; wasUpdate: boolean } | null;
+  errors: string[];
+} | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    include: {
+      tasks: { select: { status: true } },
+    },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+
+  // Check all tasks are DONE (or VOIDED)
+  const pendingTasks = plan.tasks.filter((t) => t.status !== "DONE" && t.status !== "VOIDED");
+  if (pendingTasks.length > 0) {
+    return { ok: false, error: `${pendingTasks.length} tarea(s) aún no completadas. El plan debe estar al 100%.` };
+  }
+
+  try {
+    const { uploadPlanToNotion } = await import("@/lib/notion-bitacora");
+    const result = await uploadPlanToNotion(planId, session.user.email ?? "cerebro-seo");
+
+    return {
+      ok: true,
+      bitacoraCount: result.bitacoraCount,
+      bitacoraTotal: result.bitacoraTotal,
+      estrategia: result.estrategia,
+      errors: result.errors,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}

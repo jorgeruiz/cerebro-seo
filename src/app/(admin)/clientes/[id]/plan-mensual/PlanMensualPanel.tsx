@@ -22,6 +22,7 @@ import {
   actionSubmitForReview,
   actionMergePlan,
   actionPublishNextjsBlog,
+  actionUploadToNotion,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -483,6 +484,70 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 }
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+// ─── Notion Upload Button ───────────────────────────────────────────────────
+
+function NotionUploadButton({ planId }: { planId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<{
+    bitacoraCount: number;
+    bitacoraTotal: number;
+    estrategia: { url: string; wasUpdate: boolean } | null;
+    errors: string[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleUpload = () => {
+    setError(null);
+    setResult(null);
+    startTransition(async () => {
+      const res = await actionUploadToNotion(planId);
+      if (!res.ok) {
+        setError(res.error);
+      } else {
+        setResult({
+          bitacoraCount: res.bitacoraCount,
+          bitacoraTotal: res.bitacoraTotal,
+          estrategia: res.estrategia,
+          errors: res.errors,
+        });
+      }
+    });
+  };
+
+  if (result) {
+    return (
+      <div className="text-right space-y-0.5">
+        <p className="font-mono text-[0.6rem] text-emerald-600">
+          Bitácora: {result.bitacoraCount}/{result.bitacoraTotal}
+          {result.estrategia && (
+            <> · <a href={result.estrategia.url} target="_blank" rel="noopener noreferrer"
+              className="underline hover:text-emerald-500">
+              Estrategia {result.estrategia.wasUpdate ? "actualizada" : "creada"}
+            </a></>
+          )}
+        </p>
+        {result.errors.length > 0 && (
+          <p className="font-mono text-[0.55rem] text-destructive">{result.errors.join("; ")}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && <p className="font-mono text-[0.6rem] text-destructive mb-1">{error}</p>}
+      <button
+        onClick={handleUpload}
+        disabled={isPending}
+        className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+      >
+        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+        Cargar a Notion
+      </button>
+    </div>
+  );
+}
 
 function NextjsBlogPublishBlock({ task }: { task: PlanTaskFullView }) {
   const [isPending, startTransition] = useTransition();
@@ -1065,14 +1130,17 @@ function PlanStatusBanner({
           <div>
             <p className="text-sm font-semibold text-foreground">Plan al 100%</p>
             <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-              Todas las tareas terminadas. Pasa a revision para ver el preview y hacer merge.
+              Todas las tareas terminadas. Pasa a revisión o carga el informe a Notion.
             </p>
           </div>
-          <button onClick={onSubmitReview} disabled={isActing}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
-            {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-            Pasar a revision
-          </button>
+          <div className="flex items-center gap-2">
+            <NotionUploadButton planId={plan.id} />
+            <button onClick={onSubmitReview} disabled={isActing}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+              {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              Pasar a revisión
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1117,12 +1185,17 @@ function PlanStatusBanner({
   if (plan.status === "PUBLISHED") {
     return (
       <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
-        <p className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4" /> Plan publicado
-        </p>
-        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-          Merge completado{plan.mergedAt ? ` el ${new Date(plan.mergedAt).toLocaleDateString("es-MX")}` : ""}.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" /> Plan publicado
+            </p>
+            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+              Merge completado{plan.mergedAt ? ` el ${new Date(plan.mergedAt).toLocaleDateString("es-MX")}` : ""}.
+            </p>
+          </div>
+          <NotionUploadButton planId={plan.id} />
+        </div>
       </div>
     );
   }
