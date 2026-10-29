@@ -996,3 +996,47 @@ export async function actionUploadToNotion(
     return { ok: false, error: msg };
   }
 }
+
+// ─── Verify completed task ─────────────────────────────────────────────────
+
+export async function actionVerifyTask(
+  taskId: string
+): Promise<{
+  ok: true;
+  taskTitle: string;
+  checks: Array<{ label: string; url: string; status: string; detail: string }>;
+  allPassed: boolean;
+} | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "No autenticado." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: {
+      site: { select: { url: true } },
+      runs: {
+        where: { status: "SUCCEEDED" },
+        select: { changedRoutes: true },
+      },
+    },
+  });
+
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+  if (task.status !== "DONE") return { ok: false, error: "La tarea no está completada." };
+
+  try {
+    const { verifyTask } = await import("@/lib/task-verifier");
+    const result = await verifyTask(
+      {
+        title: task.title,
+        category: task.category,
+        resultUrls: task.resultUrls,
+        runs: task.runs,
+      },
+      task.site.url
+    );
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}

@@ -23,6 +23,7 @@ import {
   actionMergePlan,
   actionPublishNextjsBlog,
   actionUploadToNotion,
+  actionVerifyTask,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -485,6 +486,63 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
 
+// ─── Verify Task Button ─────────────────────────────────────────────────────
+
+function VerifyTaskButton({ taskId }: { taskId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<{
+    checks: Array<{ label: string; url: string; status: string; detail: string }>;
+    allPassed: boolean;
+  } | null>(null);
+
+  const handleVerify = () => {
+    setResult(null);
+    startTransition(async () => {
+      const res = await actionVerifyTask(taskId);
+      if (res.ok) {
+        setResult({ checks: res.checks, allPassed: res.allPassed });
+      }
+    });
+  };
+
+  if (result) {
+    return (
+      <div className="w-full mt-1">
+        <div className="bg-muted/20 rounded px-2 py-1.5 space-y-0.5">
+          {result.checks.map((check, i) => (
+            <div key={i} className="font-mono text-[0.6rem] flex items-center gap-1.5">
+              <span className={
+                check.status === "pass" ? "text-emerald-500" :
+                check.status === "warn" ? "text-yellow-500" :
+                check.status === "skip" ? "text-muted-foreground" :
+                "text-destructive"
+              }>
+                {check.status === "pass" ? "✓" : check.status === "warn" ? "⚠" : check.status === "skip" ? "—" : "✗"}
+              </span>
+              <span className="text-muted-foreground">{check.label}:</span>
+              <span className="text-foreground truncate">{check.detail}</span>
+            </div>
+          ))}
+          {result.allPassed && (
+            <p className="font-mono text-[0.55rem] text-emerald-500 pt-0.5">Todo verificado correctamente</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleVerify}
+      disabled={isPending}
+      className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+    >
+      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+      Verificar
+    </button>
+  );
+}
+
 // ─── Notion Upload Button ───────────────────────────────────────────────────
 
 function NotionUploadButton({ planId }: { planId: string }) {
@@ -850,11 +908,10 @@ function TaskCard({
             </div>
           )}
 
-          {/* DONE — Ver en sitio + Ver contenido */}
+          {/* DONE — Ver en sitio + Ver contenido + Verificar */}
           {task.status === "DONE" && (() => {
             const routes = Array.from(new Set(task.runs.flatMap((r) => r.changedRoutes)));
             const isContent = task.kind === "CONTENT";
-            if (routes.length === 0 && !isContent) return null;
             return (
               <div className="px-4 py-3 border-t border-border flex items-center gap-2 flex-wrap">
                 {routes.length > 0 && routes.map((route) => (
@@ -880,6 +937,7 @@ function TaskCard({
                     <WrapText className="h-3 w-3" /> Ver contenido
                   </button>
                 )}
+                <VerifyTaskButton taskId={task.id} />
               </div>
             );
           })()}
