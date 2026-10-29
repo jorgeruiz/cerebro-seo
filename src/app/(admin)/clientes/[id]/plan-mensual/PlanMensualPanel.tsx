@@ -1158,11 +1158,14 @@ function PlanStatusBanner({
               Revisa el preview y haz merge cuando estes listo.
             </p>
           </div>
-          <button onClick={onMerge} disabled={isActing}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
-            {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitMerge className="h-3 w-3" />}
-            Merge a produccion
-          </button>
+          <div className="flex items-center gap-2">
+            <NotionUploadButton planId={plan.id} />
+            <button onClick={onMerge} disabled={isActing}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+              {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitMerge className="h-3 w-3" />}
+              Merge a producción
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-4 font-mono text-[0.6rem]">
           {plan.prUrl && (
