@@ -243,22 +243,26 @@ export async function sendEstrategia(entry: EstrategiaEntry): Promise<{ id: stri
 
 export interface NotionUploadResult {
   bitacoraCount: number;
+  bitacoraFailed: string[];
   bitacoraTotal: number;
   estrategia: { id: string; url: string; wasUpdate: boolean } | null;
-  errors: string[];
+  estrategiaError: string | null;
+  /** The report draft is always persisted in MonthlyPlan.notionReport — never lost */
+  draftSaved: boolean;
 }
 
 /**
  * Uploads a completed plan to Notion:
- * 1. One Bitácora entry per DONE task
- * 2. One Estrategia Mensual with objectives + plan summary
+ * 1. Generate report text and SAVE DRAFT to DB (never lost)
+ * 2. Send Bitácora entries (one per task) — persist IDs
+ * 3. Send Estrategia Mensual — persist ID
+ *
+ * Idempotent: re-running skips bitácora entries already sent.
  */
 export async function uploadPlanToNotion(
   planId: string,
   uploadedByEmail: string,
 ): Promise<NotionUploadResult> {
-  const errors: string[] = [];
-
   const plan = await prisma.monthlyPlan.findUnique({
     where: { id: planId },
     include: {
@@ -267,6 +271,7 @@ export async function uploadPlanToNotion(
         where: { status: "DONE" },
         orderBy: { order: "asc" },
         select: {
+          id: true,
           title: true,
           kind: true,
           category: true,
@@ -284,12 +289,40 @@ export async function uploadPlanToNotion(
   });
 
   if (!plan || !plan.client.cerebroClientId) {
-    return { bitacoraCount: 0, bitacoraTotal: 0, estrategia: null, errors: ["Plan o cerebroClientId no encontrado"] };
+    return { bitacoraCount: 0, bitacoraFailed: [], bitacoraTotal: 0, estrategia: null, estrategiaError: "Plan o cerebroClientId no encontrado", draftSaved: false };
   }
 
   const clienteId = toNotionUuid(plan.client.cerebroClientId);
   const clienteNombre = plan.client.name;
   const fecha = new Date().toISOString().slice(0, 10);
+
+  // ── Step 1: Generate report text and save draft ─────────────────────────
+  const objetivos = plan.tasks
+    .map((t, i) => `${i + 1}. ${t.title}`)
+    .join("\n");
+
+  const planSummary = plan.tasks
+    .map((t) => {
+      const urls = t.resultUrls;
+      const routes = t.runs.flatMap((r) => r.changedRoutes);
+      const result = urls.length > 0 ? urls.join(", ") : routes.length > 0 ? routes.join(", ") : "—";
+      return `• ${t.title}\n  Categoría: ${t.category} | Resultado: ${result}`;
+    })
+    .join("\n\n");
+
+  const reportDraft = {
+    objetivos: `Objetivos del plan ${plan.month}:\n\n${objetivos}`,
+    plan: `Trabajo realizado:\n\n${planSummary}`,
+    generatedAt: new Date().toISOString(),
+    uploadedBy: uploadedByEmail,
+    taskCount: plan.tasks.length,
+  };
+
+  // ALWAYS persist the draft — this is the safety net
+  await prisma.monthlyPlan.update({
+    where: { id: planId },
+    data: { notionReport: reportDraft as unknown as Parameters<typeof prisma.monthlyPlan.update>[0]["data"]["notionReport"] },
+  });
 
   const areaMap: Record<string, string> = {
     CONTENT: "Contenido",
@@ -297,9 +330,16 @@ export async function uploadPlanToNotion(
     SETUP: "SEO",
   };
 
-  // ── 1. Bitácora: one entry per task ────────────────────────────────────
-  let bitacoraCount = 0;
+  // ── Step 2: Bitácora entries (skip already-sent tasks) ──────────────────
+  const alreadySentIds = new Set(plan.notionBitacoraIds ?? []);
+  let bitacoraCount = alreadySentIds.size;
+  const bitacoraFailed: string[] = [];
+  const newBitacoraIds: string[] = [...(plan.notionBitacoraIds ?? [])];
+
   for (const task of plan.tasks) {
+    // Skip if already sent in a previous attempt
+    if (alreadySentIds.has(task.id)) continue;
+
     const routes = task.runs.flatMap((r) => r.changedRoutes);
     const urls = task.resultUrls;
     const resultado = urls.length > 0
@@ -319,47 +359,73 @@ export async function uploadPlanToNotion(
       resultadoObtenido: resultado,
       impacto: task.kind === "CONTENT" ? "Alto" : "Medio",
     });
-    if (ok) bitacoraCount++;
+
+    if (ok) {
+      bitacoraCount++;
+      newBitacoraIds.push(task.id);
+    } else {
+      bitacoraFailed.push(task.title);
+    }
   }
 
-  // ── 2. Estrategia Mensual ──────────────────────────────────────────────
-  // Build objectives and plan from tasks
-  const objetivos = plan.tasks
-    .map((t, i) => `${i + 1}. ${t.title}`)
-    .join("\n");
-
-  const planSummary = plan.tasks
-    .map((t) => {
-      const urls = t.resultUrls;
-      const routes = t.runs.flatMap((r) => r.changedRoutes);
-      const result = urls.length > 0 ? urls.join(", ") : routes.length > 0 ? routes.join(", ") : "—";
-      return `• ${t.title}\n  Categoría: ${t.category} | Resultado: ${result}`;
-    })
-    .join("\n\n");
-
-  const estrategia = await sendEstrategia({
-    clienteId,
-    clienteNombre,
-    mes: plan.month,
-    objetivos: `Objetivos del plan ${plan.month}:\n\n${objetivos}`,
-    plan: `Trabajo realizado:\n\n${planSummary}`,
-    servicio: "SEO",
-    estado: "Borrador",
+  // Persist bitácora progress
+  await prisma.monthlyPlan.update({
+    where: { id: planId },
+    data: { notionBitacoraIds: newBitacoraIds },
   });
 
-  if (!estrategia) {
-    errors.push("No se pudo crear/actualizar la Estrategia Mensual en Notion");
+  // ── Step 3: Estrategia Mensual (skip if already created) ────────────────
+  let estrategia: { id: string; url: string; wasUpdate: boolean } | null = null;
+  let estrategiaError: string | null = null;
+
+  if (plan.notionEstrategiaId) {
+    // Already sent — return existing
+    estrategia = {
+      id: plan.notionEstrategiaId,
+      url: `https://www.notion.so/${plan.notionEstrategiaId.replace(/-/g, "")}`,
+      wasUpdate: true,
+    };
+  } else {
+    estrategia = await sendEstrategia({
+      clienteId,
+      clienteNombre,
+      mes: plan.month,
+      objetivos: reportDraft.objetivos,
+      plan: reportDraft.plan,
+      servicio: "SEO",
+      estado: "Borrador",
+    });
+
+    if (estrategia) {
+      await prisma.monthlyPlan.update({
+        where: { id: planId },
+        data: { notionEstrategiaId: estrategia.id },
+      });
+    } else {
+      estrategiaError = "Falló la conexión con Cerebro web. El borrador está guardado — puedes reintentar.";
+    }
+  }
+
+  // ── Step 4: Mark as fully uploaded if everything succeeded ──────────────
+  if (bitacoraFailed.length === 0 && estrategia) {
+    await prisma.monthlyPlan.update({
+      where: { id: planId },
+      data: { notionUploadedAt: new Date() },
+    });
   }
 
   console.log(
-    `[notion-upload] Plan ${plan.month}: ${bitacoraCount}/${plan.tasks.length} bitácora, ` +
-    `estrategia: ${estrategia ? (estrategia.wasUpdate ? "actualizada" : "creada") : "FALLÓ"}`
+    `[notion-upload] Plan ${plan.month}: bitácora ${bitacoraCount}/${plan.tasks.length}` +
+    (bitacoraFailed.length > 0 ? ` (${bitacoraFailed.length} fallidas)` : "") +
+    `, estrategia: ${estrategia ? (estrategia.wasUpdate ? "existente" : "creada") : "FALLÓ"}`
   );
 
   return {
     bitacoraCount,
+    bitacoraFailed,
     bitacoraTotal: plan.tasks.length,
     estrategia,
-    errors,
+    estrategiaError,
+    draftSaved: true,
   };
 }

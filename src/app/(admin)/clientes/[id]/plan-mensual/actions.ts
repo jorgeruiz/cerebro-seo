@@ -952,9 +952,11 @@ export async function actionUploadToNotion(
 ): Promise<{
   ok: true;
   bitacoraCount: number;
+  bitacoraFailed: string[];
   bitacoraTotal: number;
   estrategia: { id: string; url: string; wasUpdate: boolean } | null;
-  errors: string[];
+  estrategiaError: string | null;
+  draftSaved: boolean;
 } | { ok: false; error: string }> {
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
@@ -983,9 +985,11 @@ export async function actionUploadToNotion(
     return {
       ok: true,
       bitacoraCount: result.bitacoraCount,
+      bitacoraFailed: result.bitacoraFailed,
       bitacoraTotal: result.bitacoraTotal,
       estrategia: result.estrategia,
-      errors: result.errors,
+      estrategiaError: result.estrategiaError,
+      draftSaved: result.draftSaved,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -491,9 +491,11 @@ function NotionUploadButton({ planId }: { planId: string }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<{
     bitacoraCount: number;
+    bitacoraFailed: string[];
     bitacoraTotal: number;
     estrategia: { url: string; wasUpdate: boolean } | null;
-    errors: string[];
+    estrategiaError: string | null;
+    draftSaved: boolean;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -505,30 +507,62 @@ function NotionUploadButton({ planId }: { planId: string }) {
       if (!res.ok) {
         setError(res.error);
       } else {
-        setResult({
-          bitacoraCount: res.bitacoraCount,
-          bitacoraTotal: res.bitacoraTotal,
-          estrategia: res.estrategia,
-          errors: res.errors,
-        });
+        setResult(res);
       }
     });
   };
 
+  const hasErrors = result && (result.bitacoraFailed.length > 0 || result.estrategiaError);
+  const allSuccess = result && !hasErrors;
+
   if (result) {
     return (
-      <div className="text-right space-y-0.5">
-        <p className="font-mono text-[0.6rem] text-emerald-600">
+      <div className="text-right space-y-1">
+        {/* Bitácora status */}
+        <p className={cn("font-mono text-[0.6rem]", result.bitacoraFailed.length > 0 ? "text-yellow-600" : "text-emerald-600")}>
           Bitácora: {result.bitacoraCount}/{result.bitacoraTotal}
-          {result.estrategia && (
-            <> · <a href={result.estrategia.url} target="_blank" rel="noopener noreferrer"
-              className="underline hover:text-emerald-500">
-              Estrategia {result.estrategia.wasUpdate ? "actualizada" : "creada"}
-            </a></>
-          )}
+          {result.bitacoraFailed.length > 0 && ` (${result.bitacoraFailed.length} fallidas)`}
         </p>
-        {result.errors.length > 0 && (
-          <p className="font-mono text-[0.55rem] text-destructive">{result.errors.join("; ")}</p>
+
+        {/* Estrategia status */}
+        {result.estrategia ? (
+          <p className="font-mono text-[0.6rem] text-emerald-600">
+            <a href={result.estrategia.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-emerald-500">
+              Estrategia {result.estrategia.wasUpdate ? "ya existía" : "creada"} ↗
+            </a>
+          </p>
+        ) : result.estrategiaError ? (
+          <p className="font-mono text-[0.55rem] text-destructive">{result.estrategiaError}</p>
+        ) : null}
+
+        {/* Failed bitácora details */}
+        {result.bitacoraFailed.length > 0 && (
+          <p className="font-mono text-[0.55rem] text-yellow-600">
+            Fallidas: {result.bitacoraFailed.join(", ")}
+          </p>
+        )}
+
+        {/* Draft saved notice */}
+        {result.draftSaved && hasErrors && (
+          <p className="font-mono text-[0.55rem] text-muted-foreground">
+            Borrador guardado — puedes reintentar sin perder datos.
+          </p>
+        )}
+
+        {/* Retry button if there were errors */}
+        {hasErrors && (
+          <button
+            onClick={handleUpload}
+            disabled={isPending}
+            className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1 mt-1 h-6 text-[0.6rem]")}
+          >
+            {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+            Reintentar
+          </button>
+        )}
+
+        {allSuccess && (
+          <p className="font-mono text-[0.55rem] text-emerald-500">✓ Todo cargado correctamente</p>
         )}
       </div>
     );
