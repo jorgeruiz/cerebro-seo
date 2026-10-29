@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-10-26 (v8 — Tres carriles de ejecución, data steps, humanReason)
+**Última actualización:** 2026-10-29 (v9 — Notion upload, verificación post-tarea, templates, pre-push hook)
 
 ---
 
@@ -192,9 +192,21 @@ Tres carriles de ejecución:
 - **Carril de código** (meta tags, landings, técnico): rama del plan → agente con repo → build → PR → merge.
 - **Carril de contenido** (blogs Next.js): Claude genera datos del artículo → staged en PlanStep → user revisa → "Publicar" → commit atómico a main vía GitHub API. Sin rama, sin PR, sin merge.
 - **Carril de datos** (keyword research, análisis): APIs internas (DataForSEO, GSC, GA4) + Claude → stagedChange → HUMAN aprueba → AI aplica a BD. Sin terminal ni repo.
-  - Preflight: catalog-schemas.md debe tener `## Blog` activo (no "No implementado").
-  - Guard: slug no puede ya existir en main.
-  - Detección tolerante: `hasSection(schemas, "Blog")` acepta decoradores pero rechaza "## Blog Post" y "## Blogs".
+
+**Plantillas determinísticas** (`src/lib/task-templates.ts`):
+- Catálogo por (actionType × platform): create_blog, update_meta, keyword_research, schema, internal_links, edit_page_text, create_landing, upload_media, generate_image.
+- `resolveTaskMode(steps)` = única fuente de verdad para task.mode.
+- `applyCapabilities(template, wpCaps)` degrada AI→HUMAN si falta endpoint WP.
+- Si hay template → decomposer usa pasos fijos; si no → generación libre con LLM.
+
+**Post-completion** (`src/lib/task-verifier.ts`, `src/lib/notion-bitacora.ts`):
+- Botón "Verificar": fetch URL producción → meta tags, schema, HTTP status (✓/⚠/✗).
+- Botón "Cargar a Notion": Bitácora (1 entrada/tarea) + Estrategia Mensual.
+  - Draft persistido en MonthlyPlan.notionReport ANTES de enviar.
+  - Idempotente: notionBitacoraIds y notionEstrategiaId evitan duplicados en retry.
+  - Cerebro web endpoints: POST /api/internal/bitacora y /api/internal/estrategia.
+
+**Pre-push hook**: `.git/hooks/pre-push` corre `next lint` antes de cada push.
 
 **Lógica AEO/GEO y análisis:**
 ```

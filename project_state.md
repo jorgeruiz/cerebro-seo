@@ -2,9 +2,38 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-28 (PLAN-FIXES — templates, secuencia, filtros, bitácora, generatorVersion)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Deploy. Probar plantillas con Quicsa (Next.js) y Química Ecológica (WP). Verificar Bitácora de Notion.
+**Última actualización:** 2026-10-29 (NOTION-UPLOAD + VERIFY — Cargar a Notion con borrador persistido + verificación post-tarea)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Deploy cerebro-web (endpoint /api/internal/estrategia) → deploy cerebro-seo. Probar "Cargar a Notion" + "Verificar" con un plan real.
+
+### ✅ NOTION-UPLOAD + VERIFY — Cargar a Notion y verificación (2026-10-28/29)
+
+**Botón "Cargar a Notion"** — visible cuando plan está al 100% (ACTIVE, IN_REVIEW, PUBLISHED):
+- Bitácora: 1 entrada por tarea DONE vía POST /api/internal/bitacora (Cerebro web)
+- Estrategia Mensual: objetivos + resumen vía POST /api/internal/estrategia (nuevo endpoint en cerebro-web)
+- Borrador siempre persistido en MonthlyPlan.notionReport ANTES de enviar
+- Idempotente: tareas ya enviadas se saltan en retry (notionBitacoraIds)
+- Estrategia no se duplica (notionEstrategiaId)
+- UI muestra resultado detallado + botón "Reintentar" si hay errores parciales
+- Trigger explícito (botón), no automático en merge — funciona igual para Next.js y WP
+
+**Botón "Verificar"** — visible en cada tarea DONE:
+- Fetch a URL de producción + verificación de meta tags, schema, HTTP status
+- Resultado inline: ✓ pass / ⚠ warn / ✗ fail por check
+
+**Pre-push hook** — `next lint` corre antes de cada push. Evita errores de lint en deploy.
+
+**Archivos nuevos:**
+- `cerebro-web/app/api/internal/estrategia/route.ts` — endpoint interno Bearer auth
+- `src/lib/task-verifier.ts` — verifyTask, verifyMetaTags, verifyJsonLd
+
+**Archivos modificados:**
+- `prisma/schema.prisma` — MonthlyPlan: notionReport, notionBitacoraIds, notionEstrategiaId, notionUploadedAt
+- `src/lib/notion-bitacora.ts` — sendEstrategia, uploadPlanToNotion (con draft + idempotencia)
+- `src/app/.../actions.ts` — actionUploadToNotion, actionVerifyTask; quitado fire-and-forget de merge
+- `src/app/.../PlanMensualPanel.tsx` — NotionUploadButton, VerifyTaskButton
+
+**Migraciones:** add_notion_report_fields
 
 ### ✅ PLAN-FIXES — Correcciones Plan Mensual (2026-10-28)
 
