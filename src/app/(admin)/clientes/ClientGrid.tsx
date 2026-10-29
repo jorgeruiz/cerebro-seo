@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Clock, Search, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Search, X, ArrowUpDown } from "lucide-react";
 import type { CycleStatus } from "@prisma/client";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -12,12 +12,17 @@ export interface ClientRow {
   name: string;
   domain: string | null;
   services: string[];
+  createdAt: string;
+  /** Most recent plan updatedAt — proxy for "last activity" */
+  lastActivity: string | null;
   cycles: Array<{
     status: CycleStatus;
     tasks: Array<{ id: string }>;
   }>;
   insights: Array<{ id: string }>;
 }
+
+type SortMode = "alerts" | "alpha" | "recent";
 
 const SERVICE_LABEL: Record<string, { label: string; color: string }> = {
   seo:        { label: "SEO",       color: "bg-primary/10 border-ds-gd text-ds-green" },
@@ -35,10 +40,16 @@ const CYCLE_STATUS_BADGE: Record<CycleStatus, { label: string; cls: string }> = 
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "alerts", label: "Alertas" },
+  { value: "alpha", label: "A → Z" },
+  { value: "recent", label: "Recientes" },
+];
+
 export function ClientGrid({ clients }: { clients: ClientRow[] }) {
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortMode>("alerts");
 
-  // Filtrar + ordenar client-side
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -50,8 +61,16 @@ export function ClientGrid({ clients }: { clients: ClientRow[] }) {
         )
       : clients;
 
-    // Ordenar: alertas críticas primero → tareas pendientes → nombre
     return [...matched].sort((a, b) => {
+      if (sort === "alpha") {
+        return a.name.localeCompare(b.name, "es");
+      }
+      if (sort === "recent") {
+        const dateA = a.lastActivity ?? a.createdAt;
+        const dateB = b.lastActivity ?? b.createdAt;
+        return dateB.localeCompare(dateA); // newest first
+      }
+      // "alerts" — default: alerts → pending tasks → name
       const alertDiff = b.insights.length - a.insights.length;
       if (alertDiff !== 0) return alertDiff;
       const taskA = a.cycles[0]?.tasks.length ?? 0;
@@ -59,29 +78,47 @@ export function ClientGrid({ clients }: { clients: ClientRow[] }) {
       if (taskB !== taskA) return taskB - taskA;
       return a.name.localeCompare(b.name, "es");
     });
-  }, [clients, query]);
+  }, [clients, query, sort]);
 
   return (
     <div className="space-y-4">
 
-      {/* Buscador */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por nombre o dominio…"
-          className="w-full pl-9 pr-9 py-2 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 font-mono transition-colors"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
+      {/* Buscador + Ordenar */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre o dominio…"
+            className="w-full pl-9 pr-9 py-2 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 font-mono transition-colors"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setSort(opt.value)}
+              className={`font-mono text-[0.65rem] px-2 py-1.5 rounded border transition-colors ${
+                sort === opt.value
+                  ? "bg-primary/10 border-primary/40 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Contador */}

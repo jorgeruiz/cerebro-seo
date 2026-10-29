@@ -16,7 +16,7 @@ async function getClients(_role: UserRole, _userEmail: string, filterSeo: boolea
   const baseWhere = { status: ClientStatus.ACTIVE };
   const where = filterSeo ? { ...baseWhere, services: { has: "seo" } } : baseWhere;
 
-  return prisma.client.findMany({
+  const clients = await prisma.client.findMany({
     where,
     orderBy: { name: "asc" },
     include: {
@@ -35,8 +35,19 @@ async function getClients(_role: UserRole, _userEmail: string, filterSeo: boolea
         where: { severity: "critical", dismissed: false },
         select: { id: true },
       },
+      monthlyPlans: {
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        select: { updatedAt: true },
+      },
     },
   });
+
+  return clients.map((c) => ({
+    ...c,
+    createdAt: c.createdAt.toISOString(),
+    lastActivity: c.monthlyPlans[0]?.updatedAt.toISOString() ?? null,
+  }));
 }
 
 export default async function ClientesPage({
