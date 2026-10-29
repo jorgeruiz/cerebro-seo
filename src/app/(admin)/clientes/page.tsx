@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { ClientStatus, UserRole } from "@prisma/client";
 import { ServiceToggle } from "./ServiceToggle";
 import { ClientGrid } from "./ClientGrid";
+import { SyncButton } from "./SyncButton";
 
 
 async function getClients(_role: UserRole, _userEmail: string, filterSeo: boolean) {
@@ -74,6 +75,7 @@ export default async function ClientesPage({
         </div>
         <div className="flex items-center gap-3">
           <Suspense><ServiceToggle /></Suspense>
+          {isAdmin && <SyncButton />}
           {isAdmin && (
             <Link
               href="/clientes/nuevo"
