@@ -29,6 +29,8 @@ export interface AddToPlanInput {
   priority: number; // 1-5
   effort: "LOW" | "MEDIUM" | "HIGH";
   category: string; // "tecnico", "blog", "meta", "schema", etc.
+  /** SEO target keyword (2-6 words). Falls back to sourceRef.snapshot.keyword. */
+  targetKeyword?: string;
   sourceRef: {
     module: string;    // "keywords", "audit", "backlinks", "competencia", "ai-search", "insights", "contenido", "terminos-busqueda", "oportunidades"
     itemId?: string;   // ID del item específico (keyword, issue, etc.)
@@ -143,6 +145,9 @@ export async function actionAddToPlan(
       priority,
       effort: effort as "LOW" | "MEDIUM" | "HIGH",
       category,
+      targetKeyword: input.targetKeyword
+        ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
+        ?? null,
       sourceCandidateId: `module-${randomUUID().slice(0, 8)}`,
       sourceRef: sourceRef as unknown as InputJsonValue,
       status: "PLANNING",

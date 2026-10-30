@@ -6,6 +6,20 @@
 **Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY completas. S4b/S4d/S4e pendientes.
 **Próximo hito:** Deploy cerebro-web (endpoint /api/internal/estrategia) → deploy cerebro-seo. Probar "Cargar a Notion" + "Verificar" con un plan real.
 
+### ✅ KEYWORD-FIX — Keyword como dato de la tarea, no del título (2026-10-30)
+
+Problema: content_package fallaba porque usaba task.title ("Redactar artículo '...'") como keyword.
+
+Solución:
+- **PlanTask.targetKeyword**: campo dedicado, llenado desde candidata o sourceRef.snapshot.keyword
+- **resolveKeyword()**: payload.keyword → task.targetKeyword → texto entre comillas → sanitizado → WAITING_HUMAN
+- **parseClaudeJson()**: parser robusto que extrae {…} o […] de respuestas mixtas texto+JSON
+- **meta_title**: 50-65 chars, palabras significativas (no texto exacto para keywords largas)
+- **WAITING_HUMAN**: si Claude no genera JSON o falta keyword → paso pendiente con respuesta visible, no FAILED
+
+**Archivos nuevos:** keyword-resolver.ts, parse-claude-json.ts, tests (22 nuevos)
+**Modificados:** wp-executor.ts (keyword chain + JSON parser), task-processor.ts (WAITING_HUMAN signals), add-to-plan-action.ts (targetKeyword), schema.prisma (migration add_target_keyword)
+
 ### ✅ NOTION-UPLOAD + VERIFY — Cargar a Notion y verificación (2026-10-28/29)
 
 **Botón "Cargar a Notion"** — visible cuando plan está al 100% (ACTIVE, IN_REVIEW, PUBLISHED):

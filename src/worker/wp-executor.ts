@@ -68,7 +68,7 @@ export interface WpStepResult {
 export async function executeWpAiStep(
   cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
-  task: { title: string; objective: string; kind: string; category: string },
+  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null },
   step: { title: string; prompt: string | null; acceptanceCriteria: string[]; notes: string | null },
   taskId: string,
   imageCount = 0,
@@ -385,13 +385,27 @@ ${JSON.stringify(toCheck, null, 2)}`;
 async function executeContentPackage(
   cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
-  task: { title: string; objective: string; kind: string; category: string },
+  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null },
   action: WpStepAction,
   taskId: string,
 ): Promise<WpStepResult> {
   const kind = (action.payload?.kind as string) ?? "landing";
-  const keyword = (action.payload?.keyword as string) ?? task.title;
-  const pageTitle = (action.payload?.page_title as string) ?? task.title;
+
+  // Keyword resolution: payload → task.targetKeyword → quoted → sanitized → WAITING_HUMAN
+  const { resolveKeyword } = await import("@/lib/keyword-resolver");
+  const taskTargetKeyword = task.targetKeyword ?? null;
+  const keyword = resolveKeyword(
+    action.payload?.keyword as string | undefined,
+    taskTargetKeyword,
+    task.title,
+  );
+  if (!keyword) {
+    return {
+      notes: "waiting_human:missing_keyword",
+      stagedChange: undefined,
+    };
+  }
+  const pageTitle = (action.payload?.page_title as string) ?? keyword;
 
   // ── Step A: For optimization, fetch real Elementor data ────────────────────
   type ElementorWidget = { id?: string; type: string; text?: string; alt?: string };
@@ -510,8 +524,8 @@ REGLA DE SOURCING (crítica, no negociable):
 • Ejemplos inválidos: "Distribuimos bridas weld neck" (afirmación del cliente sin fuente → [COMPLETAR])
 
 FORMATO:
-• keyword, H1, meta_title: deben incluir EXACTAMENTE las palabras clave proporcionadas.
-• meta_title: 50-60 caracteres con keyword. meta_description: 140-160 caracteres.
+• keyword: incluir las palabras clave principales en H1 y meta_title. Pueden reorganizarse o abreviarse para cumplir con los límites.
+• meta_title: 50-65 caracteres. Si la keyword es larga, usa solo sus palabras significativas (no forzar el texto exacto). meta_description: 140-160 caracteres.
 • Cada sección: texto completo de 80-150 palabras (no resúmenes).
 • Tablas: usa filas reales si los datos son de conocimiento sectorial (normas ASME, clases de presión).
   Si dependen del inventario del cliente → [COMPLETAR: valor].
@@ -549,7 +563,7 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
     optimizationContext,
     "",
     `TIPO: ${kind}`,
-    `KEYWORD PRINCIPAL (incluir tal cual en H1 y meta_title): ${keyword}`,
+    `KEYWORD PRINCIPAL: ${keyword}`,
     `TÍTULO SEO DE PÁGINA: ${pageTitle}`,
     `OBJETIVO DE LA TAREA: ${task.objective}`,
     "",
@@ -566,6 +580,7 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
   };
 
   async function callClaude(messages: Anthropic.MessageParam[]): Promise<PkgResult> {
+    const { parseClaudeJson } = await import("@/lib/parse-claude-json");
     const res = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 8000,
@@ -573,14 +588,11 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
       messages,
     });
     const raw = res.content[0]?.type === "text" ? res.content[0].text : "{}";
-    const cl = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-    let p: Record<string, unknown>;
-    try {
-      p = JSON.parse(cl) as Record<string, unknown>;
-    } catch {
-      throw new Error(`content_package: JSON parse failed. Respuesta: ${cl.slice(0, 400)}`);
+    const parsed = parseClaudeJson<Record<string, unknown>>(raw);
+    if (!parsed.ok) {
+      throw new Error(`content_package_json_failed:${parsed.rawText.slice(0, 500)}`);
     }
-    return { pkg: p, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens };
+    return { pkg: parsed.data, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens };
   }
 
   let { pkg, inputTokens, outputTokens } = await callClaude([
@@ -588,29 +600,35 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
   ]);
 
   // Check keyword presence before possible retry
+  // Use significant words (>3 chars) — at least 60% must appear, not all
   const kwWordsForCheck = normStr(keyword).split(/\s+/).filter((w) => w.length > 3);
-  const hasKwInH1 = kwWordsForCheck.every((w) => normStr((pkg.h1 as string) ?? "").includes(w));
-  const hasKwInMeta = kwWordsForCheck.every((w) => normStr((pkg.meta_title as string) ?? "").includes(w));
+  const threshold = Math.ceil(kwWordsForCheck.length * 0.6);
+  const h1Norm = normStr((pkg.h1 as string) ?? "");
+  const metaNorm = normStr((pkg.meta_title as string) ?? "");
+  const h1Hits = kwWordsForCheck.filter((w) => h1Norm.includes(w)).length;
+  const metaHits = kwWordsForCheck.filter((w) => metaNorm.includes(w)).length;
+  const hasKwInH1 = h1Hits >= threshold;
+  const hasKwInMeta = metaHits >= threshold;
 
   if (!hasKwInH1 || !hasKwInMeta) {
     const missing: string[] = [];
-    if (!hasKwInH1) missing.push(`H1 actual: "${(pkg.h1 as string) ?? ""}"`);
-    if (!hasKwInMeta) missing.push(`meta_title actual: "${(pkg.meta_title as string) ?? ""}"`);
+    if (!hasKwInH1) missing.push(`H1 actual: "${(pkg.h1 as string) ?? ""}" (${h1Hits}/${kwWordsForCheck.length} palabras clave)`);
+    if (!hasKwInMeta) missing.push(`meta_title actual: "${(pkg.meta_title as string) ?? ""}" (${metaHits}/${kwWordsForCheck.length} palabras clave)`);
 
-    // Single retry with explicit correction prompt
+    // Single retry — flexible: include significant words, not exact string
     const retryMessages: Anthropic.MessageParam[] = [
       { role: "user", content: userPrompt },
       { role: "assistant", content: JSON.stringify(pkg) },
       {
         role: "user",
         content: [
-          `CORRECCIÓN REQUERIDA: el keyword "${keyword}" no aparece exactamente en:`,
+          `CORRECCIÓN: las palabras clave de "${keyword}" no aparecen suficientemente en:`,
           ...missing,
           "",
-          `Reescribe el JSON completo con estas correcciones OBLIGATORIAS:`,
-          `- h1 DEBE contener exactamente: "${keyword}"`,
-          `- meta_title DEBE contener exactamente: "${keyword}" (50-60 chars total)`,
-          `Responde SOLO con el JSON corregido completo.`,
+          `Reescribe el JSON con estas correcciones:`,
+          `- h1: incluir las palabras principales de "${keyword}" (pueden reorganizarse)`,
+          `- meta_title: incluir las palabras principales (máx 65 caracteres, no forzar texto exacto)`,
+          `Responde SOLO con el JSON corregido.`,
         ].join("\n"),
       },
     ];

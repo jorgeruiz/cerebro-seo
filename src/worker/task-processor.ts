@@ -906,6 +906,7 @@ async function processWpTask(
     kind: string;
     category: string;
     mode: string;
+    targetKeyword: string | null;
     resultUrls: string[];
     steps: Array<{
       id: string;
@@ -982,12 +983,14 @@ async function processWpTask(
         // Track image count for per-task limit
         if (stepResult.imageUrl) imageCount++;
 
-        // Image steps that need human intervention → WAITING_HUMAN
+        // Steps that need human intervention → WAITING_HUMAN
         const isImageHuman = stepResult.notes.startsWith("image:human-required")
           || stepResult.notes.startsWith("image:limit")
           || stepResult.notes.startsWith("image:qa-failed")
           || stepResult.notes.startsWith("image:failed")
-          || stepResult.notes.startsWith("image:upload-failed");
+          || stepResult.notes.startsWith("image:upload-failed")
+          || stepResult.notes.startsWith("waiting_human:")
+          || stepResult.notes.startsWith("content_package_json_failed:");
 
         if (isImageHuman) {
           await prisma.planStep.update({
@@ -1044,8 +1047,27 @@ async function processWpTask(
         console.log(`[wp-task] Step ${step.order} ✓ ${stepResult.notes.slice(0, 80)}`);
       } catch (stepErr) {
         const errMsg = stepErr instanceof Error ? stepErr.message : String(stepErr);
-        console.error(`[wp-task] Step ${step.order} ✗: ${errMsg}`);
 
+        // JSON parse failures → WAITING_HUMAN with Claude's response visible
+        if (errMsg.startsWith("content_package_json_failed:")) {
+          const claudeResponse = errMsg.replace("content_package_json_failed:", "");
+          console.warn(`[wp-task] Step ${step.order} → WAITING_HUMAN (JSON parse failed)`);
+          await prisma.planStep.update({
+            where: { id: step.id },
+            data: { status: "WAITING_HUMAN", notes: `Claude no devolvió JSON válido. Respuesta:\n${claudeResponse}` },
+          });
+          await prisma.planTask.update({
+            where: { id: taskId },
+            data: { status: "WAITING_HUMAN", resultUrls },
+          });
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "SUCCEEDED", logTail: `JSON parse failed — WAITING_HUMAN`, finishedAt: new Date() },
+          });
+          return;
+        }
+
+        console.error(`[wp-task] Step ${step.order} ✗: ${errMsg}`);
         await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
         await failRun(run.id, errMsg);
         await failTask(taskId, `Paso WP ${step.order} falló: ${errMsg}`);

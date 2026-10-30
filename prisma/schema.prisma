@@ -721,6 +721,7 @@ model PlanTask {
   priority           Int            @default(5)  // 1 = más urgente
   effort             TaskEffort     @default(MEDIUM)
   category           String         // "meta" | "blog" | "schema" | "tecnico" | etc.
+  targetKeyword      String?        // keyword objetivo SEO (2-6 palabras, sin verbos de instrucción)
   sourceCandidateId  String?        // ID de la candidata en el Análisis
   sourceRef          Json?          // { module, itemId, snapshot } — origen desde módulo (no Análisis)
   status             PlanTaskStatus @default(PLANNING)
