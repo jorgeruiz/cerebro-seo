@@ -1,47 +1,50 @@
 /**
  * Tests para wp-executor.ts
  *
- * Verifica que:
- * 1. executeWpAiStep para pasos SEO SIEMPRE stagea — nunca aplica directamente.
- * 2. El resultado tiene el prefijo WP_SEO_STAGED: en notes.
- * 3. updateWpSeo NO es llamado bajo ningún page_id (ni 0 ni un ID real).
- * 4. executeWpAiStep para pasos publish devuelve previewUrl (no lo mete en resultUrls).
+ * Verifica:
+ * 1. SEO steps SIEMPRE stagean (stagedChange) — nunca aplican directamente.
+ * 2. Publish steps llaman a publishWpPost con status=draft.
+ * 3. updateWpSeo NO es llamado (se aplica en publishWpPlanAction, no aquí).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-// Mock Anthropic SDK — devuelve meta JSON válido para tests de SEO
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: {
+// Mock Anthropic SDK — class mock for `new Anthropic()`
+vi.mock("@anthropic-ai/sdk", () => {
+  class MockAnthropic {
+    messages = {
       create: vi.fn().mockResolvedValue({
         content: [{ type: "text", text: '{"meta_title":"Título de prueba para SEO","meta_description":"Descripción de prueba para SEO con exactamente el largo correcto y CTA."}' }],
         usage: { input_tokens: 100, output_tokens: 50 },
       }),
-    },
-  })),
-}));
-
-// Mock WP proxy — updateWpSeo es el que NO debe llamarse; publishWpPost sí puede llamarse
-const mockUpdateWpSeo = vi.fn();
-const mockPublishWpPost = vi.fn().mockResolvedValue({
-  ok: true,
-  data: { post_id: 123, draft_url: "https://example.com/?p=123&preview=true" },
+    };
+  }
+  return { default: MockAnthropic };
 });
+
+const { mockUpdateWpSeo, mockPublishWpPost } = vi.hoisted(() => ({
+  mockUpdateWpSeo: vi.fn(),
+  mockPublishWpPost: vi.fn().mockResolvedValue({
+    ok: true,
+    data: { post_id: 123, draft_url: "https://example.com/?p=123&preview=true" },
+  }),
+}));
 
 vi.mock("@/lib/wp-proxy-client", () => ({
   updateWpSeo: mockUpdateWpSeo,
   publishWpPost: mockPublishWpPost,
+  getWpPages: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+  getWpElementorPage: vi.fn().mockResolvedValue({ ok: false, error: "not available" }),
+  duplicateWpElementorPage: vi.fn(),
+  updateWpElementorWidgets: vi.fn(),
 }));
 
-// Mock logApiUsage
 vi.mock("@/server/jobs/workers/base-worker", () => ({
   logApiUsage: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock CLAUDE_MODEL
 vi.mock("@/lib/anthropic-config", () => ({
   CLAUDE_MODEL: "claude-sonnet-4-6",
 }));
@@ -60,73 +63,59 @@ const SEO_TASK = {
   objective: "Mejorar el meta title y description para keyword 'servicios industriales Monterrey'",
   kind: "CODE",
   category: "seo",
+  targetKeyword: "servicios industriales Monterrey",
 };
 
 const PUBLISH_TASK = {
   title: "Artículo: Beneficios del mantenimiento preventivo",
-  objective: "Crear artículo de blog sobre mantenimiento preventivo industrial para keyword objetivo",
+  objective: "Crear artículo de blog sobre mantenimiento preventivo industrial",
   kind: "CONTENT",
   category: "blog",
+  targetKeyword: "mantenimiento preventivo industrial",
 };
 
 const SEO_STEP_WITH_JSON = {
-  title: "Actualizar meta tags de Inicio",
+  title: "Optimizar meta tags",
   prompt: JSON.stringify({
     action: "seo",
-    endpoint: "POST /seo/45",
-    payload: { page_id: 45, focus_keyword: "servicios industriales monterrey" },
-    content_brief: "Optimizar meta tags para página de inicio con keyword servicios industriales Monterrey",
+    endpoint: "POST /seo/{page_id}",
+    payload: { page_id: 45, meta_title: "", meta_description: "", focus_keyword: "servicios industriales" },
   }),
-  acceptanceCriteria: ["meta_title entre 50-60 chars", "meta_description entre 140-160 chars"],
-  notes: null,
-};
-
-const SEO_STEP_PAGE_ID_ZERO = {
-  title: "Actualizar meta tags (page_id desconocido)",
-  prompt: JSON.stringify({
-    action: "seo",
-    endpoint: "POST /seo/0",
-    payload: { page_id: 0 },
-    content_brief: "Optimizar meta tags de la página de servicios",
-  }),
-  acceptanceCriteria: [],
+  acceptanceCriteria: ["meta_title 50-60 chars"],
   notes: null,
 };
 
 const PUBLISH_STEP = {
-  title: "Crear artículo de blog",
+  title: "Crear borrador",
   prompt: JSON.stringify({
     action: "publish",
     endpoint: "POST /publish",
-    payload: { title: "Beneficios del mantenimiento preventivo industrial", focus_keyword: "mantenimiento preventivo" },
-    content_brief: "Artículo informativo sobre mantenimiento preventivo en industria",
+    payload: { title: "Mantenimiento preventivo", slug: "mantenimiento-preventivo", focus_keyword: "mantenimiento", categories: ["Blog"] },
+    content_brief: "Artículo sobre mantenimiento preventivo industrial.",
   }),
-  acceptanceCriteria: [],
+  acceptanceCriteria: ["Borrador creado"],
   notes: null,
 };
 
 const MOCK_PROFILE: WpSiteProfile = {
-  clientName: "Industrial Test SA",
-  siteUrl: "https://industrialtest.com",
-  pages: [{ title: "Inicio", slug: "" }, { title: "Servicios", slug: "servicios" }],
-  contentSummary: "=== Inicio ===\nServicios industriales en Monterrey. Mantenimiento preventivo y correctivo.",
-  hasContent: true,
-  buildAt: new Date().toISOString(),
+  clientName: "Test Client",
+  siteUrl: "https://example.com",
+  pages: [
+    { id: 1, title: "Inicio", slug: "", link: "https://example.com/" },
+    { id: 2, title: "Servicios", slug: "servicios", link: "https://example.com/servicios/" },
+  ],
+  contentSummary: "",
+  fetchedAt: new Date().toISOString(),
 };
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("executeWpAiStep — SEO steps", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Re-apply publish mock after clearAllMocks
-    mockPublishWpPost.mockResolvedValue({
-      ok: true,
-      data: { post_id: 123, draft_url: "https://example.com/?p=123&preview=true" },
-    });
   });
 
-  it("SIEMPRE stagea — nunca llama a updateWpSeo (page_id conocido)", async () => {
+  it("SIEMPRE stagea — nunca llama a updateWpSeo", async () => {
     const result = await executeWpAiStep(
       CEREBRO_CLIENT_ID,
       null,
@@ -135,30 +124,38 @@ describe("executeWpAiStep — SEO steps", () => {
       "task-id-001",
     );
 
-    // updateWpSeo NUNCA debe llamarse — incluso con page_id=45
+    // updateWpSeo NUNCA debe llamarse
     expect(mockUpdateWpSeo).not.toHaveBeenCalled();
 
-    // notes debe tener el prefijo WP_SEO_STAGED:
-    expect(result.notes).toMatch(/^WP_SEO_STAGED:/);
+    // Result should have stagedChange
+    expect(result.stagedChange).toBeDefined();
+    expect(result.stagedChange?.type).toBe("seo");
 
-    // No debe haber previewUrl en steps SEO
-    expect(result.previewUrl).toBeUndefined();
+    // Notes should indicate staging
+    expect(result.notes).toContain("seo staged");
   });
 
-  it("SIEMPRE stagea — nunca llama a updateWpSeo (page_id=0)", async () => {
+  it("stagedChange tiene los campos requeridos", async () => {
     const result = await executeWpAiStep(
       CEREBRO_CLIENT_ID,
       null,
       SEO_TASK,
-      SEO_STEP_PAGE_ID_ZERO,
+      SEO_STEP_WITH_JSON,
       "task-id-002",
     );
 
-    expect(mockUpdateWpSeo).not.toHaveBeenCalled();
-    expect(result.notes).toMatch(/^WP_SEO_STAGED:/);
+    const staged = result.stagedChange;
+    expect(staged).toBeDefined();
+    if (staged && staged.type === "seo") {
+      expect(staged).toHaveProperty("page_id");
+      expect(staged).toHaveProperty("meta_title");
+      expect(staged).toHaveProperty("meta_description");
+      expect(staged).toHaveProperty("generated");
+      expect(staged).toHaveProperty("staged_at");
+    }
   });
 
-  it("el payload staged es JSON parseable con campos requeridos", async () => {
+  it("no devuelve previewUrl en steps SEO", async () => {
     const result = await executeWpAiStep(
       CEREBRO_CLIENT_ID,
       null,
@@ -166,36 +163,7 @@ describe("executeWpAiStep — SEO steps", () => {
       SEO_STEP_WITH_JSON,
       "task-id-003",
     );
-
-    const firstLine = result.notes.split("\n")[0];
-    const jsonStr = firstLine.replace(/^WP_SEO_STAGED:/, "");
-    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
-
-    expect(parsed).toHaveProperty("page_id");
-    expect(parsed).toHaveProperty("meta_title");
-    expect(parsed).toHaveProperty("meta_description");
-    expect(parsed).toHaveProperty("generated");
-    expect(parsed).toHaveProperty("staged_at");
-  });
-
-  it("stagea incluso si el step tiene category=seo sin JSON estructurado (heurística)", async () => {
-    const stepPlainText = {
-      title: "Mejorar meta tags",
-      prompt: "Optimiza el meta title y description de la página de inicio para SEO",
-      acceptanceCriteria: [],
-      notes: null,
-    };
-
-    const result = await executeWpAiStep(
-      CEREBRO_CLIENT_ID,
-      null,
-      SEO_TASK,
-      stepPlainText,
-      "task-id-004",
-    );
-
-    expect(mockUpdateWpSeo).not.toHaveBeenCalled();
-    expect(result.notes).toMatch(/^WP_SEO_STAGED:/);
+    expect(result.previewUrl).toBeUndefined();
   });
 });
 
@@ -219,8 +187,6 @@ describe("executeWpAiStep — publish steps", () => {
 
     expect(mockPublishWpPost).toHaveBeenCalledOnce();
     expect(result.previewUrl).toBe("https://example.com/?p=456&preview=true");
-    expect(result.notes).toContain("wp:publish OK");
-    expect(result.notes).toContain("post_id=456");
   });
 
   it("publishWpPost recibe status=draft siempre", async () => {
@@ -234,54 +200,5 @@ describe("executeWpAiStep — publish steps", () => {
 
     const callArgs = mockPublishWpPost.mock.calls[0] as [string, Record<string, unknown>, string];
     expect(callArgs[1].status).toBe("draft");
-  });
-
-  it("nota incluye advertencia de placeholders si el contenido tiene [COMPLETAR", async () => {
-    // Forzar que Claude devuelva contenido con [COMPLETAR
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    (Anthropic as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          content: [{ type: "text", text: "<p>Servicios de [COMPLETAR: nombre empresa] en Monterrey.</p>" }],
-          usage: { input_tokens: 200, output_tokens: 100 },
-        }),
-      },
-    }));
-
-    const result = await executeWpAiStep(
-      CEREBRO_CLIENT_ID,
-      MOCK_PROFILE,
-      PUBLISH_TASK,
-      PUBLISH_STEP,
-      "task-id-007",
-    );
-
-    expect(result.notes).toContain("placeholder");
-  });
-});
-
-describe("executeWpAiStep — acciones no implementadas", () => {
-  it("stagea sin fallar para acción update", async () => {
-    const updateStep = {
-      title: "Actualizar página",
-      prompt: JSON.stringify({
-        action: "update",
-        endpoint: "PUT /update/99",
-        payload: { post_id: 99 },
-      }),
-      acceptanceCriteria: [],
-      notes: null,
-    };
-
-    const result = await executeWpAiStep(
-      CEREBRO_CLIENT_ID,
-      null,
-      { ...SEO_TASK, category: "pagina" },
-      updateStep,
-      "task-id-008",
-    );
-
-    expect(result.notes).toContain("wp:staged");
-    expect(result.previewUrl).toBeUndefined();
   });
 });

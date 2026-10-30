@@ -17,8 +17,10 @@ Solución:
 - **meta_title**: 50-65 chars, palabras significativas (no texto exacto para keywords largas)
 - **WAITING_HUMAN**: si Claude no genera JSON o falta keyword → paso pendiente con respuesta visible, no FAILED
 
-**Archivos nuevos:** keyword-resolver.ts, parse-claude-json.ts, tests (22 nuevos)
-**Modificados:** wp-executor.ts (keyword chain + JSON parser), task-processor.ts (WAITING_HUMAN signals), add-to-plan-action.ts (targetKeyword), schema.prisma (migration add_target_keyword)
+**Archivos nuevos:** keyword-resolver.ts, parse-claude-json.ts, template-flow.test.ts
+**Modificados:** wp-executor.ts (keyword chain + JSON parser + no default kind), task-processor.ts (WAITING_HUMAN signals), add-to-plan-action.ts (targetKeyword from snapshot.keyword/term/query), analisis/plan-actions.ts (keywordObjetivo → targetKeyword), task-decomposer.ts (template payloads con kind/keyword)
+**Tests fijos:** wp-executor (TDZ + class mock), site-platform (WP eligible), publish-wp-plan-action (blogs skip)
+**Suite: 416/416 — 100% verde**
 
 ### ✅ NOTION-UPLOAD + VERIFY — Cargar a Notion y verificación (2026-10-28/29)
 

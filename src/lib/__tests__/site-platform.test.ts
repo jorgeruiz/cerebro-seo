@@ -119,8 +119,8 @@ describe("site-platform", () => {
       expect(ineligibilityReason("NEXTJS")).toBeNull();
     });
 
-    it("returns reason for WORDPRESS", () => {
-      expect(ineligibilityReason("WORDPRESS")).toContain("WordPress");
+    it("returns null for WORDPRESS (eligible via plugin)", () => {
+      expect(ineligibilityReason("WORDPRESS")).toBeNull();
     });
 
     it("returns reason for MIGRACION", () => {

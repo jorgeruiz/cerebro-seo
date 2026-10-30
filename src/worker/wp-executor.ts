@@ -389,7 +389,12 @@ async function executeContentPackage(
   action: WpStepAction,
   taskId: string,
 ): Promise<WpStepResult> {
-  const kind = (action.payload?.kind as string) ?? "landing";
+  const kind = (action.payload?.kind as string) ?? null;
+  if (!kind) {
+    return {
+      notes: "waiting_human:missing_kind|Falta tipo de contenido (kind: blog/landing/optimization) en el payload del paso.",
+    };
+  }
 
   // Keyword resolution: payload → task.targetKeyword → quoted → sanitized → WAITING_HUMAN
   const { resolveKeyword } = await import("@/lib/keyword-resolver");

@@ -147,6 +147,8 @@ export async function actionAddToPlan(
       category,
       targetKeyword: input.targetKeyword
         ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
+        ?? (typeof sourceRef.snapshot?.term === "string" ? sourceRef.snapshot.term : null)
+        ?? (typeof sourceRef.snapshot?.query === "string" ? sourceRef.snapshot.query : null)
         ?? null,
       sourceCandidateId: `module-${randomUUID().slice(0, 8)}`,
       sourceRef: sourceRef as unknown as InputJsonValue,

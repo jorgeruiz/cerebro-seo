@@ -185,6 +185,7 @@ export async function actionSendToPlan(
         priority: candidate.priority,
         effort,
         category: candidate.kind.toLowerCase(),
+        targetKeyword: candidate.keywordObjetivo ?? null,
         sourceCandidateId: candidate.id,
         status: "PLANNING",
       },

@@ -454,16 +454,73 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
     const mode = resolveTaskMode(finalSteps);
     const modeReason = buildModeReason(finalSteps);
 
-    // Create steps from template
+    // Derive content kind from actionType
+    const KIND_MAP: Record<string, string> = {
+      create_blog: "blog",
+      create_landing: "landing",
+      edit_page_text: "optimization",
+    };
+    const contentKind = KIND_MAP[inferredActionType!] ?? null;
+    const targetKeyword = task.targetKeyword ?? null;
+
+    // Create steps from template with proper payloads
     for (let i = 0; i < finalSteps.length; i++) {
       const ts = finalSteps[i];
+      let prompt: string | null = null;
+
+      if (ts.action) {
+        const payload: Record<string, unknown> = { action: ts.action };
+
+        if (ts.action === "content_package") {
+          if (!contentKind) {
+            // Missing kind → can't build payload → WAITING_HUMAN
+            await prisma.planStep.create({
+              data: {
+                taskId,
+                order: i + 1,
+                title: ts.title,
+                type: "HUMAN",
+                prompt: "Falta tipo de contenido (blog/landing/optimization). Configura el actionType de la tarea.",
+                acceptanceCriteria: [],
+                status: "WAITING_HUMAN",
+                notes: "humanReason:config",
+              },
+            });
+            continue;
+          }
+          payload.kind = contentKind;
+          payload.keyword = targetKeyword ?? "";
+          payload.page_title = targetKeyword ?? task.title;
+          payload.target_page_id = 0;
+        }
+
+        if (ts.action === "seo") {
+          payload.endpoint = "POST /seo/{page_id}";
+          payload.page_id = 0;
+          payload.meta_title = "";
+          payload.meta_description = "";
+          payload.focus_keyword = targetKeyword ?? "";
+        }
+
+        if (ts.action === "keyword_research") {
+          payload.categories = [{ name: task.category, seeds: targetKeyword ? [targetKeyword] : [] }];
+          payload.criteria = { total: 25 };
+        }
+
+        if (ts.action === "apply_keywords") {
+          // No extra payload needed — reads from previous step's stagedChange
+        }
+
+        prompt = JSON.stringify(payload);
+      }
+
       await prisma.planStep.create({
         data: {
           taskId,
           order: i + 1,
           title: ts.title,
           type: ts.type as "AI" | "HUMAN",
-          prompt: ts.action ? JSON.stringify({ action: ts.action }) : null,
+          prompt,
           acceptanceCriteria: [],
           status: "PENDING",
           notes: [
