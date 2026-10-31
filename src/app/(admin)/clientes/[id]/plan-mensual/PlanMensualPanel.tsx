@@ -24,6 +24,8 @@ import {
   actionPublishNextjsBlog,
   actionUploadToNotion,
   actionVerifyTask,
+  actionPublishWpPlan,
+  actionGetWpStagedSummary,
   type PlanFullView,
   type PlanTaskFullView,
   type PlanStepView,
@@ -485,6 +487,104 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 }
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+// ─── WP Publish Button ──────────────────────────────────────────────────────
+
+function WpPublishButton({ planId, isArchived = false }: { planId: string; isArchived?: boolean }) {
+  const [isPending, startTransition] = useTransition();
+  const [stage, setStage] = useState<"idle" | "preview" | "done">("idle");
+  const [preview, setPreview] = useState<Array<{ taskTitle: string; stepTitle: string; type: string; detail: string }>>([]);
+  const [result, setResult] = useState<{ metaApplied: number; elementorApplied: number; skipped: number; failed: number; details: string[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPreview = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await actionGetWpStagedSummary(planId);
+      if (!res.ok) { setError(res.error); return; }
+      if (res.changes.length === 0) { setError("No hay cambios pendientes de aplicar."); return; }
+      setPreview(res.changes);
+      setStage("preview");
+    });
+  };
+
+  const doPublish = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await actionPublishWpPlan(planId);
+      if (!res.ok) { setError(res.error); return; }
+      setResult(res);
+      setStage("done");
+    });
+  };
+
+  if (stage === "done" && result) {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 space-y-2">
+        <p className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" /> Publicado en WordPress
+        </p>
+        <div className="font-mono text-[0.6rem] text-muted-foreground space-y-0.5">
+          <p>Meta tags aplicados: {result.metaApplied}</p>
+          <p>Elementor aplicados: {result.elementorApplied}</p>
+          {result.skipped > 0 && <p>Omitidos (blogs/borradores): {result.skipped}</p>}
+          {result.failed > 0 && <p className="text-destructive">Fallidos: {result.failed}</p>}
+        </div>
+        {result.details.length > 0 && (
+          <details className="mt-1">
+            <summary className="font-mono text-[0.55rem] text-ds-blue cursor-pointer">Detalle por cambio</summary>
+            <ul className="mt-1 space-y-0.5 font-mono text-[0.55rem] text-muted-foreground">
+              {result.details.map((d, i) => <li key={i}>{d}</li>)}
+            </ul>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  if (stage === "preview") {
+    return (
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
+        <p className="text-sm font-semibold text-foreground">Cambios a aplicar en WordPress</p>
+        <div className="space-y-1 max-h-[200px] overflow-y-auto">
+          {preview.map((c, i) => (
+            <div key={i} className="font-mono text-[0.6rem] flex items-start gap-2 py-0.5">
+              <span className={`shrink-0 px-1.5 py-0.5 rounded text-[0.55rem] ${
+                c.type === "Meta tags" ? "bg-primary/10 text-primary" :
+                c.type === "Elementor" ? "bg-ds-blue/10 text-ds-blue" :
+                "bg-muted text-muted-foreground"
+              }`}>{c.type}</span>
+              <span className="text-muted-foreground">{c.detail}</span>
+            </div>
+          ))}
+        </div>
+        {error && <p className="font-mono text-[0.6rem] text-destructive">{error}</p>}
+        <div className="flex gap-2">
+          <button onClick={doPublish} disabled={isPending}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+            {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            Confirmar y publicar
+          </button>
+          <button onClick={() => setStage("idle")}
+            className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }))}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && <p className="font-mono text-[0.6rem] text-destructive mb-1">{error}</p>}
+      <button onClick={loadPreview} disabled={isPending}
+        className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
+        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+        {isArchived ? "Publicar cambios pendientes" : "Publicar en WordPress"}
+      </button>
+    </div>
+  );
+}
 
 // ─── Verify Task Button ─────────────────────────────────────────────────────
 
@@ -1170,17 +1270,20 @@ function PlanStatusBanner({
   const allTerminal = plan.tasks.every((t) => ["DONE", "VOIDED", "FAILED"].includes(t.status));
   const remaining = plan.tasks.filter((t) => !["DONE", "VOIDED", "FAILED"].includes(t.status)).length;
 
+  const isWp = plan.platform === "WORDPRESS" || plan.platform === "MIGRACION";
+
   // ACTIVE + not done yet — show progress hint
   if (plan.status === "ACTIVE" && !allTerminal) {
     const doneTasks = plan.tasks.filter((t) => t.status === "DONE");
-    const missingPreview = !plan.previewUrl && doneTasks.some((t) =>
+    const missingPreview = !isWp && !plan.previewUrl && doneTasks.some((t) =>
       t.runs.some((r) => r.changedRoutes.length > 0)
     );
     return (
       <div className="space-y-2">
         <div className="bg-muted/20 border border-border rounded-xl px-4 py-3">
           <p className="font-mono text-[0.65rem] text-muted-foreground">
-            {remaining} tarea{remaining !== 1 ? "s" : ""} restante{remaining !== 1 ? "s" : ""} para Pasar a revisión
+            {remaining} tarea{remaining !== 1 ? "s" : ""} restante{remaining !== 1 ? "s" : ""}
+            {isWp ? " para Publicar en WordPress" : " para Pasar a revisión"}
           </p>
         </div>
         {missingPreview && (
@@ -1196,7 +1299,27 @@ function PlanStatusBanner({
   }
 
   if (plan.status === "ACTIVE" && allTerminal) {
-    // Soft check: code/design tasks without changed routes
+    // WordPress: show WP publish button instead of review/merge flow
+    if (isWp) {
+      return (
+        <div className="space-y-2">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Plan al 100%</p>
+              <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+                Todas las tareas terminadas. Aplica los meta tags y cambios en WordPress.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotionUploadButton planId={plan.id} />
+              <WpPublishButton planId={plan.id} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Next.js: show review/merge flow
     const codeWithoutPreview = plan.tasks.filter(
       (t) => t.status === "DONE" && (t.kind === "CODE") && t.runs.every((r) => r.changedRoutes.length === 0)
     );
@@ -1239,15 +1362,38 @@ function PlanStatusBanner({
   }
 
   if (plan.status === "IN_REVIEW") {
+    // WordPress plans stuck in IN_REVIEW (legacy) → show WP publish button
+    if (isWp) {
+      return (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Eye className="h-4 w-4 text-blue-500" /> Plan WordPress en revisión
+              </p>
+              <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+                Aplica los cambios pendientes en WordPress.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotionUploadButton planId={plan.id} />
+              <WpPublishButton planId={plan.id} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Next.js: normal review/merge flow
     return (
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Eye className="h-4 w-4 text-blue-500" /> En revision
+              <Eye className="h-4 w-4 text-blue-500" /> En revisión
             </p>
             <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-              Revisa el preview y haz merge cuando estes listo.
+              Revisa el preview y haz merge cuando estés listo.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1298,12 +1444,17 @@ function PlanStatusBanner({
   if (plan.status === "ARCHIVED") {
     return (
       <div className="bg-muted/40 border border-border rounded-xl p-4">
-        <p className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-          <Archive className="h-4 w-4" /> Plan archivado
-        </p>
-        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
-          Este plan fue archivado para auditoría. Puedes rehacer tareas individuales si es necesario.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <Archive className="h-4 w-4" /> Plan archivado
+            </p>
+            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+              Este plan fue archivado. {isWp ? "Puedes aplicar cambios pendientes sin reactivarlo." : "Puedes rehacer tareas individuales si es necesario."}
+            </p>
+          </div>
+          {isWp && <WpPublishButton planId={plan.id} isArchived />}
+        </div>
       </div>
     );
   }

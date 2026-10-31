@@ -566,6 +566,15 @@ export async function actionSubmitForReview(
     return { ok: false, error: `Plan no está en ACTIVE (status: ${plan.status}).` };
   }
 
+  // Guard: Submit for review is only for Next.js (branch/PR/merge flow)
+  const submitSite = await prisma.site.findFirst({
+    where: { client: { monthlyPlans: { some: { id: planId } } } },
+    select: { platform: true },
+  });
+  if (submitSite?.platform === "WORDPRESS" || submitSite?.platform === "MIGRACION") {
+    return { ok: false, error: "Planes WordPress no usan revisión de PR. Usa \"Publicar en WordPress\" para aplicar los cambios." };
+  }
+
   // Check all tasks are terminal (DONE/VOIDED/FAILED)
   const pending = plan.tasks.filter(
     (t) => !["DONE", "VOIDED", "FAILED"].includes(t.status)
@@ -687,6 +696,15 @@ export async function actionMergePlan(
   if (!plan) return { ok: false, error: "Plan no encontrado." };
   if (plan.status !== "IN_REVIEW") {
     return { ok: false, error: `Plan no está en IN_REVIEW (status: ${plan.status}).` };
+  }
+
+  // Guard: Merge is only for Next.js (branch/PR flow)
+  const mergeSite = await prisma.site.findFirst({
+    where: { client: { monthlyPlans: { some: { id: planId } } } },
+    select: { platform: true },
+  });
+  if (mergeSite?.platform === "WORDPRESS" || mergeSite?.platform === "MIGRACION") {
+    return { ok: false, error: "Planes WordPress no usan merge de PR. Usa \"Publicar en WordPress\" para aplicar los cambios." };
   }
   if (!plan.prNumber || !plan.branchName) {
     return { ok: false, error: "Plan no tiene PR ni rama configurada." };
@@ -1039,4 +1057,137 @@ export async function actionVerifyTask(
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
+}
+
+// ─── Publish WordPress plan ────────────────────────────────────────────────
+
+export async function actionPublishWpPlan(
+  planId: string
+): Promise<{
+  ok: true;
+  metaApplied: number;
+  elementorApplied: number;
+  skipped: number;
+  failed: number;
+  details: string[];
+} | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") {
+    return { ok: false, error: "Solo administradores." };
+  }
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    select: { id: true, status: true },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+
+  // Allow ACTIVE, IN_REVIEW (legacy flow), and ARCHIVED (pending changes)
+  const allowed = ["ACTIVE", "IN_REVIEW", "ARCHIVED"];
+  if (!allowed.includes(plan.status)) {
+    return { ok: false, error: `Plan no se puede publicar en WordPress (status: ${plan.status}).` };
+  }
+
+  try {
+    const { publishWpPlanAction } = await import("./publish-wp-plan-action");
+    const result = await publishWpPlanAction(planId);
+
+    if (!result.ok) {
+      if ("blocked" in result) {
+        return { ok: false, error: `Bloqueado: ${result.reason}` };
+      }
+      return { ok: false, error: result.error };
+    }
+
+    // Mark plan as PUBLISHED (unless ARCHIVED — don't reactivate)
+    if (plan.status !== "ARCHIVED") {
+      await prisma.monthlyPlan.update({
+        where: { id: planId },
+        data: {
+          status: "PUBLISHED",
+          completedAt: new Date(),
+          mergedById: session.user.email,
+        },
+      });
+    }
+
+    return {
+      ok: true,
+      metaApplied: result.metaApplied,
+      elementorApplied: result.elementorApplied,
+      skipped: result.skipped,
+      failed: result.failed,
+      details: result.details,
+    };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+// ─── Get WP staged changes summary (for preview before publish) ────────────
+
+export async function actionGetWpStagedSummary(
+  planId: string
+): Promise<{
+  ok: true;
+  changes: Array<{
+    taskTitle: string;
+    stepTitle: string;
+    type: string;
+    detail: string;
+  }>;
+} | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "No autenticado." };
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    include: {
+      tasks: {
+        include: {
+          steps: {
+            where: { status: "DONE", NOT: { stagedChange: { equals: undefined } } },
+            orderBy: { order: "asc" },
+          },
+        },
+      },
+    },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+
+  const changes: Array<{ taskTitle: string; stepTitle: string; type: string; detail: string }> = [];
+
+  for (const task of plan.tasks) {
+    for (const step of task.steps) {
+      const sc = step.stagedChange as Record<string, unknown> | null;
+      if (!sc?.type) continue;
+
+      if (sc.type === "seo") {
+        changes.push({
+          taskTitle: task.title,
+          stepTitle: step.title,
+          type: "Meta tags",
+          detail: `page_id=${sc.page_id} | title: "${(sc.meta_title as string)?.slice(0, 50)}" | desc: "${(sc.meta_description as string)?.slice(0, 60)}…"`,
+        });
+      } else if (sc.type === "elementor") {
+        changes.push({
+          taskTitle: task.title,
+          stepTitle: step.title,
+          type: "Elementor",
+          detail: `page_id=${sc.page_id} "${sc.page_title}" → ${sc.widgets_updated} widgets`,
+        });
+      } else if (sc.type === "blog") {
+        changes.push({
+          taskTitle: task.title,
+          stepTitle: step.title,
+          type: "Blog (borrador)",
+          detail: `"${sc.title}" → revisar en WP Admin`,
+        });
+      }
+    }
+  }
+
+  return { ok: true, changes };
 }

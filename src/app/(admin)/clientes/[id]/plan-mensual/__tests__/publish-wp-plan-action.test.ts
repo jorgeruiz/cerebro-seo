@@ -205,6 +205,6 @@ describe("publishWpPlanAction — already published", () => {
     const result = await publishWpPlanAction(PLAN_ID);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("publicado");
+    if (!result.ok && "error" in result) expect(result.error).toContain("publicado");
   });
 });
