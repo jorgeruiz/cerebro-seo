@@ -146,6 +146,7 @@ export function getSitePlatform(site: { platform: SitePlatform | null }): SitePl
 
 /**
  * Determina si un sitio es elegible para ejecución de tareas IA vía repo (Next.js).
+ * @deprecated Use getPlatformPolicy(platform).needsRepo instead.
  */
 export function isEligibleForExecution(platform: SitePlatform | null): boolean {
   return platform === "NEXTJS";
@@ -153,7 +154,7 @@ export function isEligibleForExecution(platform: SitePlatform | null): boolean {
 
 /**
  * Determina si un sitio es elegible para ejecución de tareas IA vía plugin WP.
- * Requiere: platform=WORDPRESS o MIGRACION (plugin v1.5.0 instalado).
+ * @deprecated Use getPlatformPolicy(platform).executable instead.
  */
 export function isEligibleForWpExecution(platform: SitePlatform | null): boolean {
   return platform === "WORDPRESS" || platform === "MIGRACION";
@@ -161,12 +162,12 @@ export function isEligibleForWpExecution(platform: SitePlatform | null): boolean
 
 /**
  * Motivo de restricción por plataforma, o null si no hay restricción.
- * Para WordPress, el plan sí puede ejecutar tareas AI vía plugin — no hay bloqueo.
+ * @deprecated Use getPlatformPolicy(platform).ineligibilityReason instead.
  */
 export function ineligibilityReason(platform: SitePlatform | null): string | null {
   if (platform === "NEXTJS") return null;
-  if (platform === "WORDPRESS") return null; // Plugin v1.5.0 soporta blog, meta, alt — sin bloqueo
-  if (platform === "MIGRACION") return "Sitio en migración — producción aún en WordPress. Tareas AI usan el plugin WP; tareas de código esperan a que producción sea Next.js.";
-  if (platform === "OTRO") return "Plataforma no reconocida — el Plan mensual requiere Next.js o WordPress con plugin Cerebro.";
+  if (platform === "WORDPRESS") return null;
+  if (platform === "MIGRACION") return "Sitio en migración — producción aún en WordPress. Tareas AI usan el plugin WP.";
+  if (platform === "OTRO") return "Plataforma no reconocida — el Plan mensual requiere Next.js o WordPress.";
   return "Plataforma no detectada — ejecuta la detección de plataforma primero.";
 }

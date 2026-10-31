@@ -51,6 +51,18 @@ const KIND_ICON: Record<string, React.ElementType> = {
   SETUP: Settings2,
 };
 
+const KIND_LABELS: Record<string, Record<string, string>> = {
+  NEXTJS: { CONTENT: "Contenido", CODE: "Código", SETUP: "Setup" },
+  WORDPRESS: { CONTENT: "Contenido", CODE: "Plugin", SETUP: "Manual" },
+  MIGRACION: { CONTENT: "Contenido", CODE: "Plugin", SETUP: "Manual" },
+  DEFAULT: { CONTENT: "Contenido", CODE: "Código", SETUP: "Setup" },
+};
+
+function getKindLabel(platform: string | null, kind: string): string {
+  const labels = KIND_LABELS[platform ?? "DEFAULT"] ?? KIND_LABELS.DEFAULT;
+  return labels[kind] ?? kind;
+}
+
 const TASK_STATUS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   PLANNING:      { label: "Generando pasos...", icon: Loader2,        color: "text-yellow-500" },
   READY:         { label: "Listo",              icon: CheckCircle2,   color: "text-green-500" },
@@ -908,7 +920,7 @@ function TaskCard({
             </span>
             <span className="font-mono text-[0.6rem] text-muted-foreground border border-border rounded px-1.5 py-0.5 flex items-center gap-0.5">
               <KindIcon className="h-2.5 w-2.5" />
-              {task.kind}
+              {getKindLabel(isWordPress ? "WORDPRESS" : "NEXTJS", task.kind)}
             </span>
             <span className="font-mono text-[0.6rem] text-muted-foreground">
               P{task.priority} · {EFFORT_LABEL[task.effort] ?? task.effort}

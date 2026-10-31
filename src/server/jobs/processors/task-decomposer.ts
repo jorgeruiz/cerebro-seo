@@ -25,8 +25,6 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-const VALID_HUMAN_REASONS_NEXTJS = ["terminal", "config", "external_tool"] as const;
-const VALID_HUMAN_REASONS_WORDPRESS = ["wp_manual", "config", "external_tool"] as const;
 const stepSchema = z.object({
   title: z.string().min(2).max(200).transform((s) => s.slice(0, 120)),
   type: z.enum(["AI", "HUMAN", "HYBRID"]).transform((t) => t === "HYBRID" ? "HUMAN" : t),
@@ -355,13 +353,15 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
 
   const platform = task.site?.platform ?? "OTRO";
 
-  // MIGRACION or null platform: block decomposition
-  if (platform === "MIGRACION" || platform === null || platform === "OTRO") {
+  // Platform policy: block decomposition if not executable
+  const { getPlatformPolicy } = await import("@/lib/platform-policy");
+  const platformPolicy = getPlatformPolicy(platform);
+  if (!platformPolicy.executable) {
     await prisma.planTask.update({
       where: { id: taskId },
       data: {
         status: "WAITING_HUMAN",
-        failureReason: `Plataforma "${platform ?? "desconocida"}" no soporta descomposición automática. Configura la plataforma del sitio primero.`,
+        failureReason: platformPolicy.ineligibilityReason ?? `Plataforma "${platform}" no soporta descomposición automática.`,
       },
     });
     console.log(`[task-decomposer] ${task.title} → BLOCKED (platform=${platform})`);
@@ -571,10 +571,8 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
       throw new Error("Claude devolvió 0 pasos");
     }
 
-    // Validate each step with Zod + humanReason platform rules
-    const validReasons = platform === "WORDPRESS"
-      ? VALID_HUMAN_REASONS_WORDPRESS
-      : VALID_HUMAN_REASONS_NEXTJS;
+    // Validate each step with Zod + humanReason platform rules (via policy)
+    const validReasons = platformPolicy.humanReasons;
 
     const validSteps: z.infer<typeof stepSchema>[] = [];
     for (const raw of parsedSteps) {
@@ -629,7 +627,7 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
           `Cuando esté completada, marca este paso como hecho.`,
         acceptanceCriteria: ["Tarea completada según el objetivo"],
         complexity: "medium" as const,
-        humanReason: platform === "WORDPRESS" ? "wp_manual" : "terminal",
+        humanReason: platformPolicy.usesTerminal ? "terminal" : "wp_manual",
       });
     }
 

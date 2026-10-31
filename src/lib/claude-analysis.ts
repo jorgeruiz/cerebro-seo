@@ -117,8 +117,8 @@ El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OT
 
 CANDIDATAS — KIND:
 - CONTENT: blog, landing, página nueva, optimización de contenido existente, meta tags (title/description/focus keyword)
-- CODE: schema JSON-LD, técnico, interlinking, performance, velocidad
-- SETUP: verificaciones, cuentas externas (GSC, GBP), tracking, configuración de plataformas. Mode siempre HUMAN.
+- CODE: schema JSON-LD, técnico, interlinking, performance, velocidad. IMPORTANTE: en WordPress NO usar CODE — todo lo que el plugin resuelve es CONTENT, lo manual es SETUP.
+- SETUP: verificaciones, cuentas externas (GSC, GBP), tracking, configuración de plataformas, schema en Yoast. Mode siempre HUMAN.
 
 ANTI-CANIBALIZACIÓN (CRÍTICO):
 - Antes de proponer una página nueva, verifica las rutas existentes del sitio (site-map). Si ya existe una página sobre el mismo tema o keyword, propón OPTIMIZAR la existente (mode AI o HYBRID) en lugar de crear una nueva.

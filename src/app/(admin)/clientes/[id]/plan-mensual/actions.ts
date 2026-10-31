@@ -237,13 +237,14 @@ export async function actionExecuteTask(
     return { ok: false, error: "No hay pasos AI pendientes para ejecutar." };
   }
 
-  // Platform-specific guards
-  const platform = task.site.platform;
-  if (platform === "NEXTJS" && !task.site.githubRepo) {
-    return { ok: false, error: "No hay repositorio GitHub configurado para este sitio Next.js." };
+  // Platform-specific guards (via policy)
+  const { getPlatformPolicy } = await import("@/lib/platform-policy");
+  const policy = getPlatformPolicy(task.site.platform);
+  if (!policy.executable) {
+    return { ok: false, error: policy.ineligibilityReason ?? `Plataforma no permite ejecución automática.` };
   }
-  if (!platform || platform === "MIGRACION" || platform === "OTRO") {
-    return { ok: false, error: `Plataforma "${platform ?? "desconocida"}" no permite ejecución automática.` };
+  if (policy.needsRepo && !task.site.githubRepo) {
+    return { ok: false, error: "No hay repositorio GitHub configurado para este sitio Next.js." };
   }
 
   // Update status to RUNNING
@@ -566,13 +567,15 @@ export async function actionSubmitForReview(
     return { ok: false, error: `Plan no está en ACTIVE (status: ${plan.status}).` };
   }
 
-  // Guard: Submit for review is only for Next.js (branch/PR/merge flow)
+  // Guard: Submit for review is only for merge-flow platforms
+  const { getPlatformPolicy } = await import("@/lib/platform-policy");
   const submitSite = await prisma.site.findFirst({
     where: { client: { monthlyPlans: { some: { id: planId } } } },
     select: { platform: true },
   });
-  if (submitSite?.platform === "WORDPRESS" || submitSite?.platform === "MIGRACION") {
-    return { ok: false, error: "Planes WordPress no usan revisión de PR. Usa \"Publicar en WordPress\" para aplicar los cambios." };
+  const submitPolicy = getPlatformPolicy(submitSite?.platform ?? null);
+  if (submitPolicy.closeFlow !== "merge") {
+    return { ok: false, error: `Planes ${submitPolicy.label} no usan revisión de PR. Usa "${submitPolicy.closeFlow === "wp_publish" ? "Publicar en WordPress" : "cierre manual"}" para completar el plan.` };
   }
 
   // Check all tasks are terminal (DONE/VOIDED/FAILED)
@@ -698,13 +701,15 @@ export async function actionMergePlan(
     return { ok: false, error: `Plan no está en IN_REVIEW (status: ${plan.status}).` };
   }
 
-  // Guard: Merge is only for Next.js (branch/PR flow)
+  // Guard: Merge is only for merge-flow platforms
+  const { getPlatformPolicy: getMergePolicy } = await import("@/lib/platform-policy");
   const mergeSite = await prisma.site.findFirst({
     where: { client: { monthlyPlans: { some: { id: planId } } } },
     select: { platform: true },
   });
-  if (mergeSite?.platform === "WORDPRESS" || mergeSite?.platform === "MIGRACION") {
-    return { ok: false, error: "Planes WordPress no usan merge de PR. Usa \"Publicar en WordPress\" para aplicar los cambios." };
+  const mergePolicy = getMergePolicy(mergeSite?.platform ?? null);
+  if (mergePolicy.closeFlow !== "merge") {
+    return { ok: false, error: `Planes ${mergePolicy.label} no usan merge de PR. Usa "${mergePolicy.closeFlow === "wp_publish" ? "Publicar en WordPress" : "cierre manual"}".` };
   }
   if (!plan.prNumber || !plan.branchName) {
     return { ok: false, error: "Plan no tiene PR ni rama configurada." };

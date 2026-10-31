@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-10-29 (NOTION-UPLOAD + VERIFY — Cargar a Notion con borrador persistido + verificación post-tarea)
+**Última actualización:** 2026-10-31 (WP-PLATFORM — Publicar en WordPress + getPlatformPolicy)
 **Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY completas. S4b/S4d/S4e pendientes.
 **Próximo hito:** Deploy cerebro-web (endpoint /api/internal/estrategia) → deploy cerebro-seo. Probar "Cargar a Notion" + "Verificar" con un plan real.
 

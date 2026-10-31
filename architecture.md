@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-10-29 (v9 — Notion upload, verificación post-tarea, templates, pre-push hook)
+**Última actualización:** 2026-10-31 (v10 — getPlatformPolicy, Publicar en WordPress, kind por plataforma)
 
 ---
 
@@ -205,6 +205,10 @@ Tres carriles de ejecución:
   - Draft persistido en MonthlyPlan.notionReport ANTES de enviar.
   - Idempotente: notionBitacoraIds y notionEstrategiaId evitan duplicados en retry.
   - Cerebro web endpoints: POST /api/internal/bitacora y /api/internal/estrategia.
+
+**Política de plataforma** (`src/lib/platform-policy.ts`):
+- `getPlatformPolicy(platform)` — fuente única de verdad para: executable, needsRepo, closeFlow, kindLabels, humanReasons, usesTerminal, ineligibilityReason.
+- Reemplaza los if/else dispersos en actions.ts, decomposer, site-platform.
 
 **Pre-push hook**: `.git/hooks/pre-push` corre `next lint` antes de cada push.
 
