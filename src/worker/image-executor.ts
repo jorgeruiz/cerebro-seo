@@ -327,6 +327,11 @@ export async function executeImage(
 
   const config = getHiggsfieldConfig();
   const brief = action.content_brief;
+  if (!brief || brief.trim().length < 5) {
+    return {
+      notes: "image:human-required — Falta brief de imagen (content_brief). Agrega una descripción visual de la imagen.",
+    };
+  }
   const aspectRatio = action.payload?.aspect_ratio ?? "16:9";
   const colorHint = buildColorHint(context.brandColors);
 

@@ -86,7 +86,7 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
   }
 
   // ── Content lane: Next.js blog tasks skip the plan branch entirely ──────
-  if (isNextjsBlogTask(task.kind, task.category)) {
+  if (isNextjsBlogTask(task)) {
     await processNextjsBlogTask(taskId, task, plan);
     return;
   }
@@ -1096,8 +1096,12 @@ async function processWpTask(
 // Blog articles skip the plan branch. Claude generates the article data,
 // stores it in stagedChange, and the user publishes via direct commit to main.
 
-function isNextjsBlogTask(kind: string, category: string): boolean {
-  return kind === "CONTENT" && ["blog", "articulo", "article"].includes(category.toLowerCase());
+function isNextjsBlogTask(task: { kind: string; category: string; actionType?: string | null }): boolean {
+  // Primary: check actionType (explicit, set at creation or by decomposer)
+  if (task.actionType === "create_blog") return true;
+  // Fallback: check kind + category (legacy tasks without actionType)
+  if (task.kind === "CONTENT" && ["blog", "articulo", "article"].includes(task.category.toLowerCase())) return true;
+  return false;
 }
 
 /**

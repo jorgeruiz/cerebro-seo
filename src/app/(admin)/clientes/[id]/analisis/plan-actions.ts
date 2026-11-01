@@ -184,7 +184,8 @@ export async function actionSendToPlan(
         kind,
         priority: candidate.priority,
         effort,
-        category: candidate.kind.toLowerCase(),
+        category: inferCategory(candidate),
+        actionType: candidate.actionType ?? null,
         targetKeyword: candidate.keywordObjetivo ?? null,
         sourceCandidateId: candidate.id,
         status: "PLANNING",
@@ -290,4 +291,39 @@ export async function actionRetryTask(
   });
 
   return { ok: true };
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Infer the real category from candidate actionType and title. */
+function inferCategory(candidate: { actionType?: string | null; titulo: string; kind: string }): string {
+  // actionType → category mapping
+  const AT_TO_CATEGORY: Record<string, string> = {
+    create_blog: "blog",
+    update_meta: "meta",
+    keyword_research: "keyword",
+    schema: "schema",
+    internal_links: "enlazado",
+    edit_page_text: "optimizacion",
+    create_landing: "landing",
+    upload_media: "media",
+    generate_image: "imagen",
+  };
+
+  if (candidate.actionType && AT_TO_CATEGORY[candidate.actionType]) {
+    return AT_TO_CATEGORY[candidate.actionType];
+  }
+
+  // Regex fallback from title
+  const t = candidate.titulo.toLowerCase();
+  if (/blog|artículo|articulo|post|redactar/.test(t)) return "blog";
+  if (/meta\s*(title|description|tag)|yoast/.test(t)) return "meta";
+  if (/keyword|palabras?\s*clave/.test(t)) return "keyword";
+  if (/schema|json-?ld/.test(t)) return "schema";
+  if (/enlaces?\s*intern|internal\s*link/.test(t)) return "enlazado";
+  if (/landing/.test(t)) return "landing";
+  if (/optimizar.*texto|contenido/.test(t)) return "optimizacion";
+
+  // Fallback to kind-based
+  return candidate.kind === "CONTENT" ? "contenido" : candidate.kind === "CODE" ? "tecnico" : "setup";
 }

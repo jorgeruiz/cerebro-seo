@@ -511,6 +511,39 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
           // No extra payload needed — reads from previous step's stagedChange
         }
 
+        if (ts.action === "image") {
+          payload.endpoint = "";
+          payload.payload = {
+            usage: "featured_image",
+            attach_to_post_id: null,
+            aspect_ratio: "16:9",
+            subject_type: "conceptual",
+          };
+          // Build brief from task context
+          payload.content_brief = `Imagen de portada para: ${targetKeyword ?? task.title}. Estilo profesional, temática ${task.category}. Sin texto, sin logos, sin marcas de agua.`;
+        }
+
+        if (ts.action === "nextjs_blog_generate") {
+          // This action is handled by processNextjsBlogTask — no extra payload needed
+          // The executor generates the article data from task objective
+        }
+
+        if (ts.action === "agent") {
+          // Free-form agent execution — the prompt is the step title + task context
+          // Handled by the standard agent runner in the code lane
+        }
+
+        if (ts.action === "publish") {
+          payload.endpoint = "POST /publish";
+          payload.payload = {
+            title: targetKeyword ?? task.title,
+            slug: (targetKeyword ?? task.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50),
+            focus_keyword: targetKeyword ?? "",
+            categories: [],
+          };
+          payload.content_brief = `Artículo sobre ${targetKeyword ?? task.title}. ${task.objective}`;
+        }
+
         prompt = JSON.stringify(payload);
       }
 
@@ -537,6 +570,7 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
         status: "READY",
         mode,
         modeReason,
+        actionType: inferredActionType,
         generatorVersion: DECOMPOSER_VERSION,
         prompt: finalSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
       },

@@ -145,6 +145,7 @@ export async function actionAddToPlan(
       priority,
       effort: effort as "LOW" | "MEDIUM" | "HIGH",
       category,
+      actionType: input.actionType ?? null,
       targetKeyword: input.targetKeyword
         ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
         ?? (typeof sourceRef.snapshot?.term === "string" ? sourceRef.snapshot.term : null)
