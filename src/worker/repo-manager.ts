@@ -723,7 +723,10 @@ export function getChangedRoutesFromDiff(dir: string): string[] {
     const pageMatch = fp.match(/^(?:src\/)?app\/(.+)\/page\.(tsx|jsx|mdx)$/);
     if (pageMatch) {
       const route = "/" + pageMatch[1].replace(/\([^)]+\)\//g, "");
-      routes.push(route);
+      // Skip dynamic segments like /blog/[slug] — they're templates, not real pages
+      if (!route.includes("[")) {
+        routes.push(route);
+      }
       continue;
     }
 

@@ -797,7 +797,8 @@ export async function actionMergePlan(
 
     // Wait for deploy to propagate (Vercel typically takes 30-90s after merge)
     // We check immediately first, then retry failed ones after a delay
-    const uniqueRoutes = Array.from(new Set(allRoutes));
+    // Filter out dynamic route templates like /blog/[slug]
+    const uniqueRoutes = Array.from(new Set(allRoutes)).filter((r) => !r.includes("["));
 
     for (const route of uniqueRoutes) {
       const url = `${baseUrl}${route}`;
