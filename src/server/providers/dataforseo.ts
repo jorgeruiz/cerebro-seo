@@ -555,7 +555,7 @@ export class DataForSeoProvider implements SeoDataProvider {
       if (cached !== null) return JSON.parse(cached) as KeywordVolume[];
     } catch { /* Redis down */ }
 
-    // DataForSEO Labs — Search Volume (live) — up to 700 keywords per task
+    // Keywords Data — Search Volume (live) — up to 700 keywords per task
     const batches: string[][] = [];
     for (let i = 0; i < sorted.length; i += 700) {
       batches.push(sorted.slice(i, i + 700));
@@ -566,7 +566,7 @@ export class DataForSeoProvider implements SeoDataProvider {
 
     for (const batch of batches) {
       const { data, cost } = await dfsPost<DfsSearchVolumeResult>(
-        "/dataforseo_labs/google/search_volume/live",
+        "/keywords_data/google_ads/search_volume/live",
         [{
           keywords: batch,
           location_name: locationName,
@@ -789,41 +789,57 @@ export class DataForSeoProvider implements SeoDataProvider {
     } catch { /* Redis caído */ }
 
     const { data, cost } = await dfsPost<DfsKeywordSuggestionsResult>(
-      "/dataforseo_labs/google/keyword_suggestions/live",
+      "/dataforseo_labs/google/related_keywords/live",
       seeds.slice(0, 5).map((seed) => ({
         keyword: seed,
         location_name: location,
         language_name: language,
         limit,
-        include_serp_info: false,
-        include_seed_keyword: false,
       }))
     );
 
-    void logUsage({ endpoint: "labs/keyword_suggestions", cost: cost || 0.025, clientId });
+    void logUsage({ endpoint: "labs/related_keywords", cost: cost || 0.025, clientId });
 
     const seen = new Set<string>();
     const ideas: KeywordIdea[] = [];
 
     for (const task of data.tasks ?? []) {
       for (const result of task.result ?? []) {
-        for (const item of (result as DfsKeywordSuggestionsResult).items ?? []) {
-          const kw = item.keyword ?? "";
+        // related_keywords returns items with keyword_data nested inside
+        const resultAny = result as Record<string, unknown>;
+        const items = (resultAny.items ?? []) as Array<Record<string, unknown>>;
+
+        for (const item of items) {
+          // Try direct fields first (keyword_suggestions format)
+          let kw = (item.keyword as string) ?? "";
+          let kwInfo = item.keyword_info as Record<string, unknown> | undefined;
+          let kwProps = item.keyword_properties as Record<string, unknown> | undefined;
+          let intentInfo = item.search_intent_info as Record<string, unknown> | undefined;
+
+          // related_keywords nests data under keyword_data
+          const kwData = item.keyword_data as Record<string, unknown> | undefined;
+          if (kwData) {
+            kw = (kwData.keyword as string) ?? kw;
+            kwInfo = (kwData.keyword_info as Record<string, unknown>) ?? kwInfo;
+            kwProps = (kwData.keyword_properties as Record<string, unknown>) ?? kwProps;
+            intentInfo = (kwData.search_intent_info as Record<string, unknown>) ?? intentInfo;
+          }
+
           if (!kw || seen.has(kw)) continue;
           seen.add(kw);
 
-          const monthly = item.keyword_info?.monthly_searches ?? null;
+          const monthly = (kwInfo?.monthly_searches as Array<{ search_volume?: number }>) ?? null;
           const trend = monthly
             ? monthly.slice(-12).map((m) => m.search_volume ?? 0)
             : null;
 
           ideas.push({
             keyword: kw,
-            searchVolume: item.keyword_info?.search_volume ?? null,
-            cpc: item.keyword_info?.cpc ?? null,
-            competition: item.keyword_info?.competition ?? null,
-            keywordDifficulty: item.keyword_properties?.keyword_difficulty ?? null,
-            intent: item.search_intent_info?.main_intent ?? null,
+            searchVolume: (kwInfo?.search_volume as number) ?? null,
+            cpc: (kwInfo?.cpc as number) ?? null,
+            competition: (kwInfo?.competition as number) ?? null,
+            keywordDifficulty: (kwProps?.keyword_difficulty as number) ?? null,
+            intent: (intentInfo?.main_intent as string) ?? null,
             trend,
           });
         }
