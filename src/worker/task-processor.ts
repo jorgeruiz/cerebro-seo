@@ -347,6 +347,20 @@ export async function processTask(jobData: PlanTaskJobData): Promise<void> {
           }
         } catch (dataErr) {
           const errMsg = dataErr instanceof Error ? dataErr.message : String(dataErr);
+
+          // WAITING_HUMAN signals → pause, don't fail
+          if (errMsg.startsWith("WAITING_HUMAN:")) {
+            const reason = errMsg.replace("WAITING_HUMAN:", "").replace(/^[^|]*\|/, "");
+            console.warn(`[plan-task] Data step ${step.order} → WAITING_HUMAN: ${reason}`);
+            await prisma.planStep.update({ where: { id: step.id }, data: { status: "WAITING_HUMAN", notes: reason } });
+            await prisma.planTask.update({ where: { id: taskId }, data: { status: "WAITING_HUMAN" } });
+            await prisma.taskRun.update({
+              where: { id: run.id },
+              data: { status: "SUCCEEDED", logTail: reason.slice(0, 2000), finishedAt: new Date() },
+            });
+            return;
+          }
+
           console.error(`[plan-task] Data step ${step.order} failed: ${errMsg}`);
           await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
           await prisma.taskRun.update({

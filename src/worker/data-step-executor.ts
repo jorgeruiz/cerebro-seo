@@ -79,7 +79,10 @@ export async function executeKeywordResearch(
   let totalCost = 0;
 
   // 1. Get keyword ideas from all category seeds
-  const allSeeds = input.categories.flatMap((c) => c.seeds);
+  const allSeeds = input.categories.flatMap((c) => c.seeds).filter((s) => s.trim().length > 0);
+  if (allSeeds.length === 0) {
+    throw new Error("WAITING_HUMAN:missing_seeds|No hay keywords semilla para investigar. Agrega una keyword objetivo a la tarea.");
+  }
   const ideas = await dfs.getKeywordIdeas(allSeeds, { limit: 200 }, clientId);
   totalCost += 0.025 * Math.ceil(allSeeds.length / 5); // ~$0.025 per 5-seed batch
 

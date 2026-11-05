@@ -776,6 +776,8 @@ export class DataForSeoProvider implements SeoDataProvider {
     options?: { limit?: number; locationName?: string; languageName?: string },
     clientId?: string
   ): Promise<KeywordIdea[]> {
+    if (seeds.length === 0) return [];
+
     const limit = options?.limit ?? 100;
     const location = options?.locationName ?? "Mexico";
     const language = options?.languageName ?? "Spanish";
