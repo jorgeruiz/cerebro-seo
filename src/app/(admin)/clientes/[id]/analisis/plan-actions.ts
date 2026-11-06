@@ -314,15 +314,16 @@ function inferCategory(candidate: { actionType?: string | null; titulo: string; 
     return AT_TO_CATEGORY[candidate.actionType];
   }
 
-  // Regex fallback from title
+  // Regex fallback from title (order: specific → generic)
   const t = candidate.titulo.toLowerCase();
   if (/blog|artículo|articulo|post|redactar/.test(t)) return "blog";
+  if (/landing/.test(t)) return "landing";
   if (/meta\s*(title|description|tag)|yoast/.test(t)) return "meta";
-  if (/keyword|palabras?\s*clave/.test(t)) return "keyword";
   if (/schema|json-?ld/.test(t)) return "schema";
   if (/enlaces?\s*intern|internal\s*link/.test(t)) return "enlazado";
-  if (/landing/.test(t)) return "landing";
   if (/optimizar.*texto|contenido/.test(t)) return "optimizacion";
+  // keyword LAST — many titles mention "keyword" as context
+  if (/investigar.*keyword|seleccionar.*keyword|palabras?\s*clave/.test(t)) return "keyword";
 
   // Fallback to kind-based
   return candidate.kind === "CONTENT" ? "contenido" : candidate.kind === "CODE" ? "tecnico" : "setup";

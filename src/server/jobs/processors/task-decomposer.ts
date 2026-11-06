@@ -744,21 +744,37 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Infer actionType from task category and title. */
+/** Infer actionType from task category, actionType field, and title.
+ * Priority: 1) task.actionType (explicit), 2) category match, 3) title regex.
+ * Order matters — more specific patterns first to avoid false matches
+ * (e.g. "crear landing ... keyword" must match landing, not keyword).
+ */
 function inferActionType(category: string, title: string): ActionType | null {
   const cat = category.toLowerCase();
   const t = title.toLowerCase();
 
-  if (cat === "blog" || cat === "articulo" || /\b(blog|artículo|articulo|post|redactar)\b/.test(t)) return "create_blog";
-  if (cat === "meta" || /\bmeta\s*(title|description|tag)/i.test(t) || /\byoast\b/i.test(t)) return "update_meta";
-  if (cat === "keyword" || /\bkeyword/i.test(t) || /\bpalabras?\s*clave/i.test(t)) return "keyword_research";
-  if (cat === "schema" || /\bschema\b/i.test(t) || /\bjson-?ld\b/i.test(t)) return "schema";
-  if (/\benlaces?\s*interno/i.test(t) || /\binternal\s*link/i.test(t)) return "internal_links";
-  if (cat === "landing" || /\blanding\b/i.test(t)) return "create_landing";
-  if (/\boptimizar\s*(texto|contenido|copy)/i.test(t) || /\beditar\s*(texto|contenido)/i.test(t)) return "edit_page_text";
-  if (/\bimagen\b/i.test(t) && /\bgenerar|crear|ai\b/i.test(t)) return "generate_image";
+  // 1. Category match (most reliable — set explicitly)
+  if (cat === "blog" || cat === "articulo") return "create_blog";
+  if (cat === "meta" || cat === "seo") return "update_meta";
+  if (cat === "landing") return "create_landing";
+  if (cat === "keyword") return "keyword_research";
+  if (cat === "schema") return "schema";
+  if (cat === "enlazado") return "internal_links";
+  if (cat === "optimizacion") return "edit_page_text";
+  if (cat === "imagen") return "generate_image";
 
-  return null; // no template match → free-form
+  // 2. Title regex fallback (order: specific → generic to avoid false matches)
+  if (/\b(blog|artículo|articulo|post|redactar)\b/.test(t)) return "create_blog";
+  if (/\blanding\b/.test(t)) return "create_landing";
+  if (/\bmeta\s*(title|description|tag)|\byoast\b/.test(t)) return "update_meta";
+  if (/\bschema\b|\bjson-?ld\b/.test(t)) return "schema";
+  if (/\benlaces?\s*interno|\binternal\s*link/.test(t)) return "internal_links";
+  if (/\boptimizar\s*(texto|contenido|copy)|\beditar\s*(texto|contenido)/.test(t)) return "edit_page_text";
+  // keyword LAST — many titles mention "keyword" as context, not as the action
+  if (/\binvestigar.*keyword|\bseleccionar.*keyword|\bpalabras?\s*clave/.test(t)) return "keyword_research";
+  if (/\bimagen\b.*\b(generar|crear|ai)\b/.test(t)) return "generate_image";
+
+  return null;
 }
 
 /** Extract capabilities list from the WP capabilities context string. */
