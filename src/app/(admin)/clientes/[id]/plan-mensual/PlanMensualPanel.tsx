@@ -26,7 +26,10 @@ import {
   actionVerifyTask,
   actionPublishWpPlan,
   actionGetWpStagedSummary,
+  actionRunPreflight,
+  actionFixPreflight,
   type PlanFullView,
+  type PreflightCheck,
   type PlanTaskFullView,
   type PlanStepView,
   type PlanMonthOption,
@@ -499,6 +502,148 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 }
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+// ─── Plan Preflight ─────────────────────────────────────────────────────────
+
+function PlanPreflight({ clientId, onAllPassed }: { clientId: string; onAllPassed: () => void }) {
+  const [isPending, startTransition] = useTransition();
+  const [checks, setChecks] = useState<PreflightCheck[] | null>(null);
+  const [allPassed, setAllPassed] = useState(false);
+  const [fixValues, setFixValues] = useState<Record<string, string>>({});
+  const [fixError, setFixError] = useState<string | null>(null);
+
+  const runChecks = useCallback(() => {
+    startTransition(async () => {
+      const res = await actionRunPreflight(clientId);
+      if (res.ok) {
+        setChecks(res.checks);
+        setAllPassed(res.allPassed);
+        if (res.allPassed) onAllPassed();
+      }
+    });
+  }, [clientId, onAllPassed]);
+
+  // Auto-run on mount
+  useEffect(() => { runChecks(); }, [runChecks]);
+
+  const handleFix = (checkId: string, fixAction: string) => {
+    const value = fixValues[checkId] ?? "";
+    setFixError(null);
+    startTransition(async () => {
+      const res = await actionFixPreflight(clientId, fixAction, value);
+      if (!res.ok) {
+        setFixError(res.error);
+      } else {
+        runChecks(); // re-verify
+      }
+    });
+  };
+
+  if (checks === null) {
+    return (
+      <div className="bg-muted/20 border border-border rounded-xl px-4 py-3 flex items-center gap-2">
+        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+        <span className="font-mono text-[0.65rem] text-muted-foreground">Verificando configuración...</span>
+      </div>
+    );
+  }
+
+  if (allPassed) return null; // All good, no banner needed
+
+  return (
+    <div className="bg-yellow-500/5 border border-yellow-500/30 rounded-xl p-4 space-y-3">
+      <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+        Configuración pendiente
+      </p>
+      <div className="space-y-2">
+        {checks.map((check) => (
+          <div key={check.id} className="flex items-start gap-2">
+            <span className={cn(
+              "font-mono text-[0.65rem] mt-0.5",
+              check.status === "pass" ? "text-emerald-500" : "text-yellow-500"
+            )}>
+              {check.status === "pass" ? "✓" : "✗"}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[0.65rem] text-foreground">{check.label}</p>
+              <p className="font-mono text-[0.55rem] text-muted-foreground">{check.detail}</p>
+
+              {/* Inline fix controls */}
+              {check.status === "fail" && check.fixAction === "set_platform" && (
+                <div className="flex items-center gap-2 mt-1">
+                  <select
+                    className="font-mono text-[0.65rem] border border-border rounded px-2 py-1 bg-card"
+                    value={fixValues[check.id] ?? ""}
+                    onChange={(e) => setFixValues((v) => ({ ...v, [check.id]: e.target.value }))}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="WORDPRESS">WordPress</option>
+                    <option value="NEXTJS">Next.js</option>
+                  </select>
+                  <button
+                    onClick={() => handleFix(check.id, check.fixAction!)}
+                    disabled={isPending || !fixValues[check.id]}
+                    className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "h-6 text-[0.6rem]")}
+                  >
+                    {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Guardar"}
+                  </button>
+                </div>
+              )}
+
+              {check.status === "fail" && check.fixAction === "set_url" && (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    placeholder="https://ejemplo.com"
+                    className="font-mono text-[0.65rem] border border-border rounded px-2 py-1 bg-card flex-1"
+                    value={fixValues[check.id] ?? ""}
+                    onChange={(e) => setFixValues((v) => ({ ...v, [check.id]: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => handleFix(check.id, check.fixAction!)}
+                    disabled={isPending || !fixValues[check.id]}
+                    className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "h-6 text-[0.6rem]")}
+                  >
+                    {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Guardar"}
+                  </button>
+                </div>
+              )}
+
+              {check.status === "fail" && check.fixAction === "set_repo" && (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    placeholder="owner/repo-name"
+                    className="font-mono text-[0.65rem] border border-border rounded px-2 py-1 bg-card flex-1"
+                    value={fixValues[check.id] ?? ""}
+                    onChange={(e) => setFixValues((v) => ({ ...v, [check.id]: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => handleFix(check.id, check.fixAction!)}
+                    disabled={isPending || !fixValues[check.id]}
+                    className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "h-6 text-[0.6rem]")}
+                  >
+                    {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Guardar"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {fixError && <p className="font-mono text-[0.6rem] text-destructive">{fixError}</p>}
+      <button
+        onClick={runChecks}
+        disabled={isPending}
+        className={cn(buttonVariants({ variant: "outline-mono", size: "sm" }), "gap-1.5")}
+      >
+        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        Verificar de nuevo
+      </button>
+    </div>
+  );
+}
 
 // ─── WP Publish Button ──────────────────────────────────────────────────────
 
@@ -1231,6 +1376,7 @@ function TaskGroup({
 
 function PlanStatusBanner({
   plan,
+  clientId,
   onActivate,
   onWatchdog,
   onSubmitReview,
@@ -1238,17 +1384,22 @@ function PlanStatusBanner({
   isActing,
 }: {
   plan: PlanFullView;
+  clientId: string;
   onActivate: () => void;
   onWatchdog: () => void;
   onSubmitReview: () => void;
   onMerge: () => void;
   isActing: boolean;
 }) {
+  const [preflightPassed, setPreflightPassed] = useState(false);
+
   if (plan.status === "PLANNING") {
     const allReady = plan.tasks.every((t) => t.status !== "PLANNING");
     const hasFailed = plan.tasks.some((t) => t.status === "FAILED");
     const planningCount = plan.tasks.filter((t) => t.status === "PLANNING").length;
     return (
+      <div className="space-y-2">
+      <PlanPreflight clientId={clientId} onAllPassed={() => setPreflightPassed(true)} />
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">Plan en preparacion</p>
@@ -1268,13 +1419,15 @@ function PlanStatusBanner({
             </button>
           )}
           {allReady && !hasFailed && (
-            <button onClick={onActivate} disabled={isActing}
+            <button onClick={onActivate} disabled={isActing || !preflightPassed}
+              title={!preflightPassed ? "Resuelve la configuración pendiente primero" : ""}
               className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5")}>
               {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
               Activar plan
             </button>
           )}
         </div>
+      </div>
       </div>
     );
   }
@@ -1708,7 +1861,7 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
             </div>
 
             {/* Plan status banner */}
-            <PlanStatusBanner plan={plan} onActivate={handleActivate} onWatchdog={handleWatchdog} onSubmitReview={handleSubmitReview} onMerge={handleMerge} isActing={isActing} />
+            <PlanStatusBanner plan={plan} clientId={clientId} onActivate={handleActivate} onWatchdog={handleWatchdog} onSubmitReview={handleSubmitReview} onMerge={handleMerge} isActing={isActing} />
 
             {/* Task groups */}
             <div className="space-y-8">

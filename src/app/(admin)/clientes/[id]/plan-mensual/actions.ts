@@ -1197,3 +1197,125 @@ export async function actionGetWpStagedSummary(
 
   return { ok: true, changes };
 }
+
+// ─── Plan preflight checks ─────────────────────────────────────────────────
+
+export interface PreflightCheck {
+  id: string;
+  label: string;
+  status: "pass" | "fail";
+  /** What the user can do to fix it */
+  fixAction: "set_platform" | "set_url" | "set_repo" | null;
+  detail: string;
+}
+
+export async function actionRunPreflight(
+  clientId: string
+): Promise<{ ok: true; checks: PreflightCheck[]; allPassed: boolean } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "No autenticado." };
+
+  const site = await prisma.site.findFirst({
+    where: { clientId },
+    select: { id: true, url: true, platform: true, githubRepo: true, client: { select: { cerebroClientId: true } } },
+  });
+
+  const checks: PreflightCheck[] = [];
+
+  // 1. Site exists
+  if (!site) {
+    checks.push({ id: "site", label: "Sitio configurado", status: "fail", fixAction: "set_url", detail: "No hay sitio. Agrega la URL del sitio." });
+    return { ok: true, checks, allPassed: false };
+  }
+
+  // 2. URL
+  if (!site.url || site.url.trim().length < 5) {
+    checks.push({ id: "url", label: "URL del sitio", status: "fail", fixAction: "set_url", detail: "Falta la URL del sitio." });
+  } else {
+    checks.push({ id: "url", label: "URL del sitio", status: "pass", fixAction: null, detail: site.url });
+  }
+
+  // 3. Platform
+  if (!site.platform || site.platform === "OTRO") {
+    checks.push({ id: "platform", label: "Plataforma", status: "fail", fixAction: "set_platform", detail: "No se ha detectado la plataforma. ¿Es WordPress o Next.js?" });
+  } else {
+    checks.push({ id: "platform", label: "Plataforma", status: "pass", fixAction: null, detail: site.platform });
+  }
+
+  // 4. Platform-specific checks
+  if (site.platform === "NEXTJS") {
+    if (!site.githubRepo) {
+      checks.push({ id: "repo", label: "Repositorio GitHub", status: "fail", fixAction: "set_repo", detail: "Falta el repositorio GitHub (owner/name)." });
+    } else {
+      checks.push({ id: "repo", label: "Repositorio GitHub", status: "pass", fixAction: null, detail: site.githubRepo });
+    }
+  }
+
+  if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
+    if (!site.client.cerebroClientId) {
+      checks.push({ id: "cerebro", label: "Conexión Cerebro", status: "fail", fixAction: null, detail: "Falta cerebroClientId. Sincroniza con Notion." });
+    } else {
+      checks.push({ id: "cerebro", label: "Conexión Cerebro", status: "pass", fixAction: null, detail: "Conectado" });
+    }
+  }
+
+  return { ok: true, checks, allPassed: checks.every((c) => c.status === "pass") };
+}
+
+// ─── Fix preflight issues ──────────────────────────────────────────────────
+
+export async function actionFixPreflight(
+  clientId: string,
+  fixId: string,
+  value: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const site = await prisma.site.findFirst({ where: { clientId } });
+
+  if (fixId === "set_platform") {
+    const valid = ["NEXTJS", "WORDPRESS"] as const;
+    if (!valid.includes(value as typeof valid[number])) {
+      return { ok: false, error: "Plataforma debe ser NEXTJS o WORDPRESS." };
+    }
+    if (site) {
+      await prisma.site.update({
+        where: { id: site.id },
+        data: { platform: value as "NEXTJS" | "WORDPRESS", platformDetectedAt: new Date() },
+      });
+    } else {
+      // Create site with minimal data
+      const client = await prisma.client.findUnique({ where: { id: clientId }, select: { domain: true } });
+      await prisma.site.create({
+        data: {
+          clientId,
+          url: client?.domain ? `https://${client.domain}` : "",
+          platform: value as "NEXTJS" | "WORDPRESS",
+          platformDetectedAt: new Date(),
+        },
+      });
+    }
+    return { ok: true };
+  }
+
+  if (fixId === "set_url") {
+    if (!value || value.trim().length < 5) return { ok: false, error: "URL inválida." };
+    const url = value.startsWith("http") ? value : `https://${value}`;
+    if (site) {
+      await prisma.site.update({ where: { id: site.id }, data: { url } });
+    } else {
+      await prisma.site.create({ data: { clientId, url } });
+    }
+    return { ok: true };
+  }
+
+  if (fixId === "set_repo") {
+    if (!value || !value.includes("/")) return { ok: false, error: "Repo debe ser owner/name." };
+    if (!site) return { ok: false, error: "Primero configura el sitio." };
+    await prisma.site.update({ where: { id: site.id }, data: { githubRepo: value.trim() } });
+    return { ok: true };
+  }
+
+  return { ok: false, error: `Fix desconocido: ${fixId}` };
+}
