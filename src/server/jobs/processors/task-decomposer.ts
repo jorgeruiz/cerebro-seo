@@ -441,11 +441,48 @@ ${repoContext}
 
 Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${platform}.`;
 
+  // ── Coherence preflight: validate + auto-correct before decomposing ──────
+  const { validateTaskCoherence } = await import("@/lib/task-coherence");
+  const coherence = validateTaskCoherence({
+    title: task.title,
+    objective: task.objective,
+    actionType: task.actionType ?? null,
+    category: task.category,
+    targetKeyword: task.targetKeyword ?? null,
+    kind: task.kind,
+  });
+
+  // Apply auto-corrections to the task
+  if (coherence.issues.some((i) => i.autoFixed)) {
+    const corrections: Record<string, unknown> = {};
+    if (coherence.actionType !== (task.actionType ?? null)) corrections.actionType = coherence.actionType;
+    if (coherence.category !== task.category) corrections.category = coherence.category;
+    if (coherence.targetKeyword !== (task.targetKeyword ?? null)) corrections.targetKeyword = coherence.targetKeyword;
+
+    if (Object.keys(corrections).length > 0) {
+      await prisma.planTask.update({ where: { id: taskId }, data: corrections });
+      console.log(
+        `[task-decomposer] Coherence auto-fix: ${coherence.issues.filter((i) => i.autoFixed).map((i) => `${i.field}: "${i.oldValue}" → "${i.newValue}"`).join(", ")}`
+      );
+    }
+  }
+
+  if (coherence.blocked) {
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "WAITING_HUMAN", failureReason: coherence.blockReason },
+    });
+    console.log(`[task-decomposer] ${task.title} → BLOCKED by coherence: ${coherence.blockReason}`);
+    return;
+  }
+
+  // Use corrected values for template lookup
+  const effectiveActionType = (coherence.actionType ?? inferActionType(coherence.category, task.title)) as ActionType | null;
+
   // ── Template-based path: deterministic steps ──────────────────────────
-  const inferredActionType = inferActionType(task.category, task.title);
   const templatePlatform = (platform === "NEXTJS" || platform === "WORDPRESS") ? platform as Platform : null;
-  const template = templatePlatform && inferredActionType
-    ? getTemplate(inferredActionType, templatePlatform)
+  const template = templatePlatform && effectiveActionType
+    ? getTemplate(effectiveActionType, templatePlatform)
     : null;
 
   if (template) {
@@ -460,8 +497,8 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
       create_landing: "landing",
       edit_page_text: "optimization",
     };
-    const contentKind = KIND_MAP[inferredActionType!] ?? null;
-    const targetKeyword = task.targetKeyword ?? null;
+    const contentKind = KIND_MAP[effectiveActionType!] ?? null;
+    const targetKeyword = coherence.targetKeyword ?? task.targetKeyword ?? null;
 
     // Create steps from template with proper payloads
     for (let i = 0; i < finalSteps.length; i++) {
@@ -570,14 +607,14 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
         status: "READY",
         mode,
         modeReason,
-        actionType: inferredActionType,
+        actionType: effectiveActionType,
         generatorVersion: DECOMPOSER_VERSION,
         prompt: finalSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
       },
     });
 
     console.log(
-      `[task-decomposer] ✓ "${task.title}" — template ${inferredActionType}/${templatePlatform} → ${finalSteps.length} steps (${mode})`
+      `[task-decomposer] ✓ "${task.title}" — template ${effectiveActionType}/${templatePlatform} → ${finalSteps.length} steps (${mode})`
     );
     return;
   }
