@@ -2,9 +2,49 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-06 (UI-FIXES — botones Hecho/Manual, terminal, análisis background)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Deploy cerebro-web (endpoint /api/internal/estrategia) → deploy cerebro-seo. Probar "Cargar a Notion" + "Verificar" con un plan real.
+**Última actualización:** 2026-11-06 (sesión extensa: blog routing, coherencia, UI, terminal, DataForSEO Labs, preflight)
+**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY+COHERENCE+UI-FIXES completas. S4b/S4d/S4e pendientes.
+**Próximo hito:** Deploy y probar plan completo Brainet (Next.js) + Química Ecológica (WP) de principio a fin.
+
+### ✅ UI-FIXES — Botones, terminal, análisis background (2026-11-06)
+
+- Botón "Hecho" en pasos HUMAN: corregida condición isActionable — aparece en el primer paso pendiente
+- Botón "Manual" en pasos AI: admin puede completar cualquier paso AI manualmente (override)
+- actionCompleteHumanStep: acepta AI steps, rechaza RUNNING
+- Terminal stuck fix: sesiones ACTIVE con >15 min inactividad o >60 min se auto-cierran al abrir nueva
+- Análisis Claude en background: botón "En 2° plano" encola en ai-analysis queue, no bloquea UI
+- SEO step context: payload incluye task.objective para saber qué páginas optimizar
+
+### ✅ COHERENCE — Preflight de coherencia en decomposer (2026-11-05)
+
+- validateTaskCoherence(): valida actionType vs título, category vs actionType, targetKeyword
+- Auto-corrige: "Crear landing ... keyword" → create_landing (no keyword_research)
+- Category siempre coincide con actionType después de corrección
+- Keyword extraída de comillas si falta targetKeyword
+- inferActionType: category primero, landing antes que keyword, keyword solo con intención explícita
+
+### ✅ BLOG-ROUTING + IMAGE GUARD (2026-11-01)
+
+- PlanTask.actionType String? — campo dedicado para ruteo (migración add_action_type)
+- plan-actions.ts: inferCategory() desde actionType/título (no kind.toLowerCase())
+- isNextjsBlogTask: checa actionType=create_blog primero, category=blog como fallback
+- Image executor: guard content_brief vacío → WAITING_HUMAN (no crash)
+- Template payloads completos: image (brief), publish (endpoint/slug), seo (context)
+
+### ✅ WP-PLATFORM — Publicar en WordPress + getPlatformPolicy (2026-10-31)
+
+- Botón "Publicar en WordPress" con preview y resultado detallado
+- Server guards: submit/merge rechazan WP
+- getPlatformPolicy(): fuente única de verdad por plataforma
+- Kind labels dinámicos (WP: Plugin/Manual, Next.js: Código)
+- Plan preflight: valida plataforma/URL/repo con corrección inline
+
+### ✅ DATAFORSEO — Endpoints corregidos (2026-11-05)
+
+- keyword_suggestions → related_keywords (disponible en cuenta)
+- labs/search_volume → keywords_data/google_ads/search_volume (universal)
+- Guard seeds vacíos → WAITING_HUMAN (no 404)
+- Credenciales: sin comillas en Easypanel, API password (no login password)
 
 ### ✅ KEYWORD-FIX — Keyword como dato de la tarea, no del título (2026-10-30)
 

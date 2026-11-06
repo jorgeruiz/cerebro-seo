@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-10-31 (v10 — getPlatformPolicy, Publicar en WordPress, kind por plataforma)
+**Última actualización:** 2026-11-06 (v11 — coherencia, blog routing, UI fixes, análisis background, DataForSEO Labs)
 
 ---
 
@@ -209,6 +209,19 @@ Tres carriles de ejecución:
 **Política de plataforma** (`src/lib/platform-policy.ts`):
 - `getPlatformPolicy(platform)` — fuente única de verdad para: executable, needsRepo, closeFlow, kindLabels, humanReasons, usesTerminal, ineligibilityReason.
 - Reemplaza los if/else dispersos en actions.ts, decomposer, site-platform.
+
+**Coherencia del decomposer** (`src/lib/task-coherence.ts`):
+- `validateTaskCoherence()` valida actionType vs título, corrige category, extrae keyword.
+- Corre antes de generar pasos — auto-corrige sin intervención humana.
+
+**Preflight del plan** (en actions.ts):
+- `actionRunPreflight()` verifica: sitio, URL, plataforma, repo (Next.js), cerebroClientId (WP).
+- `actionFixPreflight()` aplica correcciones inline (dropdown plataforma, input URL/repo).
+- "Activar plan" deshabilitado hasta que todo pase.
+
+**Análisis en background** (insights-worker.ts):
+- Job `analysis:generate` en cola `ai-analysis` — no bloquea UI.
+- Botón "En 2° plano" en AnalysisPanel.
 
 **Pre-push hook**: `.git/hooks/pre-push` corre `next lint` antes de cada push.
 
