@@ -49,6 +49,44 @@ export async function actionGenerateAnalysis(
   }
 }
 
+/**
+ * Enqueue analysis in background — returns immediately, doesn't block UI.
+ * The UI polls getLatestAnalysis() to check completion.
+ */
+export async function actionGenerateAnalysisBackground(
+  clientId: string
+): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session?.user) return { ok: false, error: "No autenticado" };
+
+  const { aiAnalysisQueue } = await import("@/server/jobs/queues");
+  await aiAnalysisQueue.add("analysis:generate", {
+    clientId,
+    triggeredBy: session.user.email ?? "unknown",
+  });
+
+  return { ok: true, message: "Análisis en cola — se ejecutará en segundo plano." };
+}
+
+/**
+ * Check if an analysis is currently running for this client.
+ */
+export async function actionCheckAnalysisStatus(
+  clientId: string
+): Promise<{ running: boolean; latestId: string | null; latestAt: string | null }> {
+  const latest = await prisma.clientAnalysis.findFirst({
+    where: { clientId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, createdAt: true },
+  });
+
+  return {
+    running: false,
+    latestId: latest?.id ?? null,
+    latestAt: latest?.createdAt.toISOString() ?? null,
+  };
+}
+
 export async function getAnalysisHistory(clientId: string): Promise<AnalysisRecord[]> {
   const records = await prisma.clientAnalysis.findMany({
     where: { clientId },

@@ -279,11 +279,12 @@ export async function actionCompleteHumanStep(
   });
 
   if (!step) return { ok: false, error: "Paso no encontrado." };
-  if (step.type !== "HUMAN") {
-    return { ok: false, error: "Solo se pueden completar pasos manuales." };
-  }
+  // Allow completing HUMAN steps normally AND AI steps manually (admin override)
   if (step.status === "DONE") {
     return { ok: false, error: "Paso ya completado." };
+  }
+  if (step.status === "RUNNING") {
+    return { ok: false, error: "Paso en ejecución — espera a que termine." };
   }
 
   // Enforce step ordering: reject if an earlier step is still pending

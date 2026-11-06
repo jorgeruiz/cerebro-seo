@@ -537,6 +537,8 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
           payload.meta_title = "";
           payload.meta_description = "";
           payload.focus_keyword = targetKeyword ?? "";
+          // Include task objective as context so the executor knows which pages to target
+          payload.context = task.objective;
         }
 
         if (ts.action === "keyword_research") {

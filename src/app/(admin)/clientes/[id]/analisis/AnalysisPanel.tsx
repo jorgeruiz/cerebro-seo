@@ -5,7 +5,7 @@ import {
   Sparkles, Loader2, AlertTriangle, TrendingUp, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { actionGenerateAnalysis, type AnalysisRecord } from "./actions";
+import { actionGenerateAnalysis, actionGenerateAnalysisBackground, type AnalysisRecord } from "./actions";
 import type { AnalysisOpportunity, AnalysisRisk } from "@/lib/claude-analysis";
 import { CandidatasPanel } from "./CandidatasPanel";
 
@@ -147,12 +147,28 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const [bgMessage, setBgMessage] = useState<string | null>(null);
+
   function handleGenerate() {
     setError(null);
+    setBgMessage(null);
     startTransition(async () => {
       const result = await actionGenerateAnalysis(clientId);
       if (result.ok) {
         setCurrent(result.record);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  function handleGenerateBackground() {
+    setError(null);
+    setBgMessage(null);
+    startTransition(async () => {
+      const result = await actionGenerateAnalysisBackground(clientId);
+      if (result.ok) {
+        setBgMessage(result.message + " Recarga la página en ~30s para ver el resultado.");
       } else {
         setError(result.error);
       }
@@ -173,12 +189,26 @@ export function AnalysisPanel({ clientId, initialRecord, history }: Props) {
             <><Sparkles className="h-3.5 w-3.5" /> {current ? "Nuevo análisis" : "Generar análisis"}</>
           )}
         </button>
+        <button
+          onClick={handleGenerateBackground}
+          disabled={isPending}
+          className={buttonVariants({ variant: "outline-mono", size: "sm" }) + " gap-2"}
+          title="Corre el análisis en segundo plano — puedes seguir trabajando"
+        >
+          <Sparkles className="h-3.5 w-3.5" /> En 2° plano
+        </button>
         {current && !isPending && (
           <p className="font-mono text-[0.7rem] text-muted-foreground">
             Análisis actual del {formatDate(current.createdAt)}
           </p>
         )}
       </div>
+
+      {bgMessage && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+          <p className="text-sm text-emerald-600">{bgMessage}</p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4">

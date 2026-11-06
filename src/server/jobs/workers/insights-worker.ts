@@ -17,6 +17,20 @@ import type { InsightsJobData } from "../queues";
 export const insightsWorker = createWorker<InsightsJobData>(
   "ai-analysis",
   async (job) => {
+    // ── analysis:generate — background client analysis ──────────────
+    if (job.name === "analysis:generate") {
+      const { clientId, triggeredBy } = job.data as unknown as { clientId: string; triggeredBy: string };
+      console.log(`[analysis] Starting background analysis for client=${clientId} by=${triggeredBy}`);
+
+      const { generateClientAnalysis } = await import("@/lib/claude-analysis");
+      const { analysis } = await generateClientAnalysis(clientId, triggeredBy);
+
+      const candidateCount = analysis.candidatas?.length ?? 0;
+      console.log(`[analysis] Done: client=${clientId} candidatas=${candidateCount}`);
+      return { clientId, candidateCount };
+    }
+
+    // ── insights:generate ───────────────────────────────────────────
     if (job.name !== "insights:generate") return undefined as never;
 
     const result = await runInsightsProcessor(job.data);

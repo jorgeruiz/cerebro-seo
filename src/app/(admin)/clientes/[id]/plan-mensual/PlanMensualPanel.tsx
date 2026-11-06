@@ -298,7 +298,10 @@ function StepRow({
   isActionable?: boolean;
 }) {
   const statusCfg = STEP_STATUS[step.status] ?? STEP_STATUS.PENDING;
+  // Show "Hecho" button for HUMAN steps that are pending AND actionable (first pending step)
+  // Also show for ANY step when isActionable, to allow manual completion of AI steps
   const isHumanPending = step.type === "HUMAN" && (step.status === "PENDING" || step.status === "WAITING_HUMAN") && isActionable;
+  const canCompleteManually = isActionable && (step.status === "PENDING" || step.status === "WAITING_HUMAN" || step.status === "FAILED");
 
   return (
     <div className="flex items-start gap-2 py-1.5 px-2 rounded hover:bg-muted/30 group">
@@ -404,6 +407,7 @@ function StepRow({
           {statusCfg.label}
         </span>
 
+        {/* HUMAN step: "Hecho" button */}
         {isHumanPending && (
           <button
             onClick={() => onComplete(step.id)}
@@ -417,6 +421,25 @@ function StepRow({
               <Loader2 className="h-2.5 w-2.5 animate-spin" />
             ) : (
               <><CheckCircle2 className="h-2.5 w-2.5" /> Hecho</>
+            )}
+          </button>
+        )}
+
+        {/* AI/failed step: "Completar manual" button */}
+        {!isHumanPending && canCompleteManually && step.type === "AI" && (
+          <button
+            onClick={() => onComplete(step.id)}
+            disabled={isCompleting}
+            className={cn(
+              buttonVariants({ variant: "outline-mono", size: "sm" }),
+              "h-6 text-[0.55rem] px-2 gap-1 text-muted-foreground"
+            )}
+            title="Marcar como completado manualmente"
+          >
+            {isCompleting ? (
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            ) : (
+              <><CheckCircle2 className="h-2.5 w-2.5" /> Manual</>
             )}
           </button>
         )}

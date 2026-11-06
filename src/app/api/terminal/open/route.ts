@@ -43,15 +43,29 @@ export async function POST(req: NextRequest) {
     select: { githubRepo: true },
   });
 
-  // Check for existing active terminal session
+  // Check for existing active terminal session — auto-close stale ones
   const existing = await prisma.terminalSession.findFirst({
     where: { planId: body.planId, status: "ACTIVE" },
   });
   if (existing) {
-    return NextResponse.json(
-      { error: "Ya hay una terminal activa para este plan.", sessionId: existing.id },
-      { status: 409 }
-    );
+    // Check if the session is stale (older than 15 min since last activity or 60 min total)
+    const ageMs = Date.now() - existing.createdAt.getTime();
+    const updatedMs = Date.now() - existing.updatedAt.getTime();
+    const isStale = ageMs > 60 * 60 * 1000 || updatedMs > 15 * 60 * 1000;
+
+    if (isStale) {
+      // Auto-close the stale session
+      await prisma.terminalSession.update({
+        where: { id: existing.id },
+        data: { status: "TIMED_OUT", closedAt: new Date() },
+      });
+      console.log(`[terminal/open] Auto-closed stale session ${existing.id} (age: ${Math.round(ageMs / 60000)}min)`);
+    } else {
+      return NextResponse.json(
+        { error: "Ya hay una terminal activa para este plan.", sessionId: existing.id },
+        { status: 409 }
+      );
+    }
   }
 
   // Acquire plan lock
