@@ -931,8 +931,10 @@ async function processWpTask(
       prompt: string | null;
       acceptanceCriteria: string[];
       notes: string | null;
+      stagedChange?: unknown;
     }>;
     site: {
+      id: string;
       url: string;
       platform: string | null;
       client: { cerebroClientId: string | null; name: string } | null;
@@ -980,6 +982,60 @@ async function processWpTask(
         return;
       }
 
+      // Check if this is a data step (keyword_research, apply_keywords) — runs inside Cerebro SEO, not WP
+      const dataAction = parseDataAction(step.prompt);
+      const applyAction = parseApplyAction(step.prompt);
+
+      if (dataAction || applyAction) {
+        await prisma.planStep.update({ where: { id: step.id }, data: { status: "RUNNING" } });
+        const run = await prisma.taskRun.create({
+          data: { taskId, stepId: step.id, kind: "AUTO", status: "RUNNING" },
+        });
+        try {
+          if (dataAction?.action === "keyword_research") {
+            const { executeKeywordResearch } = await import("./data-step-executor");
+            const result = await executeKeywordResearch(dataAction, task.site.id, plan.clientId);
+            await prisma.planStep.update({
+              where: { id: step.id },
+              data: {
+                status: "DONE", notes: result.notes,
+                ...(result.stagedChange ? { stagedChange: result.stagedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"] } : {}),
+              },
+            });
+            await prisma.taskRun.update({
+              where: { id: run.id },
+              data: { status: "SUCCEEDED", logTail: result.notes.slice(0, 2000), finishedAt: new Date() },
+            });
+            continue;
+          }
+          if (applyAction) {
+            const { executeApplyKeywords } = await import("./data-step-executor");
+            const kwStep = task.steps.find(
+              (s) => s.status === "DONE" && s.stagedChange && (s.stagedChange as Record<string, unknown>).type === "keyword_research"
+            );
+            if (!kwStep?.stagedChange) throw new Error("No keyword_research staged data found");
+            const staged = kwStep.stagedChange as unknown as { rows: Array<Record<string, unknown>> };
+            const result = await executeApplyKeywords(staged.rows as never, plan.clientId);
+            await prisma.planStep.update({ where: { id: step.id }, data: { status: "DONE", notes: result.notes } });
+            await prisma.taskRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", logTail: result.notes.slice(0, 2000), finishedAt: new Date() } });
+            continue;
+          }
+        } catch (dataErr) {
+          const errMsg = dataErr instanceof Error ? dataErr.message : String(dataErr);
+          if (errMsg.startsWith("WAITING_HUMAN:")) {
+            const reason = errMsg.replace(/^WAITING_HUMAN:[^|]*\|?/, "");
+            await prisma.planStep.update({ where: { id: step.id }, data: { status: "WAITING_HUMAN", notes: reason } });
+            await prisma.planTask.update({ where: { id: taskId }, data: { status: "WAITING_HUMAN" } });
+            await prisma.taskRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", logTail: reason.slice(0, 2000), finishedAt: new Date() } });
+            return;
+          }
+          await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED" } });
+          await failRun(run.id, errMsg);
+          await failTask(taskId, `Data step WP ${step.order} falló: ${errMsg}`);
+          return;
+        }
+      }
+
       // type=AI — execute via WP proxy
       await prisma.planStep.update({ where: { id: step.id }, data: { status: "RUNNING" } });
 
@@ -994,22 +1050,25 @@ async function processWpTask(
 
         const stepResult = await executeWpAiStep(cerebroClientId, siteProfile, task, step, taskId, imageCount);
 
+        // Guard: ensure notes is always a string (prevents .startsWith crash)
+        const notes = stepResult.notes ?? `wp:step completed — ${step.title}`;
+
         // Track image count for per-task limit
         if (stepResult.imageUrl) imageCount++;
 
         // Steps that need human intervention → WAITING_HUMAN
-        const isImageHuman = stepResult.notes.startsWith("image:human-required")
-          || stepResult.notes.startsWith("image:limit")
-          || stepResult.notes.startsWith("image:qa-failed")
-          || stepResult.notes.startsWith("image:failed")
-          || stepResult.notes.startsWith("image:upload-failed")
-          || stepResult.notes.startsWith("waiting_human:")
-          || stepResult.notes.startsWith("content_package_json_failed:");
+        const isImageHuman = notes.startsWith("image:human-required")
+          || notes.startsWith("image:limit")
+          || notes.startsWith("image:qa-failed")
+          || notes.startsWith("image:failed")
+          || notes.startsWith("image:upload-failed")
+          || notes.startsWith("waiting_human:")
+          || notes.startsWith("content_package_json_failed:");
 
         if (isImageHuman) {
           await prisma.planStep.update({
             where: { id: step.id },
-            data: { status: "WAITING_HUMAN", notes: stepResult.notes },
+            data: { status: "WAITING_HUMAN", notes },
           });
           await prisma.planTask.update({
             where: { id: taskId },
@@ -1017,9 +1076,9 @@ async function processWpTask(
           });
           await prisma.taskRun.update({
             where: { id: run.id },
-            data: { status: "SUCCEEDED", logTail: stepResult.notes.slice(0, 2000), finishedAt: new Date() },
+            data: { status: "SUCCEEDED", logTail: notes.slice(0, 2000), finishedAt: new Date() },
           });
-          console.log(`[wp-task] Image step ${step.order} → WAITING_HUMAN: ${stepResult.notes.slice(0, 80)}`);
+          console.log(`[wp-task] Step ${step.order} → WAITING_HUMAN: ${notes.slice(0, 80)}`);
           return;
         }
 
@@ -1027,16 +1086,13 @@ async function processWpTask(
           where: { id: step.id },
           data: {
             status: "DONE",
-            notes: step.notes ? `${step.notes}\n---\n${stepResult.notes}` : stepResult.notes,
-            // stagedChange almacena datos estructurados del borrador (blog o seo)
-            // publishWpPlanAction los lee para aplicar al publicar el plan
+            notes: step.notes ? `${step.notes}\n---\n${notes}` : notes,
             ...(stepResult.stagedChange !== undefined
               ? { stagedChange: stepResult.stagedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"] }
               : {}),
           },
         });
 
-        // Borrador WP → previewUrl de la tarea (resultUrls se llena al publicar el plan)
         if (stepResult.previewUrl) {
           await prisma.planTask.update({
             where: { id: taskId },
@@ -1044,7 +1100,6 @@ async function processWpTask(
           });
         }
 
-        // Imagen generada → resultUrls (la URL de la imagen, no previewUrl de la tarea)
         if (stepResult.imageUrl) {
           resultUrls.push(stepResult.imageUrl);
         }
@@ -1053,12 +1108,12 @@ async function processWpTask(
           where: { id: run.id },
           data: {
             status: "SUCCEEDED",
-            logTail: stepResult.notes.slice(0, 2000),
+            logTail: notes.slice(0, 2000),
             finishedAt: new Date(),
           },
         });
 
-        console.log(`[wp-task] Step ${step.order} ✓ ${stepResult.notes.slice(0, 80)}`);
+        console.log(`[wp-task] Step ${step.order} ✓ ${notes.slice(0, 80)}`);
       } catch (stepErr) {
         const errMsg = stepErr instanceof Error ? stepErr.message : String(stepErr);
 

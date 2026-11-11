@@ -231,6 +231,11 @@ B. La canibalización ya fue verificada automáticamente. Si el contexto incluye
    "PÁGINA EXISTENTE:", la tarea DEBE optimizar esa página — NUNCA crear una nueva.
 C. Si un paso AI requiere un endpoint que NO aparece en WP CAPABILITIES → conviértelo
    en HUMAN con instrucciones manuales equivalentes. Nunca lo dejes inválido.
+D. TODO paso type=AI en WordPress DEBE tener un prompt JSON con "action" reconocida:
+   content_package, publish, seo, image, keyword_research, apply_keywords.
+   Si la tarea necesita algo que no tiene acción (verificar backlinks, revisar 404s,
+   configurar redirects) → paso HUMAN con instrucciones claras para WP Admin.
+   NUNCA generes un paso AI con prompt de texto libre en WordPress.
 
 PASO OBLIGATORIO "content_package":
 Toda tarea CONTENT en WordPress DEBE comenzar con este paso AI como paso 1:
@@ -684,6 +689,23 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
         continue;
       }
 
+      // WP: AI steps must have recognized action JSON — degrade to HUMAN if not
+      if (platform === "WORDPRESS" && step.type === "AI") {
+        const VALID_WP_ACTIONS = ["content_package", "publish", "seo", "image", "elementor", "landing", "keyword_research", "apply_keywords"];
+        let hasValidAction = false;
+        try {
+          const parsed = JSON.parse((step.prompt ?? "").replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim());
+          hasValidAction = VALID_WP_ACTIONS.includes(parsed?.action);
+        } catch { /* not JSON */ }
+
+        if (!hasValidAction) {
+          console.warn(`[task-decomposer] WP AI step sin acción válida → HUMAN: "${step.title}"`);
+          step.type = "HUMAN" as "AI" | "HUMAN";
+          step.humanReason = "wp_manual";
+          step.prompt = `Este paso requiere intervención manual en WordPress Admin.\n\nObjetivo: ${step.title}\n${step.prompt ?? ""}`;
+        }
+      }
+
       validSteps.push(step);
     }
 
@@ -812,6 +834,11 @@ function inferActionType(category: string, title: string): ActionType | null {
   // keyword LAST — many titles mention "keyword" as context, not as the action
   if (/\binvestigar.*keyword|\bseleccionar.*keyword|\bpalabras?\s*clave/.test(t)) return "keyword_research";
   if (/\bimagen\b.*\b(generar|crear|ai)\b/.test(t)) return "generate_image";
+
+  // Tasks that don't have templates but shouldn't be free-form AI
+  // (they'll use the fallback HUMAN step in the decomposer)
+  // No return null — let them fall through to free-form decomposition
+  // which will then degrade AI→HUMAN for WP via the validator above
 
   return null;
 }
