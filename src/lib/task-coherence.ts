@@ -10,17 +10,23 @@ import type { ActionType } from "./task-templates";
 
 // ─── Patterns ───────────────────────────────────────────────────────────────
 
-const BLOG_SIGNALS = /\b(blog|artículo|articulo|post|redactar|escribir\s+artículo)\b/i;
+// NOTE: ORDER MATTERS — more specific patterns first.
+// "meta title del artículo /url/" must match META, not BLOG.
+const META_SIGNALS = /\b(meta\s*(title|description|tag)|yoast|optimizar\s+meta|mejorar\s+meta|focus\s+keyword)\b/i;
+const BLOG_SIGNALS = /\b(blog|redactar|escribir\s+artículo|crear\s+artículo|nuevo\s+artículo|publicar\s+artículo)\b/i;
 const LANDING_SIGNALS = /\b(landing|página\s+de\s+servicio|crear\s+página|nueva\s+página|página\s+web)\b/i;
-const META_SIGNALS = /\b(meta\s*(title|description|tag)|yoast|optimizar\s+meta|mejorar\s+meta)\b/i;
 const KEYWORD_SIGNALS = /\b(investigar\s+keywords?|seleccionar\s+keywords?|investigación\s+de\s+palabras|palabras\s+clave\s+prioritarias)\b/i;
 const SCHEMA_SIGNALS = /\b(schema|json-?ld|structured\s+data|datos\s+estructurados)\b/i;
 const INTERNAL_LINKS_SIGNALS = /\b(enlaces?\s+internos?|internal\s+links?|interlinking)\b/i;
+// Tasks that should always be HUMAN (no AI handler exists)
+const INDEXATION_SIGNALS = /\b(indexaci[oó]n|indexar|indexados?|search\s+console.*verific|verificar.*indexa)\b/i;
+const REDIRECT_SIGNALS = /\b(redirecci[oó]n|redirect|301|302|404.*redirig)\b/i;
 
 const ACTION_TYPE_SIGNALS: Array<{ actionType: ActionType; pattern: RegExp; label: string }> = [
-  { actionType: "create_blog", pattern: BLOG_SIGNALS, label: "blog/artículo" },
-  { actionType: "create_landing", pattern: LANDING_SIGNALS, label: "landing/página" },
+  // META before BLOG — "meta title del artículo" is meta, not blog
   { actionType: "update_meta", pattern: META_SIGNALS, label: "meta tags" },
+  { actionType: "create_blog", pattern: BLOG_SIGNALS, label: "blog" },
+  { actionType: "create_landing", pattern: LANDING_SIGNALS, label: "landing/página" },
   { actionType: "keyword_research", pattern: KEYWORD_SIGNALS, label: "keyword research" },
   { actionType: "schema", pattern: SCHEMA_SIGNALS, label: "schema" },
   { actionType: "internal_links", pattern: INTERNAL_LINKS_SIGNALS, label: "enlaces internos" },
@@ -81,6 +87,33 @@ export function validateTaskCoherence(task: {
   const blockReason: string | null = null;
 
   const text = `${task.title} ${task.objective}`.toLowerCase();
+
+  // ── 0. Detect HUMAN-only tasks (no AI handler) ────────────────────────────
+  if (INDEXATION_SIGNALS.test(text)) {
+    // Indexation tasks are always HUMAN external_tool (GSC manual)
+    if (!actionType) {
+      actionType = "other";
+      issues.push({
+        field: "actionType",
+        problem: "Tarea de indexación → HUMAN (requiere Google Search Console manual)",
+        autoFixed: true,
+        oldValue: null,
+        newValue: "other",
+      });
+    }
+  }
+  if (REDIRECT_SIGNALS.test(text) && !META_SIGNALS.test(text)) {
+    if (!actionType) {
+      actionType = "other";
+      issues.push({
+        field: "actionType",
+        problem: "Tarea de redirección → HUMAN (requiere WP Admin / plugin Redirection)",
+        autoFixed: true,
+        oldValue: null,
+        newValue: "other",
+      });
+    }
+  }
 
   // ── 1. Detect actionType from title signals ──────────────────────────────
   const detectedFromTitle = detectActionTypeFromText(text);
