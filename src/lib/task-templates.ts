@@ -283,5 +283,5 @@ export function buildModeReason(steps: Array<{ type: "AI" | "HUMAN"; humanReason
 // ─── Version ────────────────────────────────────────────────────────────────
 
 /** Bump when templates or decomposer rules change significantly. */
-export const DECOMPOSER_VERSION = "2026-10-28-v1";
-export const ANALYSIS_VERSION = "2026-10-28-v1";
+export const DECOMPOSER_VERSION = "2026-11-11-v1";
+export const ANALYSIS_VERSION = "2026-11-11-v1";

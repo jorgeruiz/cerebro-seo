@@ -28,6 +28,7 @@ import {
   actionGetWpStagedSummary,
   actionRunPreflight,
   actionFixPreflight,
+  actionRedoOutdatedTasks,
   type PlanFullView,
   type PreflightCheck,
   type PlanTaskFullView,
@@ -38,7 +39,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { ContentPreviewModal } from "./ContentPreviewModal";
 
 /** Must match DECOMPOSER_VERSION in src/lib/task-templates.ts */
-const CURRENT_DECOMPOSER_VERSION = "2026-10-28-v1";
+const CURRENT_DECOMPOSER_VERSION = "2026-11-11-v1";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -525,6 +526,56 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 }
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+// ─── Redo Outdated Tasks Banner ──────────────────────────────────────────────
+
+function RedoOutdatedBanner({ planId, outdatedCount }: { planId: string; outdatedCount: number }) {
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<{ redone: number } | null>(null);
+
+  const handleRedo = () => {
+    if (!confirm(`¿Rehacer ${outdatedCount} tarea(s) con reglas obsoletas? Se eliminarán los pasos actuales y se regenerarán.`)) return;
+    startTransition(async () => {
+      const res = await actionRedoOutdatedTasks(planId);
+      if (res.ok) {
+        setResult({ redone: res.redone });
+        setTimeout(() => window.location.reload(), 2000);
+      }
+    });
+  };
+
+  if (result) {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+        <p className="text-sm text-emerald-600">
+          ✓ {result.redone} tarea(s) re-encoladas para descomposición. Recargando...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center justify-between">
+      <div>
+        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          {outdatedCount} tarea(s) con reglas obsoletas
+        </p>
+        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5">
+          Fueron generadas con reglas anteriores que pueden causar errores. Rehacerlas las descompone correctamente.
+        </p>
+      </div>
+      <button
+        onClick={handleRedo}
+        disabled={isPending}
+        className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1.5 shrink-0")}
+      >
+        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        Rehacer todas
+      </button>
+    </div>
+  );
+}
 
 // ─── Plan Preflight ─────────────────────────────────────────────────────────
 
@@ -1460,6 +1511,8 @@ function PlanStatusBanner({
 
   const isWp = plan.platform === "WORDPRESS" || plan.platform === "MIGRACION";
 
+
+
   // ACTIVE + not done yet — show progress hint
   if (plan.status === "ACTIVE" && !allTerminal) {
     const doneTasks = plan.tasks.filter((t) => t.status === "DONE");
@@ -1882,6 +1935,15 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
                 )}
               </div>
             </div>
+
+            {/* Outdated tasks banner */}
+            {(() => {
+              const outdated = plan.tasks.filter(
+                (t) => t.status !== "DONE" && t.status !== "VOIDED" &&
+                  (t.generatorVersion === null || t.generatorVersion !== CURRENT_DECOMPOSER_VERSION)
+              ).length;
+              return outdated > 0 ? <RedoOutdatedBanner planId={plan.id} outdatedCount={outdated} /> : null;
+            })()}
 
             {/* Plan status banner */}
             <PlanStatusBanner plan={plan} clientId={clientId} onActivate={handleActivate} onWatchdog={handleWatchdog} onSubmitReview={handleSubmitReview} onMerge={handleMerge} isActing={isActing} />

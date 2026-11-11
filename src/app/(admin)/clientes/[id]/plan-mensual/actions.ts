@@ -1320,3 +1320,51 @@ export async function actionFixPreflight(
 
   return { ok: false, error: `Fix desconocido: ${fixId}` };
 }
+
+// ─── Batch redo outdated tasks ─────────────────────────────────────────────
+
+export async function actionRedoOutdatedTasks(
+  planId: string
+): Promise<{ ok: true; redone: number; total: number } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const { DECOMPOSER_VERSION } = await import("@/lib/task-templates");
+
+  const tasks = await prisma.planTask.findMany({
+    where: {
+      planId,
+      status: { notIn: ["DONE", "VOIDED"] },
+      OR: [
+        { generatorVersion: null },
+        { generatorVersion: { not: DECOMPOSER_VERSION } },
+      ],
+    },
+    select: { id: true, sourceCandidateId: true },
+  });
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: planId },
+    select: { clientId: true },
+  });
+
+  if (!plan) return { ok: false, error: "Plan no encontrado." };
+
+  let redone = 0;
+  for (const task of tasks) {
+    await prisma.taskRun.deleteMany({ where: { taskId: task.id } });
+    await prisma.planStep.deleteMany({ where: { taskId: task.id } });
+    await prisma.planTask.update({
+      where: { id: task.id },
+      data: { status: "PLANNING", failureReason: null, generatorVersion: null, commitShas: [] },
+    });
+    await decomposeQueue.add("task:decompose", {
+      taskId: task.id,
+      clientId: plan.clientId,
+      candidateId: task.sourceCandidateId ?? "batch-redo",
+    });
+    redone++;
+  }
+
+  return { ok: true, redone, total: tasks.length };
+}
