@@ -130,13 +130,29 @@ SERVICIOS Y PRODUCTOS VERIFICADOS (CRÍTICO):
 - Si una oportunidad SEO sugiere un servicio o producto que NO aparece en la documentación del sitio, la candidata DEBE ser mode=HUMAN con la pregunta explícita "¿El cliente ofrece [servicio]? Si sí, agregar a site-spec antes de crear la página."
 - Artículos de blog técnicos del sector son OK sin verificación (no afirman que el cliente ofrezca el servicio), pero NO deben incluir CTAs ni enlaces a páginas de servicio que no existan.
 
-CANDIDATAS — COMPOSICIÓN:
-- Genera tantas como sean justificables con datos reales (idealmente 4+ CONTENT y 4+ CODE)
-- MÁXIMO 8 de cada tipo
-- Usa las ideas del Plan de Contenido vigente como fuente principal para CONTENT
-- Si hay datos sospechosos, genera candidatas de setup/verificación con fuente "setup"
+CANDIDATAS — COMPOSICIÓN POR BLOQUES (OBLIGATORIO):
+Las candidatas DEBEN cubrir TRES bloques. Genera 2-4 candidatas por bloque.
+Si un bloque no aplica (ej: 0 errores técnicos), incluye una nota en la descripción
+de la primera candidata del bloque explicando por qué y propón una tarea preventiva.
+
+BLOQUE 1 — TÉCNICO (2-4 candidatas):
+Meta tags, H1, schema, redirects 301, errores 404, velocidad, sitemap, robots.txt,
+canonical, alt text de imágenes, enlaces rotos.
+
+BLOQUE 2 — CONTENIDO (2-4 candidatas):
+Blog nuevo, landing nueva, optimizar texto existente, actualizar contenido viejo,
+ampliar artículos cortos, agregar secciones FAQ. Usa las ideas del Plan de Contenido
+vigente como fuente principal.
+
+BLOQUE 3 — AEO/GEO (2-4 candidatas):
+FAQ schema para featured snippets, respuestas directas para AI Overviews,
+datos estructurados FAQPage/HowTo, contenido de pregunta-respuesta,
+elegibilidad para AI Search, optimizar para Perplexity/ChatGPT/Gemini.
+
+TOTAL: 6-12 candidatas (2-4 por bloque).
 - Orden: prioridad vs easy win (esfuerzo bajo + impacto alto primero)
 - Solo sugiere lo que tenga justificación concreta — NO rellenes para llegar a un número
+- Si hay datos sospechosos, genera candidatas de setup/verificación con fuente "setup"
 
 CANDIDATAS — FUENTE:
 - "signal": responde a una señal detectada (caída de keyword, CTR bajo, backlink perdido)
@@ -166,6 +182,7 @@ RESPONDE ÚNICAMENTE con un JSON válido:
     {
       "titulo": "máx 120 chars, específico y accionable",
       "descripcion": "qué hacer exactamente, máx 500 chars",
+      "bloque": "tecnico|contenido|aeo_geo",
       "kind": "CONTENT|CODE|SETUP",
       "mode": "AI|HYBRID|HUMAN",
       "modeReason": "por qué este modo, máx 200 chars",
@@ -646,11 +663,24 @@ export async function generateClientAnalysis(
     analysis.candidatas = [...setupCandidates, ...(analysis.candidatas ?? [])];
   }
 
-  // Log candidate stats
+  // Log candidate stats by block
   const allCandidates = analysis.candidatas ?? [];
-  const contentCount = allCandidates.filter((c) => c.kind === "CONTENT").length;
-  const codeCount = allCandidates.filter((c) => c.kind === "CODE").length;
-  console.log(`[analysis] Candidatas: ${allCandidates.length} total (${contentCount} CONTENT, ${codeCount} CODE)`);
+  const byBloque = {
+    tecnico: allCandidates.filter((c) => c.bloque === "tecnico").length,
+    contenido: allCandidates.filter((c) => c.bloque === "contenido").length,
+    aeo_geo: allCandidates.filter((c) => c.bloque === "aeo_geo").length,
+    sin_bloque: allCandidates.filter((c) => !c.bloque).length,
+  };
+  console.log(
+    `[analysis] Candidatas: ${allCandidates.length} total — ` +
+    `técnico:${byBloque.tecnico} contenido:${byBloque.contenido} AEO/GEO:${byBloque.aeo_geo}` +
+    (byBloque.sin_bloque > 0 ? ` sin-bloque:${byBloque.sin_bloque}` : "")
+  );
+
+  // Warn if any block is missing
+  if (byBloque.tecnico === 0) console.warn("[analysis] ⚠ Bloque TÉCNICO vacío");
+  if (byBloque.contenido === 0) console.warn("[analysis] ⚠ Bloque CONTENIDO vacío");
+  if (byBloque.aeo_geo === 0) console.warn("[analysis] ⚠ Bloque AEO/GEO vacío");
 
   // Cost
   const usage = response.usage;

@@ -41,10 +41,13 @@ export type WpActionType =
   | "generate_image"
   | "other";
 
+export type CandidateBloque = "tecnico" | "contenido" | "aeo_geo";
+
 export interface AnalysisCandidate {
   id: string; // UUID estable para selección
   titulo: string;
   descripcion: string;
+  bloque?: CandidateBloque | null; // tecnico | contenido | aeo_geo
   kind: CandidateKind;
   mode: CandidateMode;
   modeReason: string;
@@ -64,6 +67,7 @@ export interface AnalysisCandidate {
 const candidateSchema = z.object({
   titulo: z.string().min(5).max(120),
   descripcion: z.string().min(10).max(500),
+  bloque: z.enum(["tecnico", "contenido", "aeo_geo"]).nullable().optional(),
   kind: z.enum(["CONTENT", "CODE", "SETUP"]),
   mode: z.enum(["AI", "HYBRID", "HUMAN"]),
   modeReason: z.string().min(5).max(200),
