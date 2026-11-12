@@ -131,7 +131,7 @@ describe("task-catalog integrity", () => {
     }
 
     const collisions: string[] = [];
-    for (const [signal, types] of signalMap) {
+    for (const [signal, types] of Array.from(signalMap.entries())) {
       if (types.length > 1) {
         collisions.push(`"${signal}" → ${types.join(", ")}`);
       }

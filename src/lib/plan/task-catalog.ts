@@ -764,13 +764,14 @@ export const CATALOG: CatalogEntry[] = [
     category: "technical",
     modes: {
       NEXTJS: { mode: "AI" },
-      WORDPRESS: { mode: "MANUAL" },
+      WORDPRESS: { mode: "HYBRID" },
     },
     steps: {
       NEXTJS: [
         { kind: "agent", title: "Configurar canonical en alternates", type: "AI" },
       ],
       WORDPRESS: [
+        { kind: "content_package", title: "Determinar URL canonical correcta", type: "AI" },
         { kind: "wp_manual", title: "Configurar canonical en Yoast/Rank Math", type: "HM", humanReason: "El plugin no tiene la capability para hacerlo." },
       ],
     },

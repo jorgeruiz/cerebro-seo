@@ -31,15 +31,11 @@ export type CandidateSource =
  * Al actualizar el plugin (ej: v1.6.0 agrega elementor), las tareas con action_type
  * edit_page_widgets pasan automáticamente a AI sin cambiar código aquí.
  */
-export type WpActionType =
-  | "create_blog"
-  | "update_meta"
-  | "upload_media"
-  | "update_post"
-  | "edit_page_widgets"
-  | "create_landing_from_template"
-  | "generate_image"
-  | "other";
+/**
+ * @deprecated Use ActionType from src/lib/plan/task-catalog.ts instead.
+ * Kept only as type alias for backward compat during migration.
+ */
+export type WpActionType = string;
 
 export type CandidateBloque = "tecnico" | "contenido" | "aeo_geo";
 
@@ -58,8 +54,8 @@ export interface AnalysisCandidate {
   keywordObjetivo?: string | null;
   urlObjetivo?: string | null;
   fuente: CandidateSource;
-  /** Tipo de acción para cruzar con /capabilities del plugin WP. Generado por Claude. */
-  actionType?: WpActionType | null;
+  /** Tipo de acción. Uses ActionType from task-catalog.ts. Legacy values are resolved via DEPRECATED_ALIASES. */
+  actionType?: string | null;
 }
 
 // ─── Zod schema ──────────────────────────────────────────────────────────────
@@ -78,10 +74,8 @@ const candidateSchema = z.object({
   keywordObjetivo: z.string().nullable().optional(),
   urlObjetivo: z.string().nullable().optional(),
   fuente: z.enum(["signal", "contentplan", "analisis", "setup", "pendiente-anterior", "ciclo-anterior"]),
-  actionType: z.enum([
-    "create_blog", "update_meta", "upload_media", "update_post",
-    "edit_page_widgets", "create_landing_from_template", "generate_image", "other",
-  ]).nullable().optional(),
+  // Accept any string — the classifier (F1b) validates and resolves aliases
+  actionType: z.string().nullable().optional(),
 });
 
 export const analysisResultSchema = z.object({

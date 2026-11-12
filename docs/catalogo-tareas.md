@@ -551,13 +551,14 @@ Rangos de palabras: informacional 1200–1800, AEO 600–900, landing 800–1200
 |---|---|
 | **Clase** | execution |
 | **Categoría** | technical |
-| **WP modo** | MANUAL |
+| **WP modo** | HYBRID |
 | **Next.js modo** | AI |
 | **Complejidad** | low |
 | **Riesgo** | medium |
 | **Gates** | G1, G2, G8 |
 
 **Pasos WordPress:**
+- IA: Determinar URL canonical correcta (`content_package`)
 - HM: Configurar canonical en Yoast/Rank Math (`wp_manual`)
 
 **Pasos Next.js:**

@@ -32,6 +32,11 @@ const ACTION_TYPE_SIGNALS: Array<{ actionType: ActionType; pattern: RegExp; labe
   { actionType: "internal_links", pattern: INTERNAL_LINKS_SIGNALS, label: "enlaces internos" },
 ];
 
+// Derive category from catalog (single source of truth)
+// getCatalogEntry is available for F1b-3 when we connect the classifier
+// For now, legacy map is still used by validateTaskCoherence
+
+// Legacy map kept only for values not in catalog yet (during migration)
 const ACTION_TO_CATEGORY: Record<string, string> = {
   create_blog: "blog",
   create_landing: "landing",

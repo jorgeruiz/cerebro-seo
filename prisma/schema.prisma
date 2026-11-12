@@ -629,6 +629,9 @@ enum PlanTaskStatus {
   READY
   RUNNING
   WAITING_HUMAN
+  NEEDS_DEFINITION   // other → waiting for human to classify
+  NEEDS_INPUT        // missing required input data
+  BLOCKED            // gate failed, remedy available
   DONE
   FAILED
   VOIDED
@@ -731,6 +734,10 @@ model PlanTask {
   previewUrl         String?        // borrador WP (POST /publish draft_url) o preview Vercel de tarea
   modeReason         String?        @db.Text  // por qué se asignó este modo (AI/HYBRID/HUMAN)
   generatorVersion   String?        // DECOMPOSER_VERSION al crear los pasos — para detectar reglas obsoletas
+  classificationConfidence Float?   // 0-1 from the classifier
+  classificationMeta Json?          // { candidates, signals, conflicts, missingInputs, catalogVersion }
+  blockedReason      String?        @db.Text  // gate failure reason
+  remedy             String?        @db.Text  // how to unblock
   failureReason      String?        @db.Text
   voidReason         String?        @db.Text
   completedById      String?
@@ -740,9 +747,23 @@ model PlanTask {
 
   steps PlanStep[]
   runs  TaskRun[]
+  classificationEvents ClassificationEvent[]
 
   @@index([planId, order])
   @@index([siteId])
+}
+
+model ClassificationEvent {
+  id            String   @id @default(cuid())
+  taskId        String
+  task          PlanTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  originalType  String?  // actionType before the change
+  finalType     String   // actionType after the change
+  actor         String   // "classifier" | "human:email@..." | "migration"
+  reason        String   @db.Text
+  createdAt     DateTime @default(now())
+
+  @@index([taskId])
 }
 
 model PlanStep {
