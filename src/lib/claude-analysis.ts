@@ -25,7 +25,6 @@ import {
   type AnalysisCandidate,
   validateCandidates,
   generateSetupCandidates,
-  enforceModeRules,
   analysisResultSchema,
 } from "@/lib/analysis-candidates";
 import { generateContentPlan } from "@/lib/claude-content-plan";
@@ -193,27 +192,48 @@ RESPONDE ÚNICAMENTE con un JSON válido:
       "keywordObjetivo": "keyword principal o null",
       "urlObjetivo": "URL existente o slug sugerido o null",
       "fuente": "signal|contentplan|analisis|setup|pendiente-anterior|ciclo-anterior",
-      "actionType": "create_blog|update_meta|upload_media|update_post|edit_page_widgets|create_landing_from_template|generate_image|other|null"
+      "actionType": "create_blog|update_meta|create_landing|keyword_research|schema|internal_links|edit_page_text|add_image|verify_indexation|fix_redirect|verify_analytics|optimize_alt_text|configure_sitemap|improve_speed|setup_gbp|audit_duplicate|optimize_images|configure_robots|configure_canonical|link_building|fix_headings|fix_broken_links|refresh_content|add_faq|aeo_readiness|merge_content|add_human_evidence|security_fix|other"
     }
   ]
 }
 
 }
 
-REGLA actionType (OBLIGATORIA para sitios WordPress/Migración):
-- Cada candidata DEBE incluir "actionType" que clasifique la acción principal.
-- create_blog: crear artículo de blog/post nuevo.
-- update_meta: actualizar meta title/description/focus keyword (Yoast).
-- upload_media: subir imagen con alt text.
-- update_post: editar contenido de un post existente.
-- edit_page_widgets: editar textos/imágenes/CTAs en una página Elementor existente.
-- create_landing_from_template: crear landing o página de servicio nueva.
-- generate_image: generar imagen AI para blog.
-- other: acciones que no encajan (performance, CSS, tema, plugins, etc.).
-- Para sitios Next.js: actionType puede ser null.
+REGLA actionType (OBLIGATORIA para TODAS las candidatas):
+- Cada candidata DEBE incluir "actionType" del catálogo cerrado.
+- create_blog: crear artículo de blog nuevo.
+- update_meta: actualizar meta title/description/focus keyword.
+- create_landing: crear landing o página de servicio nueva.
+- keyword_research: investigar y seleccionar keywords.
+- schema: implementar JSON-LD / datos estructurados.
+- internal_links: agregar/optimizar enlaces internos.
+- edit_page_text: optimizar texto de página existente.
+- add_image: agregar/generar imagen.
+- verify_indexation: verificar indexación en GSC.
+- fix_redirect: configurar redirección 301/302.
+- verify_analytics: verificar GA4/GTM.
+- fix_headings: corregir jerarquía H1/H2/H3.
+- fix_broken_links: corregir enlaces rotos.
+- refresh_content: actualizar artículo/contenido existente.
+- add_faq: agregar sección FAQ.
+- aeo_readiness: optimizar para AI Overviews/AEO.
+- configure_robots: configurar robots.txt.
+- configure_canonical: configurar canonical.
+- configure_sitemap: configurar sitemap.
+- optimize_alt_text: optimizar alt text de imágenes.
+- optimize_images: comprimir/optimizar imágenes.
+- improve_speed: mejorar velocidad/Core Web Vitals.
+- setup_gbp: configurar Google Business Profile.
+- link_building: link building / autoridad.
+- audit_duplicate: auditar contenido duplicado.
+- merge_content: fusionar contenido duplicado.
+- add_human_evidence: agregar testimonio/caso real.
+- security_fix: corregir hallazgo de seguridad.
+- other: SOLO si no encaja en ninguno de los anteriores.
+NUNCA uses: upload_media, generate_image, update_post, edit_page_widgets, create_landing_from_template (deprecados).
 
 Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones.
-Candidatas: tantas como se justifiquen con datos (idealmente 4+ CONTENT y 4+ CODE, máximo 16).
+Candidatas: 6-12 (2-4 por bloque: técnico, contenido, AEO/GEO).
 Sin texto fuera del JSON.`;
 
 // ─── Recopilación de contexto ampliado ───────────────────────────────────────
@@ -630,9 +650,14 @@ export async function generateClientAnalysis(
     };
   }
 
-  // Enforce mode rules: plataforma no-NEXTJS → HUMAN; performance en NEXTJS → HYBRID
+  // Resolve legacy actionType aliases and filter audit candidates
+  // Mode is now resolved from the catalog in the decomposer, not here
   if (analysis.candidatas) {
-    analysis.candidatas = analysis.candidatas.map((c) => enforceModeRules(c, platform, wpCapabilities));
+    const { resolveAlias } = await import("@/lib/plan/task-catalog");
+    analysis.candidatas = analysis.candidatas.map((c) => ({
+      ...c,
+      actionType: c.actionType ? (resolveAlias(c.actionType) ?? c.actionType) : c.actionType,
+    }));
 
     // Filter out audit/lighthouse candidates — these are redundant with Site Audit data
     const AUDIT_FILTER = /lighthouse|auditor[ií]a de (velocidad|rendimiento)|correr pagespeed|medir velocidad|auditar rendimiento/i;

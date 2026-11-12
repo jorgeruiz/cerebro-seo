@@ -157,28 +157,21 @@ export async function actionSendToPlan(
       continue; // skip non-setup tasks without site
     }
 
-    // ── Classify via catalog (quick — no LLM, uses existing actionType + signals)
-    const { classifyTaskQuick } = await import("@/lib/plan/classify-task");
-    const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
-
-    const classification = classifyTaskQuick({
-      title: candidate.titulo,
-      objective: candidate.descripcion,
-      existingActionType: candidate.actionType,
-    });
-
-    const catalogEntry = getCatalogEntry(classification.actionType);
-    const platformKey = (eligibility.platform === "NEXTJS" || eligibility.platform === "WORDPRESS")
-      ? eligibility.platform as "NEXTJS" | "WORDPRESS" : null;
-    const mode = platformKey && catalogEntry
-      ? catalogEntry.modes[platformKey].mode === "AI" ? "AI" : catalogEntry.modes[platformKey].mode === "HYBRID" ? "HYBRID" : "HUMAN"
-      : "HUMAN";
-    const category = catalogEntry?.category ?? inferCategory(candidate);
+    // ── Store candidate's proposed actionType — full classification runs in decomposer (async)
+    const { resolveAlias } = await import("@/lib/plan/task-catalog");
+    const resolvedActionType = candidate.actionType ? resolveAlias(candidate.actionType) : null;
+    const category = inferCategory(candidate);
     const kind = candidate.kind === "SETUP" ? "SETUP" : candidate.kind === "CONTENT" ? "CONTENT" : "CODE";
     const effort = candidate.effort === "LOW" ? "LOW" : candidate.effort === "HIGH" ? "HIGH" : "MEDIUM";
 
-    // Determine initial status based on classification
-    const initialStatus = classification.actionType === "other" ? "NEEDS_DEFINITION" as const : "PLANNING" as const;
+    // Mode from candidate (decomposer will re-derive from catalog after classification)
+    const platform = eligibility.platform;
+    let mode: "AI" | "HYBRID" | "HUMAN";
+    if (platform === "NEXTJS" || platform === "WORDPRESS" || platform === "MIGRACION") {
+      mode = candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
+    } else {
+      mode = "HUMAN";
+    }
 
     const task = await prisma.planTask.create({
       data: {
@@ -195,35 +188,19 @@ export async function actionSendToPlan(
         priority: candidate.priority,
         effort,
         category,
-        actionType: classification.actionType,
-        classificationConfidence: classification.confidence,
+        actionType: resolvedActionType ?? candidate.actionType ?? null,
         targetKeyword: candidate.keywordObjetivo ?? null,
         sourceCandidateId: candidate.id,
-        status: initialStatus,
+        status: "PLANNING",
       },
     });
 
-    // Log classification event
-    if (candidate.actionType && candidate.actionType !== classification.actionType) {
-      await prisma.classificationEvent.create({
-        data: {
-          taskId: task.id,
-          originalType: candidate.actionType,
-          finalType: classification.actionType,
-          actor: "classifier",
-          reason: `Análisis propuso "${candidate.actionType}", clasificador resolvió "${classification.actionType}" (confianza: ${classification.confidence.toFixed(2)})`,
-        },
-      });
-    }
-
-    // Only enqueue decomposition if not NEEDS_DEFINITION
-    if (initialStatus !== "NEEDS_DEFINITION") {
-      await decomposeQueue.add("task:decompose", {
-        taskId: task.id,
-        clientId,
-        candidateId: candidate.id,
-      });
-    }
+    // Enqueue decomposition — classifier runs there (async, with LLM)
+    await decomposeQueue.add("task:decompose", {
+      taskId: task.id,
+      clientId,
+      candidateId: candidate.id,
+    });
 
     created++;
   }

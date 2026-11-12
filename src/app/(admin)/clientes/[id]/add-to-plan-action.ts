@@ -111,30 +111,15 @@ export async function actionAddToPlan(
   // Create task — classify via catalog
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
-  const { classifyTaskQuick } = await import("@/lib/plan/classify-task");
-  const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
-
-  const classification = classifyTaskQuick({
-    title,
-    objective,
-    existingActionType: input.actionType,
-  });
-
-  const catalogEntry = getCatalogEntry(classification.actionType);
-  const platformKey = (site.platform === "NEXTJS" || site.platform === "WORDPRESS")
-    ? site.platform as "NEXTJS" | "WORDPRESS" : null;
-  const effectiveMode = platformKey && catalogEntry
-    ? catalogEntry.modes[platformKey].mode === "AI" ? "AI" : catalogEntry.modes[platformKey].mode === "HYBRID" ? "HYBRID" : "HUMAN"
-    : (input.mode ?? "HUMAN");
-  const effectiveCategory = catalogEntry?.category ?? category;
+  // Resolve alias if actionType is legacy — full classification runs in decomposer
+  const { resolveAlias } = await import("@/lib/plan/task-catalog");
+  const resolvedActionType = input.actionType ? resolveAlias(input.actionType) : null;
 
   const targetKeyword = input.targetKeyword
     ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
     ?? (typeof sourceRef.snapshot?.term === "string" ? sourceRef.snapshot.term : null)
     ?? (typeof sourceRef.snapshot?.query === "string" ? sourceRef.snapshot.query : null)
     ?? null;
-
-  const initialStatus = classification.actionType === "other" ? "NEEDS_DEFINITION" as const : "PLANNING" as const;
 
   const task = await prisma.planTask.create({
     data: {
@@ -145,26 +130,20 @@ export async function actionAddToPlan(
       objective,
       prompt: "",
       acceptanceCriteria: [],
-      mode: effectiveMode as "AI" | "HYBRID" | "HUMAN",
+      mode: (input.mode ?? "HUMAN") as "AI" | "HYBRID" | "HUMAN",
       kind: kind as "CONTENT" | "CODE" | "SETUP",
       priority,
       effort: effort as "LOW" | "MEDIUM" | "HIGH",
-      category: effectiveCategory,
-      actionType: classification.actionType,
-      classificationConfidence: classification.confidence,
+      category,
+      actionType: resolvedActionType ?? input.actionType ?? null,
       targetKeyword,
       sourceCandidateId: `module-${randomUUID().slice(0, 8)}`,
       sourceRef: sourceRef as unknown as InputJsonValue,
-      status: initialStatus,
+      status: "PLANNING",
     },
   });
 
-  // Only enqueue decomposition if not NEEDS_DEFINITION
-  if (initialStatus === "NEEDS_DEFINITION") {
-    return { ok: true, taskId: task.id, planId: plan.id, isDuplicate: false };
-  }
-
-  // Enqueue decomposition
+  // Enqueue decomposition — classifier runs there (async, with LLM)
   await decomposeQueue.add("task:decompose", {
     taskId: task.id,
     clientId,
