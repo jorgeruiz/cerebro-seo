@@ -446,407 +446,185 @@ ${repoContext}
 
 Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${platform}.`;
 
-  // ── Coherence preflight: validate + auto-correct before decomposing ──────
-  const { validateTaskCoherence } = await import("@/lib/task-coherence");
-  const coherence = validateTaskCoherence({
+  // ═══════════════════════════════════════════════════════════════════════════
+  // F1c: CATALOG-BASED DECOMPOSER — classifier + template steps + evidence
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  try {
+  const { classifyTask } = await import("@/lib/plan/classify-task");
+  const { getCatalogEntry, isValidActionType } = await import("@/lib/plan/task-catalog");
+  const { resolveStepsWithCapabilities } = await import("@/lib/plan/capabilities");
+  const { resolveTaskEvidence } = await import("@/lib/plan/task-data-resolver");
+
+  // Step 1: Classify the task (LLM with closed enum + deterministic validation)
+  const wpCaps = wpCapabilitiesContext ? extractCapsList(wpCapabilitiesContext) : null;
+
+  const classification = await classifyTask({
     title: task.title,
     objective: task.objective,
-    actionType: task.actionType ?? null,
-    category: task.category,
-    targetKeyword: task.targetKeyword ?? null,
-    kind: task.kind,
+    platform,
+    wpCapabilities: wpCaps,
+    existingActionType: task.actionType,
   });
 
-  // Apply auto-corrections to the task
-  if (coherence.issues.some((i) => i.autoFixed)) {
-    const corrections: Record<string, unknown> = {};
-    if (coherence.actionType !== (task.actionType ?? null)) corrections.actionType = coherence.actionType;
-    if (coherence.category !== task.category) corrections.category = coherence.category;
-    if (coherence.targetKeyword !== (task.targetKeyword ?? null)) corrections.targetKeyword = coherence.targetKeyword;
+  // Save classification results
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      actionType: classification.actionType,
+      category: classification.category,
+      classificationConfidence: classification.confidence,
+      classificationMeta: {
+        candidates: classification.candidates,
+        conflicts: classification.conflicts,
+        missingInputs: classification.missingInputs,
+        reasoning: classification.reasoning,
+      } as unknown as Parameters<typeof prisma.planTask.update>[0]["data"]["classificationMeta"],
+      targetKeyword: classification.targetKeyword ?? task.targetKeyword ?? null,
+    },
+  });
 
-    if (Object.keys(corrections).length > 0) {
-      await prisma.planTask.update({ where: { id: taskId }, data: corrections });
-      console.log(
-        `[task-decomposer] Coherence auto-fix: ${coherence.issues.filter((i) => i.autoFixed).map((i) => `${i.field}: "${i.oldValue}" → "${i.newValue}"`).join(", ")}`
-      );
-    }
+  // Log cost
+  if (classification.costUsd > 0) {
+    await logApiUsage({
+      provider: "anthropic",
+      endpoint: "task-classify",
+      cost: classification.costUsd,
+      clientId,
+    });
   }
 
-  if (coherence.blocked) {
+  // Handle classification outcomes
+  if (classification.status === "NEEDS_DEFINITION") {
     await prisma.planTask.update({
       where: { id: taskId },
-      data: { status: "WAITING_HUMAN", failureReason: coherence.blockReason },
+      data: { status: "NEEDS_DEFINITION", mode: "HUMAN", modeReason: "No clasificable automáticamente" },
     });
-    console.log(`[task-decomposer] ${task.title} → BLOCKED by coherence: ${coherence.blockReason}`);
+    console.log(`[task-decomposer] "${task.title}" → NEEDS_DEFINITION (${classification.reasoning})`);
     return;
   }
 
-  // Use corrected values for template lookup
-  const effectiveActionType = (coherence.actionType ?? inferActionType(coherence.category, task.title)) as ActionType | null;
+  if (classification.status === "NEEDS_INPUT") {
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "NEEDS_INPUT",
+        blockedReason: `Faltan datos: ${classification.missingInputs.join(", ")}`,
+        remedy: "Completar los datos faltantes y reintentar",
+      },
+    });
+    console.log(`[task-decomposer] "${task.title}" → NEEDS_INPUT (${classification.missingInputs.join(", ")})`);
+    return;
+  }
 
-  // ── Template-based path: deterministic steps ──────────────────────────
-  // ── actionType=other → direct HUMAN step (no LLM needed) ────────────
-  const HUMAN_ONLY_ACTIONS = ["other", "verify_indexation", "fix_redirect", "verify_tracking"];
-  if (effectiveActionType && HUMAN_ONLY_ACTIONS.includes(effectiveActionType)) {
-    const HUMAN_REASON_MAP: Record<string, string> = {
-      verify_indexation: "external_tool",
-      fix_redirect: "wp_manual",
-      verify_tracking: "config",
-      other: "config",
+  // Step 2: Get catalog entry and resolve steps
+  const catalogEntry = getCatalogEntry(classification.actionType);
+  if (!catalogEntry) {
+    // Shouldn't happen if classification is valid, but handle gracefully
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: { status: "NEEDS_DEFINITION", mode: "HUMAN" },
+    });
+    return;
+  }
+
+  const platformKey = (platform === "NEXTJS" || platform === "WORDPRESS") ? platform as "NEXTJS" | "WORDPRESS" : "WORDPRESS";
+  const catalogSteps = catalogEntry.steps[platformKey] ?? catalogEntry.steps.WORDPRESS;
+  const resolvedSteps = resolveStepsWithCapabilities(
+    catalogSteps as unknown as Array<{ type: "AI" | "HM"; requiredCapability?: string; fallback?: { type: "AI" | "HM"; [key: string]: unknown }; [key: string]: unknown }>,
+    wpCaps
+  );
+
+  // Step 3: Resolve evidence from data sources
+  const evidence = await resolveTaskEvidence(
+    classification.actionType,
+    clientId,
+    task.siteId,
+    classification.targetUrl,
+    classification.targetKeyword ?? task.targetKeyword,
+  );
+
+  // Step 4: Derive mode from resolved steps
+  const hasAI = resolvedSteps.some((s) => s.type === "AI");
+  const hasHM = resolvedSteps.some((s) => s.type === "HM");
+  const finalMode = hasAI && hasHM ? "HYBRID" : hasAI ? "AI" : "HUMAN";
+
+  // Step 5: Create PlanSteps from catalog template
+  for (let i = 0; i < resolvedSteps.length; i++) {
+    const step = resolvedSteps[i] as {
+      kind: string; title: string; type: "AI" | "HM";
+      humanReason?: string; requiredCapability?: string;
+      [key: string]: unknown;
     };
-    const humanReason = platformPolicy.usesTerminal ? "terminal" : (
-      HUMAN_REASON_MAP[effectiveActionType!] ?? "config"
-    );
+
+    // Build step prompt with evidence
+    let prompt: string | null = null;
+    if (step.type === "AI") {
+      const evidenceText = evidence.rows.length > 0
+        ? `\nDATOS DISPONIBLES:\n${evidence.rows.map((r) => `- ${r.label}: ${r.value} (${r.source}, ${r.date})`).join("\n")}\n`
+        : "";
+
+      prompt = JSON.stringify({
+        action: step.kind,
+        targetUrl: classification.targetUrl,
+        targetKeyword: classification.targetKeyword ?? task.targetKeyword,
+        context: `${task.objective}${evidenceText}`,
+      });
+    } else {
+      // HM step: include instructions + evidence as table
+      const evidenceTable = evidence.rows.length > 0
+        ? `\n\nDatos:\n${evidence.rows.map((r) => `• ${r.label}: ${r.value}`).join("\n")}`
+        : "";
+      prompt = `${task.objective}\n\nCompleta este paso y marca como hecho.${evidenceTable}`;
+    }
 
     await prisma.planStep.create({
       data: {
         taskId,
-        order: 1,
-        title: task.title,
-        type: "HUMAN",
-        prompt: `${task.objective}\n\nCompleta esta tarea manualmente y marca como hecho cuando termines.`,
-        acceptanceCriteria: [],
+        order: i + 1,
+        title: step.title,
+        type: step.type === "AI" ? "AI" : "HUMAN",
+        prompt,
+        acceptanceCriteria: catalogEntry.acceptance,
         status: "PENDING",
-        notes: `humanReason:${humanReason}`,
+        notes: [
+          step.type === "AI" ? `complexity:${catalogEntry.complexity}` : null,
+          step.humanReason ? `humanReason:${step.humanReason}` : null,
+        ].filter(Boolean).join(" ") || null,
       },
     });
-
-    await prisma.planTask.update({
-      where: { id: taskId },
-      data: {
-        status: "READY",
-        mode: "HUMAN",
-        modeReason: `Tarea manual (${humanReason})`,
-        actionType: "other",
-        generatorVersion: DECOMPOSER_VERSION,
-        prompt: `1. [HUMAN] ${task.title}`,
-      },
-    });
-
-    console.log(`[task-decomposer] ✓ "${task.title}" → HUMAN ${humanReason} (actionType=other)`);
-
-    // Check if all tasks in plan are ready → ACTIVE
-    const planTasks = await prisma.planTask.findMany({
-      where: { planId: task.planId },
-      select: { status: true },
-    });
-    if (planTasks.length > 0 && planTasks.every((t) => t.status !== "PLANNING")) {
-      const planRecord = await prisma.monthlyPlan.findUnique({ where: { id: task.planId }, select: { status: true } });
-      if (planRecord?.status === "PLANNING") {
-        await prisma.monthlyPlan.update({ where: { id: task.planId }, data: { status: "ACTIVE" } });
-        console.log(`[task-decomposer] Plan ${task.planId} → ACTIVE`);
-      }
-    }
-    return;
   }
 
-  const templatePlatform = (platform === "NEXTJS" || platform === "WORDPRESS") ? platform as Platform : null;
-  const template = templatePlatform && effectiveActionType
-    ? getTemplate(effectiveActionType, templatePlatform)
-    : null;
+  // Step 6: Update task
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      status: "READY",
+      mode: finalMode,
+      modeReason: `${resolvedSteps.length} pasos (${resolvedSteps.filter((s) => s.type === "AI").length} AI, ${resolvedSteps.filter((s) => s.type === "HM").length} HM)`,
+      generatorVersion: DECOMPOSER_VERSION,
+      prompt: resolvedSteps.map((s, i) => `${i + 1}. [${(s as unknown as { type: string }).type === "AI" ? "IA" : "HM"}] ${(s as unknown as { title: string }).title}`).join("\n"),
+    },
+  });
 
-  if (template) {
-    const wpCaps = wpCapabilitiesContext ? extractCapsList(wpCapabilitiesContext) : null;
-    const finalSteps = applyCapabilities(template, wpCaps);
-    const mode = resolveTaskMode(finalSteps);
-    const modeReason = buildModeReason(finalSteps);
+  console.log(
+    `[task-decomposer] ✓ "${task.title}" — ${classification.actionType}/${platformKey} → ${resolvedSteps.length} steps (${finalMode}) ` +
+    `[confidence: ${classification.confidence.toFixed(2)}, evidence: ${evidence.rows.length} rows]`
+  );
 
-    // Derive content kind from actionType
-    const KIND_MAP: Record<string, string> = {
-      create_blog: "blog",
-      create_landing: "landing",
-      edit_page_text: "optimization",
-    };
-    const contentKind = KIND_MAP[effectiveActionType!] ?? null;
-    const targetKeyword = coherence.targetKeyword ?? task.targetKeyword ?? null;
-
-    // Create steps from template with proper payloads
-    for (let i = 0; i < finalSteps.length; i++) {
-      const ts = finalSteps[i];
-      let prompt: string | null = null;
-
-      if (ts.action) {
-        const payload: Record<string, unknown> = { action: ts.action };
-
-        if (ts.action === "content_package") {
-          if (!contentKind) {
-            // Missing kind → can't build payload → WAITING_HUMAN
-            await prisma.planStep.create({
-              data: {
-                taskId,
-                order: i + 1,
-                title: ts.title,
-                type: "HUMAN",
-                prompt: "Falta tipo de contenido (blog/landing/optimization). Configura el actionType de la tarea.",
-                acceptanceCriteria: [],
-                status: "WAITING_HUMAN",
-                notes: "humanReason:config",
-              },
-            });
-            continue;
-          }
-          payload.kind = contentKind;
-          payload.keyword = targetKeyword ?? "";
-          payload.page_title = targetKeyword ?? task.title;
-          payload.target_page_id = 0;
-        }
-
-        if (ts.action === "seo") {
-          payload.endpoint = "POST /seo/{page_id}";
-          payload.page_id = 0;
-          payload.meta_title = "";
-          payload.meta_description = "";
-          payload.focus_keyword = targetKeyword ?? "";
-          // Include task objective as context so the executor knows which pages to target
-          payload.context = task.objective;
-        }
-
-        if (ts.action === "keyword_research") {
-          payload.categories = [{ name: task.category, seeds: targetKeyword ? [targetKeyword] : [] }];
-          payload.criteria = { total: 25 };
-        }
-
-        if (ts.action === "apply_keywords") {
-          // No extra payload needed — reads from previous step's stagedChange
-        }
-
-        if (ts.action === "image") {
-          payload.endpoint = "";
-          payload.payload = {
-            usage: "featured_image",
-            attach_to_post_id: null,
-            aspect_ratio: "16:9",
-            subject_type: "conceptual",
-          };
-          // Build brief from task context
-          payload.content_brief = `Imagen de portada para: ${targetKeyword ?? task.title}. Estilo profesional, temática ${task.category}. Sin texto, sin logos, sin marcas de agua.`;
-        }
-
-        if (ts.action === "nextjs_blog_generate") {
-          // This action is handled by processNextjsBlogTask — no extra payload needed
-          // The executor generates the article data from task objective
-        }
-
-        if (ts.action === "agent") {
-          // Free-form agent execution — the prompt is the step title + task context
-          // Handled by the standard agent runner in the code lane
-        }
-
-        if (ts.action === "publish") {
-          payload.endpoint = "POST /publish";
-          payload.payload = {
-            title: targetKeyword ?? task.title,
-            slug: (targetKeyword ?? task.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50),
-            focus_keyword: targetKeyword ?? "",
-            categories: [],
-          };
-          payload.content_brief = `Artículo sobre ${targetKeyword ?? task.title}. ${task.objective}`;
-        }
-
-        prompt = JSON.stringify(payload);
-      }
-
-      await prisma.planStep.create({
-        data: {
-          taskId,
-          order: i + 1,
-          title: ts.title,
-          type: ts.type as "AI" | "HUMAN",
-          prompt,
-          acceptanceCriteria: [],
-          status: "PENDING",
-          notes: [
-            ts.type === "AI" ? "complexity:medium" : null,
-            ts.humanReason ? `humanReason:${ts.humanReason}` : null,
-          ].filter(Boolean).join(" ") || null,
-        },
-      });
+  // Check if all tasks in plan are ready → ACTIVE
+  const planTasks = await prisma.planTask.findMany({
+    where: { planId: task.planId },
+    select: { status: true },
+  });
+  if (planTasks.length > 0 && planTasks.every((t) => t.status !== "PLANNING")) {
+    const planRecord = await prisma.monthlyPlan.findUnique({ where: { id: task.planId }, select: { status: true } });
+    if (planRecord?.status === "PLANNING") {
+      await prisma.monthlyPlan.update({ where: { id: task.planId }, data: { status: "ACTIVE" } });
+      console.log(`[task-decomposer] Plan ${task.planId} → ACTIVE`);
     }
-
-    await prisma.planTask.update({
-      where: { id: taskId },
-      data: {
-        status: "READY",
-        mode,
-        modeReason,
-        actionType: effectiveActionType,
-        generatorVersion: DECOMPOSER_VERSION,
-        prompt: finalSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
-      },
-    });
-
-    console.log(
-      `[task-decomposer] ✓ "${task.title}" — template ${effectiveActionType}/${templatePlatform} → ${finalSteps.length} steps (${mode})`
-    );
-    return;
   }
 
-  // ── Free-form LLM path (no template match) ──────────────────────────
-  try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 8000, // prompts AI para tareas CONTENT pueden ser largos
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const rawText = response.content[0]?.type === "text" ? response.content[0].text : "[]";
-    const jsonStr = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-
-    let parsedSteps: unknown[];
-    try {
-      parsedSteps = JSON.parse(jsonStr) as unknown[];
-    } catch {
-      throw new Error(`JSON parse failed: ${jsonStr.slice(0, 200)}`);
-    }
-
-    if (!Array.isArray(parsedSteps) || parsedSteps.length === 0) {
-      throw new Error("Claude devolvió 0 pasos");
-    }
-
-    // Validate each step with Zod + humanReason platform rules (via policy)
-    const validReasons = platformPolicy.humanReasons;
-
-    const validSteps: z.infer<typeof stepSchema>[] = [];
-    for (const raw of parsedSteps) {
-      const result = stepSchema.safeParse(raw);
-      if (!result.success) {
-        console.warn("[task-decomposer] Step inválido descartado:", JSON.stringify(raw).slice(0, 200));
-        continue;
-      }
-      const step = result.data;
-
-      // HUMAN steps MUST have a valid humanReason for the platform
-      if (step.type === "HUMAN") {
-        if (!step.humanReason) {
-          console.warn(`[task-decomposer] Step HUMAN sin humanReason descartado: "${step.title}"`);
-          continue;
-        }
-        if (!(validReasons as readonly string[]).includes(step.humanReason)) {
-          console.warn(`[task-decomposer] humanReason "${step.humanReason}" inválido para ${platform}, descartado: "${step.title}"`);
-          continue;
-        }
-        // WP: "terminal" is forbidden
-        if (platform === "WORDPRESS" && step.humanReason === "terminal") {
-          console.warn(`[task-decomposer] "terminal" prohibido en WordPress, descartado: "${step.title}"`);
-          continue;
-        }
-      }
-
-      // AI steps must NOT have humanReason
-      if (step.type === "AI" && step.humanReason) {
-        step.humanReason = null;
-      }
-
-      // Filter audit/lighthouse step titles
-      if (/lighthouse|auditor[ií]a de (velocidad|rendimiento)|correr pagespeed|medir velocidad/i.test(step.title)) {
-        console.warn(`[task-decomposer] Paso de auditoría filtrado: "${step.title}"`);
-        continue;
-      }
-
-      // WP: AI steps must have recognized action JSON — degrade to HUMAN if not
-      if (platform === "WORDPRESS" && step.type === "AI") {
-        const VALID_WP_ACTIONS = ["content_package", "publish", "seo", "image", "elementor", "landing", "keyword_research", "apply_keywords"];
-        let hasValidAction = false;
-        try {
-          const parsed = JSON.parse((step.prompt ?? "").replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim());
-          hasValidAction = VALID_WP_ACTIONS.includes(parsed?.action);
-        } catch { /* not JSON */ }
-
-        if (!hasValidAction) {
-          console.warn(`[task-decomposer] WP AI step sin acción válida → HUMAN: "${step.title}"`);
-          step.type = "HUMAN" as "AI" | "HUMAN";
-          step.humanReason = "wp_manual";
-          step.prompt = `Este paso requiere intervención manual en WordPress Admin.\n\nObjetivo: ${step.title}\n${step.prompt ?? ""}`;
-        }
-      }
-
-      validSteps.push(step);
-    }
-
-    if (validSteps.length === 0) {
-      // Degrade instead of fail: create a single fallback HUMAN step
-      console.warn(`[task-decomposer] Todos los pasos inválidos para "${task.title}" — creando paso HUMAN fallback`);
-      validSteps.push({
-        title: `Ejecutar manualmente: ${task.title.slice(0, 90)}`,
-        type: "HUMAN" as const,
-        prompt:
-          `Ningún paso pudo generarse automáticamente para esta tarea.\n` +
-          `Objetivo: ${task.objective}\n\n` +
-          `Ejecuta esta tarea manualmente según el objetivo indicado.\n` +
-          `Cuando esté completada, marca este paso como hecho.`,
-        acceptanceCriteria: ["Tarea completada según el objetivo"],
-        complexity: "medium" as const,
-        humanReason: platformPolicy.usesTerminal ? "terminal" : "wp_manual",
-      });
-    }
-
-    // Create PlanSteps (complexity stored in notes as metadata for the worker)
-    for (let i = 0; i < validSteps.length; i++) {
-      const step = validSteps[i];
-      await prisma.planStep.create({
-        data: {
-          taskId,
-          order: i + 1,
-          title: step.title,
-          type: step.type as "AI" | "HYBRID" | "HUMAN",
-          prompt: step.prompt ?? null, // both AI and HUMAN steps have prompts now
-          acceptanceCriteria: step.acceptanceCriteria,
-          status: "PENDING",
-          notes: [
-            step.type === "AI" ? `complexity:${step.complexity ?? "medium"}` : null,
-            step.humanReason ? `humanReason:${step.humanReason}` : null,
-          ].filter(Boolean).join(" ") || null,
-        },
-      });
-    }
-
-    // Recalculate mode from actual steps (single source of truth)
-    const derivedMode = resolveTaskMode(validSteps.map((s) => ({ type: s.type as "AI" | "HUMAN" })));
-    const derivedModeReason = buildModeReason(
-      validSteps.map((s) => ({ type: s.type as "AI" | "HUMAN", humanReason: s.humanReason }))
-    );
-
-    // Update task prompt with a summary and set to READY
-    await prisma.planTask.update({
-      where: { id: taskId },
-      data: {
-        status: "READY",
-        mode: derivedMode,
-        modeReason: derivedModeReason,
-        generatorVersion: DECOMPOSER_VERSION,
-        prompt: validSteps.map((s, i) => `${i + 1}. [${s.type}] ${s.title}`).join("\n"),
-      },
-    });
-
-    // Cost tracking
-    const usage = response.usage;
-    const cachedTokens = (usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
-    const cost = calculateClaudeCost("sonnet-4-6", usage.input_tokens, usage.output_tokens, cachedTokens);
-
-    await logApiUsage({
-      provider: "anthropic",
-      endpoint: "task-decompose",
-      cost,
-      clientId,
-    });
-
-    console.log(`[task-decomposer] ✓ Task "${task.title}" → ${validSteps.length} steps, $${cost.toFixed(4)}`);
-
-    // Check if all tasks in plan are out of PLANNING → plan ACTIVE
-    const plan = await prisma.monthlyPlan.findUniqueOrThrow({
-      where: { id: task.planId },
-      include: { tasks: { select: { status: true } } },
-    });
-
-    const allReady = plan.tasks.every((t) => t.status !== "PLANNING");
-    if (allReady && plan.status === "PLANNING") {
-      await prisma.monthlyPlan.update({
-        where: { id: plan.id },
-        data: { status: "ACTIVE" },
-      });
-      console.log(`[task-decomposer] Plan ${plan.id} → ACTIVE`);
-    }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[task-decomposer] ✗ Task "${task.title}" failed:`, errMsg);
@@ -857,6 +635,10 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
     });
   }
 }
+
+// Legacy decomposer code removed in F1c — see git history (commit ca5237e)
+
+// Legacy decomposer code removed in F1c — see git history
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
