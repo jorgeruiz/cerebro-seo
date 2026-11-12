@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-11-12 (v12 — F1a: task-catalog.ts como fuente única, 29 actionTypes, diagnóstico completo)
+**Última actualización:** 2026-11-12 (v13 — F1b: clasificador único, NEEDS_DEFINITION/INPUT/BLOCKED, ClassificationEvent)
 
 ---
 

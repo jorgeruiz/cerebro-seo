@@ -157,47 +157,73 @@ export async function actionSendToPlan(
       continue; // skip non-setup tasks without site
     }
 
-    // Map candidate kind to Prisma enum
+    // ── Classify via catalog (quick — no LLM, uses existing actionType + signals)
+    const { classifyTaskQuick } = await import("@/lib/plan/classify-task");
+    const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
+
+    const classification = classifyTaskQuick({
+      title: candidate.titulo,
+      objective: candidate.descripcion,
+      existingActionType: candidate.actionType,
+    });
+
+    const catalogEntry = getCatalogEntry(classification.actionType);
+    const platformKey = (eligibility.platform === "NEXTJS" || eligibility.platform === "WORDPRESS")
+      ? eligibility.platform as "NEXTJS" | "WORDPRESS" : null;
+    const mode = platformKey && catalogEntry
+      ? catalogEntry.modes[platformKey].mode === "AI" ? "AI" : catalogEntry.modes[platformKey].mode === "HYBRID" ? "HYBRID" : "HUMAN"
+      : "HUMAN";
+    const category = catalogEntry?.category ?? inferCategory(candidate);
     const kind = candidate.kind === "SETUP" ? "SETUP" : candidate.kind === "CONTENT" ? "CONTENT" : "CODE";
-    // Modo según plataforma (respetar el modo del análisis en todos los casos)
-    // WP ahora admite HYBRID (blog/landing: IA genera, equipo aplica en WP)
-    const platform = eligibility.platform;
-    let mode: "AI" | "HYBRID" | "HUMAN";
-    if (platform === "NEXTJS" || platform === "WORDPRESS" || platform === "MIGRACION") {
-      mode = candidate.mode === "AI" ? "AI" : candidate.mode === "HYBRID" ? "HYBRID" : "HUMAN";
-    } else {
-      mode = "HUMAN";
-    }
     const effort = candidate.effort === "LOW" ? "LOW" : candidate.effort === "HIGH" ? "HIGH" : "MEDIUM";
+
+    // Determine initial status based on classification
+    const initialStatus = classification.actionType === "other" ? "NEEDS_DEFINITION" as const : "PLANNING" as const;
 
     const task = await prisma.planTask.create({
       data: {
         planId: plan.id,
-        siteId: siteId ?? "", // SETUP tasks may not have site
+        siteId: siteId ?? "",
         order: taskCount + created + 1,
         title: candidate.titulo,
         objective: candidate.descripcion,
-        prompt: "", // filled by decomposition job
+        prompt: "",
         acceptanceCriteria: [],
         mode,
         modeReason: candidate.modeReason ?? null,
         kind,
         priority: candidate.priority,
         effort,
-        category: inferCategory(candidate),
-        actionType: candidate.actionType ?? null,
+        category,
+        actionType: classification.actionType,
+        classificationConfidence: classification.confidence,
         targetKeyword: candidate.keywordObjetivo ?? null,
         sourceCandidateId: candidate.id,
-        status: "PLANNING",
+        status: initialStatus,
       },
     });
 
-    // Enqueue decomposition job (in ai-analysis queue, NOT the agent worker)
-    await decomposeQueue.add("task:decompose", {
-      taskId: task.id,
-      clientId,
-      candidateId: candidate.id,
-    });
+    // Log classification event
+    if (candidate.actionType && candidate.actionType !== classification.actionType) {
+      await prisma.classificationEvent.create({
+        data: {
+          taskId: task.id,
+          originalType: candidate.actionType,
+          finalType: classification.actionType,
+          actor: "classifier",
+          reason: `Análisis propuso "${candidate.actionType}", clasificador resolvió "${classification.actionType}" (confianza: ${classification.confidence.toFixed(2)})`,
+        },
+      });
+    }
+
+    // Only enqueue decomposition if not NEEDS_DEFINITION
+    if (initialStatus !== "NEEDS_DEFINITION") {
+      await decomposeQueue.add("task:decompose", {
+        taskId: task.id,
+        clientId,
+        candidateId: candidate.id,
+      });
+    }
 
     created++;
   }

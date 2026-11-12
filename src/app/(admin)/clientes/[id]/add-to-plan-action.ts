@@ -15,7 +15,7 @@ import { resolveSite } from "@/server/sites/resolve-site";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
-import { getTemplate, resolveTaskMode, type ActionType, type Platform } from "@/lib/task-templates";
+// Old imports removed — classification now via catalog (F1b)
 
 export interface AddToPlanInput {
   clientId: string;
@@ -108,28 +108,33 @@ export async function actionAddToPlan(
     }
   }
 
-  // Create task
+  // Create task — classify via catalog
   const taskCount = await prisma.planTask.count({ where: { planId: plan.id } });
 
-  // Derive mode from template if actionType is provided
-  const { actionType, mode } = input;
-  let effectiveMode: "AI" | "HYBRID" | "HUMAN" = mode ?? "HUMAN";
+  const { classifyTaskQuick } = await import("@/lib/plan/classify-task");
+  const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
 
-  if (actionType && (site.platform === "NEXTJS" || site.platform === "WORDPRESS")) {
-    const template = getTemplate(actionType as ActionType, site.platform as Platform);
-    if (template) {
-      // For WP, we'd need capabilities — but at addToPlan time we don't have them.
-      // The decomposer will apply capabilities. For now, use template steps as-is.
-      effectiveMode = resolveTaskMode(template.steps);
-    }
-  } else if (!actionType) {
-    // Legacy: mode passed directly (backward compat)
-    if (site.platform === "WORDPRESS" || site.platform === "MIGRACION") {
-      effectiveMode = mode === "HYBRID" ? "HUMAN" : (mode ?? "HUMAN");
-    } else if (!site.platform || site.platform === "OTRO") {
-      effectiveMode = "HUMAN";
-    }
-  }
+  const classification = classifyTaskQuick({
+    title,
+    objective,
+    existingActionType: input.actionType,
+  });
+
+  const catalogEntry = getCatalogEntry(classification.actionType);
+  const platformKey = (site.platform === "NEXTJS" || site.platform === "WORDPRESS")
+    ? site.platform as "NEXTJS" | "WORDPRESS" : null;
+  const effectiveMode = platformKey && catalogEntry
+    ? catalogEntry.modes[platformKey].mode === "AI" ? "AI" : catalogEntry.modes[platformKey].mode === "HYBRID" ? "HYBRID" : "HUMAN"
+    : (input.mode ?? "HUMAN");
+  const effectiveCategory = catalogEntry?.category ?? category;
+
+  const targetKeyword = input.targetKeyword
+    ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
+    ?? (typeof sourceRef.snapshot?.term === "string" ? sourceRef.snapshot.term : null)
+    ?? (typeof sourceRef.snapshot?.query === "string" ? sourceRef.snapshot.query : null)
+    ?? null;
+
+  const initialStatus = classification.actionType === "other" ? "NEEDS_DEFINITION" as const : "PLANNING" as const;
 
   const task = await prisma.planTask.create({
     data: {
@@ -138,24 +143,26 @@ export async function actionAddToPlan(
       order: taskCount + 1,
       title,
       objective,
-      prompt: "", // filled by decomposition
+      prompt: "",
       acceptanceCriteria: [],
       mode: effectiveMode as "AI" | "HYBRID" | "HUMAN",
       kind: kind as "CONTENT" | "CODE" | "SETUP",
       priority,
       effort: effort as "LOW" | "MEDIUM" | "HIGH",
-      category,
-      actionType: input.actionType ?? null,
-      targetKeyword: input.targetKeyword
-        ?? (typeof sourceRef.snapshot?.keyword === "string" ? sourceRef.snapshot.keyword : null)
-        ?? (typeof sourceRef.snapshot?.term === "string" ? sourceRef.snapshot.term : null)
-        ?? (typeof sourceRef.snapshot?.query === "string" ? sourceRef.snapshot.query : null)
-        ?? null,
+      category: effectiveCategory,
+      actionType: classification.actionType,
+      classificationConfidence: classification.confidence,
+      targetKeyword,
       sourceCandidateId: `module-${randomUUID().slice(0, 8)}`,
       sourceRef: sourceRef as unknown as InputJsonValue,
-      status: "PLANNING",
+      status: initialStatus,
     },
   });
+
+  // Only enqueue decomposition if not NEEDS_DEFINITION
+  if (initialStatus === "NEEDS_DEFINITION") {
+    return { ok: true, taskId: task.id, planId: plan.id, isDuplicate: false };
+  }
 
   // Enqueue decomposition
   await decomposeQueue.add("task:decompose", {

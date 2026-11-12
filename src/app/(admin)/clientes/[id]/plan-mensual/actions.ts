@@ -51,9 +51,14 @@ export interface PlanTaskFullView {
   status: string;
   commitShas: string[];
   resultUrls: string[];
+  actionType: string | null;
   failureReason: string | null;
   voidReason: string | null;
   generatorVersion: string | null;
+  classificationConfidence: number | null;
+  classificationMeta: unknown | null;
+  blockedReason: string | null;
+  remedy: string | null;
   completedAt: string | null;
   steps: PlanStepView[];
   runs: TaskRunView[];
@@ -172,9 +177,14 @@ export async function getPlanData(
       status: t.status,
       commitShas: t.commitShas,
       resultUrls: t.resultUrls,
+      actionType: t.actionType ?? null,
       failureReason: t.failureReason,
       voidReason: t.voidReason,
       generatorVersion: t.generatorVersion ?? null,
+      classificationConfidence: t.classificationConfidence ?? null,
+      classificationMeta: t.classificationMeta ?? null,
+      blockedReason: t.blockedReason ?? null,
+      remedy: t.remedy ?? null,
       completedAt: t.completedAt?.toISOString() ?? null,
       steps: t.steps.map((s) => ({
         id: s.id,
@@ -1367,4 +1377,121 @@ export async function actionRedoOutdatedTasks(
   }
 
   return { ok: true, redone, total: tasks.length };
+}
+
+// ─── Reclassify NEEDS_DEFINITION task ──────────────────────────────────────
+
+export async function actionReclassifyTask(
+  taskId: string,
+  newActionType: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const { isValidActionType, getCatalogEntry } = await import("@/lib/plan/task-catalog");
+
+  if (!isValidActionType(newActionType)) {
+    return { ok: false, error: `actionType "${newActionType}" no es válido.` };
+  }
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    select: { id: true, status: true, actionType: true, planId: true },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+
+  const entry = getCatalogEntry(newActionType as import("@/lib/plan/task-catalog").ActionType);
+  const category = entry?.category ?? "technical";
+
+  // Log the reclassification event
+  await prisma.classificationEvent.create({
+    data: {
+      taskId,
+      originalType: task.actionType,
+      finalType: newActionType,
+      actor: `human:${session.user.email}`,
+      reason: `Reclasificación manual desde NEEDS_DEFINITION`,
+    },
+  });
+
+  // Update task and enqueue decomposition
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      actionType: newActionType,
+      category,
+      status: "PLANNING",
+      failureReason: null,
+      classificationConfidence: 1.0, // human-confirmed
+    },
+  });
+
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: task.planId },
+    select: { clientId: true },
+  });
+
+  if (plan) {
+    await decomposeQueue.add("task:decompose", {
+      taskId,
+      clientId: plan.clientId,
+      candidateId: "reclassify",
+    });
+  }
+
+  return { ok: true };
+}
+
+// ─── Set task as manual (NEEDS_DEFINITION → single HUMAN step) ─────────────
+
+export async function actionSetManualTask(
+  taskId: string,
+  instructions: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    select: { id: true, status: true, actionType: true },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+
+  // Log the event
+  await prisma.classificationEvent.create({
+    data: {
+      taskId,
+      originalType: task.actionType,
+      finalType: "other",
+      actor: `human:${session.user.email}`,
+      reason: "Manual libre: humano escribió instrucciones",
+    },
+  });
+
+  // Create single HUMAN step
+  await prisma.planStep.create({
+    data: {
+      taskId,
+      order: 1,
+      title: "Ejecutar manualmente",
+      type: "HUMAN",
+      prompt: instructions,
+      acceptanceCriteria: [],
+      status: "PENDING",
+      notes: "humanReason:Tarea fuera de catálogo",
+    },
+  });
+
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      actionType: "other",
+      mode: "HUMAN",
+      modeReason: "Manual libre",
+      status: "READY",
+      classificationConfidence: 1.0,
+    },
+  });
+
+  return { ok: true };
 }

@@ -29,6 +29,8 @@ import {
   actionRunPreflight,
   actionFixPreflight,
   actionRedoOutdatedTasks,
+  actionReclassifyTask,
+  actionSetManualTask,
   type PlanFullView,
   type PreflightCheck,
   type PlanTaskFullView,
@@ -45,7 +47,7 @@ const CURRENT_DECOMPOSER_VERSION = "2026-11-11-v1";
 
 const MODE_BADGE: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   AI:     { label: "IA",      icon: Bot,      color: "text-ds-blue bg-ds-blue/10 border-ds-blue/30" },
-  HYBRID: { label: "Hibrido", icon: User,     color: "text-purple-500 bg-purple-500/10 border-purple-500/30" },
+  HYBRID: { label: "Híbrido", icon: User,     color: "text-purple-500 bg-purple-500/10 border-purple-500/30" },
   HUMAN:  { label: "Manual",  icon: User,     color: "text-orange-500 bg-orange-500/10 border-orange-500/30" },
 };
 
@@ -72,9 +74,12 @@ const TASK_STATUS: Record<string, { label: string; icon: React.ElementType; colo
   READY:         { label: "Listo",              icon: CheckCircle2,   color: "text-green-500" },
   RUNNING:       { label: "Ejecutando...",      icon: Loader2,        color: "text-ds-blue" },
   WAITING_HUMAN: { label: "Esperando humano",   icon: Clock,          color: "text-orange-500" },
-  DONE:          { label: "Completado",         icon: CheckCircle2,   color: "text-emerald-500" },
-  FAILED:        { label: "Error",              icon: XCircle,        color: "text-destructive" },
-  VOIDED:        { label: "Anulado",            icon: Ban,            color: "text-muted-foreground" },
+  NEEDS_DEFINITION: { label: "Sin clasificar",   icon: AlertTriangle,  color: "text-muted-foreground" },
+  NEEDS_INPUT:      { label: "Faltan datos",     icon: AlertTriangle,  color: "text-yellow-500" },
+  BLOCKED:          { label: "Bloqueado",        icon: XCircle,        color: "text-orange-500" },
+  DONE:             { label: "Completado",       icon: CheckCircle2,   color: "text-emerald-500" },
+  FAILED:           { label: "Error",            icon: XCircle,        color: "text-destructive" },
+  VOIDED:           { label: "Anulado",          icon: Ban,            color: "text-muted-foreground" },
 };
 
 const STEP_STATUS: Record<string, { label: string; color: string }> = {
@@ -318,7 +323,7 @@ function StepRow({
             : "bg-orange-500/10 text-orange-500"
         )}
       >
-        {step.type === "AI" ? "IA" : "HT"}
+        {step.type === "AI" ? "IA" : "Manual"}
       </span>
 
       <div className="flex-1 min-w-0">
@@ -526,6 +531,117 @@ function KeywordResearchTable({ data }: { data: KeywordResearchStaged }) {
 }
 
 // ─── Next.js Blog Publish Block ─────────────────────────────────────────────
+
+// ─── Needs Definition Card ───────────────────────────────────────────────────
+
+function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
+  const [isPending, startTransition] = useTransition();
+  const [selectedType, setSelectedType] = useState("");
+  const [manualInstructions, setManualInstructions] = useState("");
+  const [mode, setMode] = useState<"select" | "manual">("select");
+
+  const meta = task.classificationMeta as { candidates?: Array<{ actionType: string; reason: string }> } | null;
+
+  const handleReclassify = () => {
+    if (!selectedType) return;
+    startTransition(async () => {
+      const res = await actionReclassifyTask(task.id, selectedType);
+      if (res.ok) window.location.reload();
+    });
+  };
+
+  const handleManual = () => {
+    if (!manualInstructions.trim()) return;
+    startTransition(async () => {
+      const res = await actionSetManualTask(task.id, manualInstructions);
+      if (res.ok) window.location.reload();
+    });
+  };
+
+  return (
+    <div className="border-t border-border bg-muted/10 px-4 py-3 space-y-3">
+      <p className="font-mono text-[0.65rem] text-muted-foreground">
+        Esta tarea no se pudo clasificar automáticamente. Elige una opción:
+      </p>
+
+      {meta?.candidates && meta.candidates.length > 0 && (
+        <div className="space-y-1">
+          <p className="font-mono text-[0.6rem] text-muted-foreground">Candidatos más cercanos:</p>
+          {meta.candidates.map((c, i) => (
+            <div key={i} className="font-mono text-[0.6rem] flex items-center gap-2">
+              <span className="text-primary font-semibold">{c.actionType}</span>
+              <span className="text-muted-foreground">— {c.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={() => setMode("select")}
+          className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "select" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground")}>
+          Reclasificar
+        </button>
+        <button onClick={() => setMode("manual")}
+          className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "manual" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground")}>
+          Manual libre
+        </button>
+      </div>
+
+      {mode === "select" && (
+        <div className="flex gap-2 items-end">
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}
+            className="font-mono text-[0.65rem] border border-border rounded px-2 py-1 bg-card flex-1">
+            <option value="">Seleccionar actionType...</option>
+            <option value="create_blog">create_blog — Blog</option>
+            <option value="update_meta">update_meta — Meta tags</option>
+            <option value="create_landing">create_landing — Landing</option>
+            <option value="schema">schema — JSON-LD</option>
+            <option value="internal_links">internal_links — Enlaces internos</option>
+            <option value="edit_page_text">edit_page_text — Editar texto</option>
+            <option value="keyword_research">keyword_research — Keywords</option>
+            <option value="fix_redirect">fix_redirect — Redirección</option>
+            <option value="fix_headings">fix_headings — Encabezados</option>
+            <option value="fix_broken_links">fix_broken_links — Enlaces rotos</option>
+            <option value="verify_indexation">verify_indexation — Indexación</option>
+            <option value="verify_analytics">verify_analytics — Analytics</option>
+            <option value="add_faq">add_faq — FAQ</option>
+            <option value="refresh_content">refresh_content — Actualizar contenido</option>
+            <option value="configure_canonical">configure_canonical — Canonical</option>
+            <option value="configure_robots">configure_robots — Robots.txt</option>
+            <option value="configure_sitemap">configure_sitemap — Sitemap</option>
+            <option value="optimize_alt_text">optimize_alt_text — Alt text</option>
+            <option value="optimize_images">optimize_images — Imágenes</option>
+            <option value="improve_speed">improve_speed — Velocidad</option>
+            <option value="aeo_readiness">aeo_readiness — AEO</option>
+            <option value="add_image">add_image — Imagen</option>
+            <option value="add_human_evidence">add_human_evidence — Evidencia humana</option>
+            <option value="security_fix">security_fix — Seguridad</option>
+            <option value="setup_gbp">setup_gbp — Google Business</option>
+            <option value="link_building">link_building — Link building</option>
+            <option value="audit_duplicate">audit_duplicate — Duplicados</option>
+            <option value="merge_content">merge_content — Fusionar contenido</option>
+          </select>
+          <button onClick={handleReclassify} disabled={isPending || !selectedType}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-7 text-[0.6rem]")}>
+            {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Aplicar"}
+          </button>
+        </div>
+      )}
+
+      {mode === "manual" && (
+        <div className="space-y-2">
+          <textarea value={manualInstructions} onChange={(e) => setManualInstructions(e.target.value)}
+            placeholder="Instrucciones para el equipo..."
+            className="w-full font-mono text-[0.65rem] border border-border rounded px-2 py-1.5 bg-card min-h-[60px]" />
+          <button onClick={handleManual} disabled={isPending || !manualInstructions.trim()}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-7 text-[0.6rem]")}>
+            {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Crear paso manual"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Redo Outdated Tasks Banner ──────────────────────────────────────────────
 
@@ -1169,6 +1285,24 @@ function TaskCard({
       {/* Expanded content */}
       {open && (
         <div className="border-t border-border">
+          {/* NEEDS_DEFINITION card */}
+          {task.status === "NEEDS_DEFINITION" && <NeedsDefinitionCard task={task} />}
+
+          {/* BLOCKED card */}
+          {task.status === "BLOCKED" && task.blockedReason && (
+            <div className="px-4 py-3 bg-orange-500/10 border-b border-orange-500/20">
+              <p className="font-mono text-[0.65rem] text-orange-600 font-semibold">Bloqueado: {task.blockedReason}</p>
+              {task.remedy && <p className="font-mono text-[0.6rem] text-muted-foreground mt-0.5">Remedio: {task.remedy}</p>}
+            </div>
+          )}
+
+          {/* NEEDS_INPUT card */}
+          {task.status === "NEEDS_INPUT" && (
+            <div className="px-4 py-3 bg-yellow-500/10 border-b border-yellow-500/20">
+              <p className="font-mono text-[0.65rem] text-yellow-600">Faltan datos de entrada para ejecutar esta tarea.</p>
+            </div>
+          )}
+
           {/* Outdated version warning */}
           {isOutdatedVersion && (
             <div className="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center gap-2">
