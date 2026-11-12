@@ -18,13 +18,13 @@
 | `upload_media` | subir imagen | AI: image | AI: image | template |
 | `generate_image` | generar imagen AI | AI: image | AI: image | template |
 
-## Tareas HUMAN (sin handler AI)
+## Tareas HUMAN (sin handler AI, paso directo)
 
 | Señal en título | actionType | WP humanReason | Next.js humanReason | Descubierta en |
 |---|---|---|---|---|
-| indexación, indexar, verificar indexados | `other` | external_tool (GSC) | external_tool (GSC) | QE nov-2026 |
-| redirección, redirect, 301, 302, 404 redirigir | `other` | wp_manual (plugin Redirection) | terminal | QE nov-2026 |
-| verificar tracking keywords | `other` | config (Cerebro SEO) | config | QE nov-2026 |
+| indexación, indexar, verificar indexados | `verify_indexation` | external_tool (GSC) | external_tool (GSC) | QE nov-2026 |
+| redirección, redirect, 301, 302, 404 redirigir | `fix_redirect` | wp_manual (plugin Redirection) | terminal | QE nov-2026 |
+| verificar tracking, configuración keywords | `verify_tracking` | config (Cerebro SEO) | config | QE nov-2026 |
 | FAQ schema en artículos existentes | `schema` | wp_manual (Yoast) | agent | QE nov-2026 |
 
 ## Tareas pendientes de catalogar

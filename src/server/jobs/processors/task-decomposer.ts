@@ -485,6 +485,61 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
   const effectiveActionType = (coherence.actionType ?? inferActionType(coherence.category, task.title)) as ActionType | null;
 
   // ── Template-based path: deterministic steps ──────────────────────────
+  // ── actionType=other → direct HUMAN step (no LLM needed) ────────────
+  const HUMAN_ONLY_ACTIONS = ["other", "verify_indexation", "fix_redirect", "verify_tracking"];
+  if (effectiveActionType && HUMAN_ONLY_ACTIONS.includes(effectiveActionType)) {
+    const HUMAN_REASON_MAP: Record<string, string> = {
+      verify_indexation: "external_tool",
+      fix_redirect: "wp_manual",
+      verify_tracking: "config",
+      other: "config",
+    };
+    const humanReason = platformPolicy.usesTerminal ? "terminal" : (
+      HUMAN_REASON_MAP[effectiveActionType!] ?? "config"
+    );
+
+    await prisma.planStep.create({
+      data: {
+        taskId,
+        order: 1,
+        title: task.title,
+        type: "HUMAN",
+        prompt: `${task.objective}\n\nCompleta esta tarea manualmente y marca como hecho cuando termines.`,
+        acceptanceCriteria: [],
+        status: "PENDING",
+        notes: `humanReason:${humanReason}`,
+      },
+    });
+
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "READY",
+        mode: "HUMAN",
+        modeReason: `Tarea manual (${humanReason})`,
+        actionType: "other",
+        generatorVersion: DECOMPOSER_VERSION,
+        prompt: `1. [HUMAN] ${task.title}`,
+      },
+    });
+
+    console.log(`[task-decomposer] ✓ "${task.title}" → HUMAN ${humanReason} (actionType=other)`);
+
+    // Check if all tasks in plan are ready → ACTIVE
+    const planTasks = await prisma.planTask.findMany({
+      where: { planId: task.planId },
+      select: { status: true },
+    });
+    if (planTasks.length > 0 && planTasks.every((t) => t.status !== "PLANNING")) {
+      const planRecord = await prisma.monthlyPlan.findUnique({ where: { id: task.planId }, select: { status: true } });
+      if (planRecord?.status === "PLANNING") {
+        await prisma.monthlyPlan.update({ where: { id: task.planId }, data: { status: "ACTIVE" } });
+        console.log(`[task-decomposer] Plan ${task.planId} → ACTIVE`);
+      }
+    }
+    return;
+  }
+
   const templatePlatform = (platform === "NEXTJS" || platform === "WORDPRESS") ? platform as Platform : null;
   const template = templatePlatform && effectiveActionType
     ? getTemplate(effectiveActionType, templatePlatform)

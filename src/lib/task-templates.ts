@@ -24,6 +24,10 @@ export type ActionType =
   | "create_landing"
   | "upload_media"
   | "generate_image"
+  // HUMAN-only actions (no AI handler, direct to manual step)
+  | "verify_indexation"
+  | "fix_redirect"
+  | "verify_tracking"
   | "other";
 
 export type Platform = "NEXTJS" | "WORDPRESS";

@@ -90,27 +90,38 @@ export function validateTaskCoherence(task: {
 
   // ── 0. Detect HUMAN-only tasks (no AI handler) ────────────────────────────
   if (INDEXATION_SIGNALS.test(text)) {
-    // Indexation tasks are always HUMAN external_tool (GSC manual)
-    if (!actionType) {
-      actionType = "other";
+    if (!actionType || actionType === "other") {
+      actionType = "verify_indexation";
       issues.push({
         field: "actionType",
         problem: "Tarea de indexación → HUMAN (requiere Google Search Console manual)",
         autoFixed: true,
         oldValue: null,
-        newValue: "other",
+        newValue: "verify_indexation",
       });
     }
   }
   if (REDIRECT_SIGNALS.test(text) && !META_SIGNALS.test(text)) {
-    if (!actionType) {
-      actionType = "other";
+    if (!actionType || actionType === "other") {
+      actionType = "fix_redirect";
       issues.push({
         field: "actionType",
         problem: "Tarea de redirección → HUMAN (requiere WP Admin / plugin Redirection)",
         autoFixed: true,
         oldValue: null,
-        newValue: "other",
+        newValue: "fix_redirect",
+      });
+    }
+  }
+  if (/\btracking|rastreo|rastreador|configuraci[oó]n.*keyword/i.test(text) && !KEYWORD_SIGNALS.test(text)) {
+    if (!actionType || actionType === "other") {
+      actionType = "verify_tracking";
+      issues.push({
+        field: "actionType",
+        problem: "Tarea de configuración de tracking → HUMAN config",
+        autoFixed: true,
+        oldValue: null,
+        newValue: "verify_tracking",
       });
     }
   }
