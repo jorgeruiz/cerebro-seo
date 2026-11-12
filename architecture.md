@@ -1,6 +1,6 @@
 # Cerebro SEO — Architecture
 
-**Última actualización:** 2026-11-06 (v11 — coherencia, blog routing, UI fixes, análisis background, DataForSEO Labs)
+**Última actualización:** 2026-11-12 (v12 — F1a: task-catalog.ts como fuente única, 29 actionTypes, diagnóstico completo)
 
 ---
 

@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-06 (sesión extensa: blog routing, coherencia, UI, terminal, DataForSEO Labs, preflight)
+**Última actualización:** 2026-11-12 (F1a — diagnóstico + catálogo como fuente única en código)
 **Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY+COHERENCE+UI-FIXES completas. S4b/S4d/S4e pendientes.
 **Próximo hito:** Deploy y probar plan completo Brainet (Next.js) + Química Ecológica (WP) de principio a fin.
 
