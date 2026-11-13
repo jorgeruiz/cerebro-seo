@@ -39,6 +39,14 @@ import type {
   WpStagedContentPackageChange,
 } from "@/lib/wp-staged-change";
 import { executeImage, type ImageStepAction } from "./image-executor";
+import { getCatalogEntry, WORD_RANGES, type ActionType } from "@/lib/plan/task-catalog";
+
+/** Get word range from catalog, with fallback to informational default. */
+function getWordRangeForAction(actionType?: string | null): [number, number] {
+  if (!actionType) return WORD_RANGES.informational;
+  const entry = getCatalogEntry(actionType as ActionType);
+  return entry?.wordRange ?? WORD_RANGES.informational;
+}
 
 // --- Tipos -------------------------------------------------------------------
 
@@ -68,7 +76,7 @@ export interface WpStepResult {
 export async function executeWpAiStep(
   cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
-  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null },
+  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null; actionType?: string | null },
   step: { title: string; prompt: string | null; acceptanceCriteria: string[]; notes: string | null },
   taskId: string,
   imageCount = 0,
@@ -385,7 +393,7 @@ ${JSON.stringify(toCheck, null, 2)}`;
 async function executeContentPackage(
   cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
-  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null },
+  task: { title: string; objective: string; kind: string; category: string; targetKeyword?: string | null; actionType?: string | null },
   action: WpStepAction,
   taskId: string,
 ): Promise<WpStepResult> {
@@ -557,8 +565,12 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
   );
   const ctaUrl = cta_hint ? `/${cta_hint.slug}` : "/contacto";
 
+  // Word range from catalog (dynamic, not hardcoded)
+  const wordRange = getWordRangeForAction(task?.actionType);
+  const wordRangeStr = `${wordRange[0]}-${wordRange[1]}`;
+
   const kindInstructions: Record<string, string> = {
-    blog: `Artículo de blog informativo de 1200-1800 palabras (informacional) sobre "${keyword}". Mínimo 4 secciones H2, 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
+    blog: `Artículo de blog informativo de ${wordRangeStr} palabras (informacional) sobre "${keyword}". Mínimo 4 secciones H2, 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
     landing: `Página de servicio/producto sobre "${keyword}". Mínimo 5 secciones H2, tabla de especificaciones/tipos (normas sectoriales ok, precios → [COMPLETAR]), 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
     optimization: `Mejoras específicas para la página "${targetPageTitle}" (/${targetPageSlug}). optimization_changes DEBE usar los widgets reales listados en PÁGINA A OPTIMIZAR. widget_id obligatorio para cada cambio.`,
   };
@@ -774,12 +786,13 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
 async function executeWpPublish(
   cerebroClientId: string,
   siteProfile: WpSiteProfile | null,
-  task: { title: string; objective: string },
+  task: { title: string; objective: string; actionType?: string | null },
   action: WpStepAction,
   taskId: string,
 ): Promise<WpStepResult> {
   const title = String(action.payload?.title ?? task.title);
   const brief = action.content_brief ?? task.objective;
+  const wordRange = getWordRangeForAction(task.actionType);
 
   const profileBlock = siteProfile?.hasContent
     ? [
@@ -811,7 +824,7 @@ async function executeWpPublish(
     "3. Contenido informativo del sector que no requiera verificacion -> puedes incluirlo.",
     "4. PROHIBIDO inventar: testimonios falsos, estadisticas del cliente, certificaciones no mencionadas.",
     "5. HTML semantico sin <html>/<body>/<head>. Usa <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>.",
-    "6. Entre 1200 y 1800 palabras (rango estándar informacional).",
+    `6. Entre ${wordRange[0]} y ${wordRange[1]} palabras.`,
   ].join("\n");
 
   const userPrompt = [

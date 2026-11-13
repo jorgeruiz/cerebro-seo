@@ -920,6 +920,7 @@ async function processWpTask(
     kind: string;
     category: string;
     mode: string;
+    actionType?: string | null;
     targetKeyword: string | null;
     resultUrls: string[];
     steps: Array<{
@@ -1141,6 +1142,29 @@ async function processWpTask(
         await failRun(run.id, errMsg);
         await failTask(taskId, `Paso WP ${step.order} falló: ${errMsg}`);
         await prisma.planTask.update({ where: { id: taskId }, data: { resultUrls } });
+        return;
+      }
+    }
+
+    // Pre-DONE acceptance check on staged content
+    const doneSteps = await prisma.planStep.findMany({
+      where: { taskId, status: "DONE", stagedChange: { not: null } },
+      select: { stagedChange: true },
+    });
+    const stagedChanges = doneSteps.map((s) => s.stagedChange).filter(Boolean);
+    if (stagedChanges.length > 0) {
+      const { checkPreDone } = await import("@/lib/plan/check-pre-done");
+      const preDone = checkPreDone(stagedChanges);
+      if (!preDone.passed) {
+        await prisma.planTask.update({
+          where: { id: taskId },
+          data: {
+            status: "WAITING_HUMAN",
+            resultUrls,
+            failureReason: `Pre-DONE: ${preDone.issues.join(" | ")}`,
+          },
+        });
+        console.log(`[wp-task] ⚠ Task "${task.title}" → WAITING_HUMAN (pre-done: ${preDone.issues.length} issues)`);
         return;
       }
     }
