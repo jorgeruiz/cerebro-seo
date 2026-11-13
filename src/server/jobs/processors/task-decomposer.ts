@@ -339,6 +339,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
       targetKeyword: classification.targetKeyword ?? task.targetKeyword,
       actionType: classification.actionType,
       wpCapabilities: wpCaps,
+      taskCategory: classification.category,
     });
 
     if (!gateResult.allPassed) {

@@ -7,11 +7,11 @@
  * G1: Cliente activo con SEO
  * G2: Sitio sin migración no autorizada
  * G3: Memoria del repo FULL (Next.js agent)
- * G4: catalog-schemas con sección requerida (blog/landing/micrositios)
- * G5: Capability del plugin presente (WP)
- * G6: Servicio verificado (blog, landing, edit text)
+ * G4: catalog-schemas con sección requerida (blog/landing/micrositios) — Next.js only
+ * G5: Capability del plugin presente (WP) — degrades gracefully via fallback
+ * G6: Servicio verificado (landing/blog de servicio requiere site-spec)
  * G7: Anti-canibalización (keyword no asignada a otra URL/tarea activa)
- * G8: Target resuelto (URL responde 200, page_id para WP)
+ * G8: Target resuelto (page_id para WP, ruta para Next.js)
  */
 
 import { prisma } from "@/lib/db";
@@ -44,6 +44,7 @@ export async function evaluateGates(
     targetKeyword?: string | null;
     actionType: string;
     wpCapabilities?: string[] | null;
+    taskCategory?: string | null;
   }
 ): Promise<GateCheckResult> {
   const results: GateResult[] = [];
@@ -76,6 +77,7 @@ async function evaluateGate(
     targetKeyword?: string | null;
     actionType: string;
     wpCapabilities?: string[] | null;
+    taskCategory?: string | null;
   }
 ): Promise<GateResult> {
   switch (gate) {
@@ -97,15 +99,12 @@ async function evaluateGate(
       const site = await prisma.site.findUnique({ where: { id: ctx.siteId }, select: { platform: true } });
       if (site?.platform === "MIGRACION") {
         return { gate, passed: true, reason: "Sitio en migración — tareas WP permitidas" };
-        // MIGRACION is allowed for WP tasks, blocked for code tasks
       }
       return { gate, passed: true };
     }
 
     case "G3": {
-      // Memory check — only for Next.js agent steps
       if (ctx.platform !== "NEXTJS") return { gate, passed: true };
-      // Simplified: check if site has githubRepo (memory check is at execution time)
       const site = await prisma.site.findUnique({ where: { id: ctx.siteId }, select: { githubRepo: true } });
       if (!site?.githubRepo) {
         return { gate, passed: false, reason: "Repositorio GitHub no configurado", remedy: "Configurar githubRepo en el sitio" };
@@ -114,26 +113,102 @@ async function evaluateGate(
     }
 
     case "G4": {
-      // catalog-schemas check — only for Next.js blog/landing
+      // catalog-schemas check — only for Next.js content tasks (blog/landing)
       if (ctx.platform !== "NEXTJS") return { gate, passed: true };
-      // This is checked at execution time by the content lane
+
+      const contentActions = ["create_blog", "create_landing", "refresh_content"];
+      if (!contentActions.includes(ctx.actionType)) return { gate, passed: true };
+
+      const site = await prisma.site.findUnique({ where: { id: ctx.siteId }, select: { githubRepo: true } });
+      if (!site?.githubRepo) return { gate, passed: true }; // G3 handles this
+
+      // Fetch catalog-schemas.md via GitHub API
+      const pat = process.env.GITHUB_PAT_CLIENT_REPOS;
+      const catalogContent = await fetchGitHubFile(site.githubRepo, "docs/catalog-schemas.md", pat);
+
+      if (!catalogContent) {
+        return {
+          gate, passed: false,
+          reason: "catalog-schemas.md no encontrado en el repo",
+          remedy: "Instalar bootstrap del repo: crear docs/catalog-schemas.md con secciones ## Blog, ## Landing Pages",
+        };
+      }
+
+      // Check for required section heading
+      const headings = catalogContent.match(/^##\s+.+$/gm) ?? [];
+      const headingsLower = headings.map((h) => h.toLowerCase());
+
+      const needsBlog = ctx.actionType === "create_blog" || ctx.actionType === "refresh_content";
+      const needsLanding = ctx.actionType === "create_landing";
+
+      if (needsBlog && !headingsLower.some((h) => h.includes("blog"))) {
+        return {
+          gate, passed: false,
+          reason: "catalog-schemas.md no tiene sección ## Blog",
+          remedy: "Agregar sección ## Blog en docs/catalog-schemas.md con el schema del artículo",
+        };
+      }
+      if (needsLanding && !headingsLower.some((h) => h.includes("landing"))) {
+        return {
+          gate, passed: false,
+          reason: "catalog-schemas.md no tiene sección ## Landing Pages",
+          remedy: "Agregar sección ## Landing Pages en docs/catalog-schemas.md con el schema de la landing",
+        };
+      }
+
       return { gate, passed: true };
     }
 
     case "G5": {
-      // WP capability check — handled by resolveStepsWithCapabilities (fallback to HUMAN)
-      // Not a blocker — the step degrades gracefully
+      // WP capability check — resolveStepsWithCapabilities handles fallback.
+      // Gate passes always; degradation is automatic.
       return { gate, passed: true };
     }
 
     case "G6": {
-      // Service verification — for content tasks that mention a specific service
-      // Simplified: check that the client has services configured
-      return { gate, passed: true }; // Full implementation requires site-spec lookup
+      // Service verification — for tasks that create pages about a service/product
+      const serviceActions = ["create_landing", "create_blog"];
+      if (!serviceActions.includes(ctx.actionType)) return { gate, passed: true };
+
+      // Only applies to content about specific services (not generic blog)
+      if (ctx.actionType === "create_blog") {
+        // Blog is informational — usually OK without service verification
+        // Only block if the keyword mentions a service not in the client profile
+        return { gate, passed: true };
+      }
+
+      // For create_landing: verify the site has a service catalog or site-spec
+      if (ctx.platform === "NEXTJS") {
+        const site = await prisma.site.findUnique({ where: { id: ctx.siteId }, select: { githubRepo: true } });
+        if (site?.githubRepo) {
+          const pat = process.env.GITHUB_PAT_CLIENT_REPOS;
+          const siteSpec = await fetchGitHubFile(site.githubRepo, "docs/site-spec.md", pat);
+          if (!siteSpec || siteSpec.trim().length < 100) {
+            return {
+              gate, passed: false,
+              reason: "site-spec.md no encontrado o vacío — no se puede verificar si el servicio existe",
+              remedy: "Crear docs/site-spec.md con la lista de servicios/productos del cliente",
+            };
+          }
+        }
+      } else if (ctx.platform === "WORDPRESS") {
+        // For WP: check if the site has pages (proxy capabilities)
+        // If no WP capabilities at all, we can't verify
+        if (!ctx.wpCapabilities || ctx.wpCapabilities.length === 0) {
+          return {
+            gate, passed: false,
+            reason: "Plugin WP no responde — no se puede verificar servicios del sitio",
+            remedy: "Verificar que el plugin Cerebro Connector está activo y responde",
+          };
+        }
+        // WP has capabilities — service verification happens in the content prompt
+        // (site profile is loaded at execution time)
+      }
+
+      return { gate, passed: true };
     }
 
     case "G7": {
-      // Anti-cannibalization — check keyword not assigned to another active task
       if (!ctx.targetKeyword) return { gate, passed: true };
       const conflicting = await prisma.planTask.findFirst({
         where: {
@@ -155,14 +230,82 @@ async function evaluateGate(
     }
 
     case "G8": {
-      // Target resolved — URL must exist (for tasks on existing pages)
-      if (!ctx.targetUrl) return { gate, passed: true }; // No target = OK (new content)
-      // For WP: we should verify page_id exists, but that's execution-time
-      // For now: trust the URL
+      // Target resolved — URL/page must exist for tasks on existing pages
+      if (!ctx.targetUrl) return { gate, passed: true }; // No target = new content, OK
+
+      if (ctx.platform === "WORDPRESS") {
+        // Verify the page exists in WP via proxy
+        const site = await prisma.site.findUnique({
+          where: { id: ctx.siteId },
+          select: { client: { select: { cerebroClientId: true } } },
+        });
+        const cerebroId = site?.client?.cerebroClientId;
+        if (cerebroId) {
+          try {
+            const { getWpPages } = await import("@/lib/wp-proxy-client");
+            const pagesResult = await getWpPages(cerebroId);
+            if (pagesResult.ok && pagesResult.data.length > 0) {
+              const targetSlug = extractSlug(ctx.targetUrl);
+              const match = pagesResult.data.find((p: { slug: string }) =>
+                p.slug && targetSlug && p.slug.toLowerCase() === targetSlug.toLowerCase()
+              );
+              if (!match) {
+                return {
+                  gate, passed: false,
+                  reason: `Página "${ctx.targetUrl}" no encontrada en WordPress (${pagesResult.data.length} páginas revisadas)`,
+                  remedy: "Verificar que la URL existe en WordPress o crear la página primero",
+                };
+              }
+            }
+          } catch {
+            // Plugin unreachable — don't block, let execution handle it
+          }
+        }
+      } else if (ctx.platform === "NEXTJS") {
+        // For Next.js: check if the route exists in the repo
+        // This is a best-effort check — the route might be dynamic
+        if (ctx.targetUrl.includes("[")) return { gate, passed: true }; // Dynamic route
+        // We can't easily verify without cloning — trust the URL
+      }
+
       return { gate, passed: true };
     }
 
     default:
       return { gate, passed: true };
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function fetchGitHubFile(
+  githubRepo: string,
+  path: string,
+  pat?: string
+): Promise<string | null> {
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.raw",
+  };
+  if (pat) headers.Authorization = `Bearer ${pat}`;
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${githubRepo}/contents/${path}`,
+      { headers, signal: AbortSignal.timeout(10_000) }
+    );
+    if (!res.ok) return null;
+    return res.text();
+  } catch {
+    return null;
+  }
+}
+
+function extractSlug(url: string): string | null {
+  try {
+    const path = url.startsWith("http") ? new URL(url).pathname : url;
+    const slug = path.replace(/^\/+|\/+$/g, "");
+    return slug || null;
+  } catch {
+    return url.replace(/^\/+|\/+$/g, "") || null;
   }
 }

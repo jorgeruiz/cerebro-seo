@@ -18,7 +18,7 @@ describe("anti-cannibalization rules", () => {
       join(__dirname, "..", "plan", "plan-gates.ts"),
       "utf-8"
     );
-    expect(content).toContain("Anti-cannibalization");
+    expect(content).toContain("canibalización");
     expect(content).toContain("targetKeyword");
     expect(content).toContain("notIn");
   });
