@@ -1536,12 +1536,20 @@ export async function actionSplitTask(
     const trimmed = objective.trim();
     if (!trimmed) continue;
 
+    // Get next order number for this plan
+    const maxOrder = await prisma.planTask.aggregate({
+      where: { planId: task.planId },
+      _max: { order: true },
+    });
+
     const newTask = await prisma.planTask.create({
       data: {
         planId: task.planId,
         siteId: task.siteId,
+        order: (maxOrder._max.order ?? 0) + created + 1,
         title: trimmed,
         objective: trimmed,
+        prompt: trimmed,
         kind: task.kind,
         category: task.category,
         priority: task.priority,
