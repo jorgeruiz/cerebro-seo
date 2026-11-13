@@ -50,7 +50,7 @@ async function main() {
   }
 
   console.log("\nDistribución por actionType:");
-  for (const [type, count] of [...byType.entries()].sort((a, b) => b[1] - a[1])) {
+  for (const [type, count] of Array.from(byType.entries()).sort((a, b) => b[1] - a[1])) {
     console.log(`  ${type.padEnd(25)} ${count}`);
   }
 

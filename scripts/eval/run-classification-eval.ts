@@ -148,7 +148,7 @@ async function runEval(): Promise<void> {
   console.log();
 
   console.log("─── PRECISIÓN POR actionType ─────────────────────────");
-  const sorted = [...byType.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const sorted = Array.from(byType.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   for (const [type, { total: t, correct: c }] of sorted) {
     const pct = (c / t * 100).toFixed(0);
     const bar = c === t ? "✓" : `✗ (${c}/${t})`;
