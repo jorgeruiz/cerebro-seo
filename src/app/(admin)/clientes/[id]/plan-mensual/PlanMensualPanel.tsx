@@ -285,6 +285,47 @@ function ContentPackageBlock({ pkg }: { pkg: ContentPackage }) {
   );
 }
 
+// ─── Evidence Table ─────────────────────────────────────────────────────────
+
+function EvidenceTable({ stagedChange }: { stagedChange: unknown }) {
+  const sc = stagedChange as { type?: string; rows?: Array<{ label: string; value: string; proposed?: string; source: string; date: string }> } | null;
+  if (!sc || sc.type !== "evidence" || !sc.rows || sc.rows.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="font-mono text-[0.55rem] text-orange-400/70">Datos concretos ({sc.rows.length}):</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left font-mono text-[0.6rem]">
+          <thead>
+            <tr className="border-b border-orange-500/20">
+              <th className="pb-1 pr-3 text-muted-foreground/70 font-medium">Tipo</th>
+              <th className="pb-1 pr-3 text-muted-foreground/70 font-medium">Valor</th>
+              {sc.rows.some(r => r.proposed) && (
+                <th className="pb-1 pr-3 text-muted-foreground/70 font-medium">Propuesto</th>
+              )}
+              <th className="pb-1 pr-3 text-muted-foreground/70 font-medium">Fuente</th>
+              <th className="pb-1 text-muted-foreground/70 font-medium">Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sc.rows.map((row, i) => (
+              <tr key={i} className="border-b border-border/30">
+                <td className="py-1 pr-3 text-muted-foreground">{row.label}</td>
+                <td className="py-1 pr-3 text-foreground break-all">{row.value}</td>
+                {sc.rows!.some(r => r.proposed) && (
+                  <td className="py-1 pr-3 text-orange-400">{row.proposed ?? "—"}</td>
+                )}
+                <td className="py-1 pr-3 text-muted-foreground/60">{row.source}</td>
+                <td className="py-1 text-muted-foreground/60">{row.date}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Step Row ───────────────────────────────────────────────────────────────
 
 function StepRow({
@@ -342,6 +383,8 @@ function StepRow({
                 ))}
               </ul>
             )}
+            {/* Evidence table — from stagedChange.type === "evidence" */}
+            <EvidenceTable stagedChange={step.stagedChange} />
             {step.prompt && (
               <div className="space-y-1">
                 <p className="font-mono text-[0.55rem] text-orange-400/70">

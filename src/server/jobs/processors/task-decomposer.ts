@@ -264,7 +264,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   const { classifyTask } = await import("@/lib/plan/classify-task");
   const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
   const { resolveStepsWithCapabilities } = await import("@/lib/plan/capabilities");
-  const { resolveTaskEvidence } = await import("@/lib/plan/task-data-resolver");
+  const { resolveTaskEvidence, REQUIRED_EVIDENCE, validateNoVagueReferences } = await import("@/lib/plan/task-data-resolver");
 
   // Step 1: Classify the task (LLM with closed enum + deterministic validation)
   const wpCaps = wpCapabilitiesContext ? extractCapsList(wpCapabilitiesContext) : null;
@@ -382,6 +382,21 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     classification.targetKeyword ?? task.targetKeyword,
   );
 
+  // Step 3b: If evidence is required but empty → NEEDS_INPUT
+  const reqEvidence = REQUIRED_EVIDENCE[classification.actionType];
+  if (reqEvidence && !evidence.sufficient) {
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "NEEDS_INPUT",
+        blockedReason: `Datos requeridos: ${reqEvidence.description}`,
+        remedy: reqEvidence.source,
+      },
+    });
+    console.log(`[task-decomposer] "${task.title}" → NEEDS_INPUT: ${reqEvidence.description}`);
+    return;
+  }
+
   // Step 4: Derive mode from resolved steps
   const hasAI = resolvedSteps.some((s) => s.type === "AI");
   const hasHM = resolvedSteps.some((s) => s.type === "HM");
@@ -399,7 +414,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     let prompt: string | null = null;
     if (step.type === "AI") {
       const evidenceText = evidence.rows.length > 0
-        ? `\nDATOS DISPONIBLES:\n${evidence.rows.map((r) => `- ${r.label}: ${r.value} (${r.source}, ${r.date})`).join("\n")}\n`
+        ? `\nDATOS DISPONIBLES:\n${evidence.rows.map((r) => `- ${r.label}: ${r.value}${r.proposed ? ` → ${r.proposed}` : ""} (${r.source}, ${r.date})`).join("\n")}\n`
         : "";
 
       prompt = JSON.stringify({
@@ -409,12 +424,23 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
         context: `${task.objective}${evidenceText}`,
       });
     } else {
-      // HM step: include instructions + evidence as table
+      // HM step: include instructions + evidence summary
       const evidenceTable = evidence.rows.length > 0
-        ? `\n\nDatos:\n${evidence.rows.map((r) => `• ${r.label}: ${r.value}`).join("\n")}`
+        ? `\n\nDatos concretos (${evidence.rows.length}):\n${evidence.rows.map((r) => `• ${r.label}: ${r.value}${r.proposed ? ` → ${r.proposed}` : ""}`).join("\n")}`
         : "";
       prompt = `${task.objective}\n\nCompleta este paso y marca como hecho.${evidenceTable}`;
     }
+
+    // Validate no vague references in prompt text
+    const vagueCheck = validateNoVagueReferences(prompt ?? "", evidence.rows.length);
+    if (!vagueCheck.valid) {
+      console.warn(`[task-decomposer] Vague references in step ${i + 1}: ${vagueCheck.vagueMatches.join(", ")}`);
+    }
+
+    // Store evidence rows in stagedChange for UI rendering
+    const stepEvidence = evidence.rows.length > 0
+      ? { type: "evidence" as const, rows: evidence.rows }
+      : null;
 
     await prisma.planStep.create({
       data: {
@@ -425,6 +451,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
         prompt,
         acceptanceCriteria: catalogEntry.acceptance,
         status: "PENDING",
+        stagedChange: stepEvidence as unknown as Parameters<typeof prisma.planStep.create>[0]["data"]["stagedChange"],
         notes: [
           step.type === "AI" ? `complexity:${catalogEntry.complexity}` : null,
           step.humanReason ? `humanReason:${step.humanReason}` : null,
