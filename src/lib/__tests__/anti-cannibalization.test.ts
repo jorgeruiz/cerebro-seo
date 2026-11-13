@@ -13,22 +13,14 @@ describe("anti-cannibalization rules", () => {
     expect(content).toContain("misma keyword");
   });
 
-  it("decomposer SYSTEM_PROMPT includes anti-cannibalization rule", () => {
+  it("gate G7 checks keyword anti-cannibalization", () => {
     const content = readFileSync(
-      join(__dirname, "..", "..", "server", "jobs", "processors", "task-decomposer.ts"),
+      join(__dirname, "..", "plan", "plan-gates.ts"),
       "utf-8"
     );
-    expect(content).toContain("ANTI-CANIBALIZACIÓN");
-    expect(content).toContain("OPTIMIZAR la página existente");
-    expect(content).toContain("rutas existentes");
-  });
-
-  it("decomposer gathers site-map from repo context", () => {
-    const content = readFileSync(
-      join(__dirname, "..", "..", "server", "jobs", "processors", "task-decomposer.ts"),
-      "utf-8"
-    );
-    expect(content).toContain("site-map.md");
+    expect(content).toContain("Anti-cannibalization");
+    expect(content).toContain("targetKeyword");
+    expect(content).toContain("notIn");
   });
 });
 
@@ -44,7 +36,7 @@ describe("verified services/products rule", () => {
     expect(content).toContain("¿El cliente ofrece");
   });
 
-  it("decomposer SYSTEM_PROMPT requires service verification", () => {
+  it("decomposer legacy SYSTEM_PROMPT requires service verification", () => {
     const content = readFileSync(
       join(__dirname, "..", "..", "server", "jobs", "processors", "task-decomposer.ts"),
       "utf-8"

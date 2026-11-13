@@ -563,7 +563,7 @@ export async function generateClientAnalysis(
 ): Promise<{ analysis: AnalysisResult; analysisId: string }> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const { context, preconditions, hasGsc, platform, wpCapabilities } = await gatherUnifiedContext(clientId);
+  const { context, preconditions, hasGsc, platform } = await gatherUnifiedContext(clientId);
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,

@@ -6,149 +6,19 @@
  * no en el worker de agentes.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
-import { CLAUDE_MODEL } from "@/lib/anthropic-config";
 import { prisma } from "@/lib/db";
-import { calculateClaudeCost, logApiUsage } from "@/server/jobs/workers/base-worker";
+import { logApiUsage } from "@/server/jobs/workers/base-worker";
 import { getWpCapabilities } from "@/lib/wp-proxy-client";
-import { getWpSiteProfile } from "@/lib/wp-site-profile";
 import {
-  getTemplate,
-  applyCapabilities,
-  resolveTaskMode,
-  buildModeReason,
   DECOMPOSER_VERSION,
-  type ActionType,
-  type Platform,
 } from "@/lib/task-templates";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-const stepSchema = z.object({
-  title: z.string().min(2).max(200).transform((s) => s.slice(0, 120)),
-  type: z.enum(["AI", "HUMAN", "HYBRID"]).transform((t) => t === "HYBRID" ? "HUMAN" : t),
-  prompt: z.preprocess(
-    (v) => (v !== null && v !== undefined && typeof v === "object" ? JSON.stringify(v) : v),
-    z.string().nullable().optional()
-  ),
-  acceptanceCriteria: z.array(z.string()).default([]),
-  complexity: z.enum(["low", "medium", "high"]).optional().default("medium"),
-  humanReason: z.enum(["terminal", "config", "external_tool", "wp_manual"]).nullable().optional(),
-});
 
 interface DecompositionJobData {
   taskId: string;
   clientId: string;
   candidateId: string;
-}
-
-// ─── GitHub API helpers ──────────────────────────────────────────────────────
-
-async function fetchRepoFile(
-  githubRepo: string,
-  path: string,
-  pat?: string
-): Promise<string | null> {
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github.raw",
-  };
-  if (pat) headers.Authorization = `Bearer ${pat}`;
-
-  try {
-    const res = await fetch(
-      `https://api.github.com/repos/${githubRepo}/contents/${path}`,
-      { headers, signal: AbortSignal.timeout(10_000) }
-    );
-    if (!res.ok) return null;
-    return res.text();
-  } catch {
-    return null;
-  }
-}
-
-async function gatherRepoContext(githubRepo: string): Promise<string> {
-  const pat = process.env.GITHUB_PAT_CLIENT_REPOS;
-  const files = [
-    { path: "docs/site-spec.md", label: "Site Spec" },
-    { path: "docs/site-map.md", label: "Site Map" },
-    { path: "docs/catalog-schemas.md", label: "Catalog Schemas" },
-    { path: "DESIGN.md", label: "Design Guide" },
-    { path: "CLAUDE.md", label: "CLAUDE.md" },
-  ];
-
-  const sections: string[] = [];
-  for (const { path, label } of files) {
-    const content = await fetchRepoFile(githubRepo, path, pat);
-    if (content && content.trim().length > 50) {
-      // Truncate to 2000 chars to keep context manageable
-      sections.push(`## ${label} (${path})\n${content.slice(0, 2000)}`);
-    }
-  }
-
-  return sections.length > 0
-    ? sections.join("\n\n")
-    : "No hay documentación del sitio disponible.";
-}
-
-// ─── Anti-cannibalization helper ──────────────────────────────────────────────
-
-function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .trim();
-}
-
-/**
- * Detecta si ya existe una página con el mismo tema o keyword.
- * Usa normalización de texto para comparar slugs y títulos.
- * Retorna la página candidata si hay match, o null si es contenido nuevo.
- */
-function detectCannibalization(
-  pages: Array<{ title: string; slug: string }>,
-  taskTitle: string,
-  keyword?: string | null,
-): { page: { title: string; slug: string }; reason: string } | null {
-  const stopWords = new Set([
-    "para", "como", "que", "una", "los", "las", "del", "con", "por",
-    "crear", "nueva", "pagina", "landing", "blog", "articulo",
-  ]);
-  const titleNorm = normalize(taskTitle);
-  const titleWords = titleNorm.split(/\s+/).filter((w) => w.length > 3 && !stopWords.has(w));
-
-  const keyNorm = keyword ? normalize(keyword) : null;
-  const keyWords = keyNorm
-    ? keyNorm.split(/\s+/).filter((w) => w.length > 3 && !stopWords.has(w))
-    : [];
-
-  for (const page of pages) {
-    if (!page.slug) continue; // skip root
-    const slugNorm = normalize(page.slug);
-    const pageTitleNorm = normalize(page.title);
-
-    // Keyword match in slug
-    if (keyWords.length >= 2) {
-      const kwMatches = keyWords.filter((w) => slugNorm.includes(w) || pageTitleNorm.includes(w));
-      if (kwMatches.length >= 2) {
-        return { page, reason: `keyword "${keyword}" coincide con /${page.slug} ("${page.title}")` };
-      }
-    }
-
-    // Title word overlap ≥ 2 significative words
-    const titleMatches = titleWords.filter(
-      (w) => slugNorm.includes(w) || pageTitleNorm.includes(w),
-    );
-    if (titleMatches.length >= 2) {
-      return {
-        page,
-        reason: `"${taskTitle}" comparte ${titleMatches.length} palabras con /${page.slug} ("${page.title}")`,
-      };
-    }
-  }
-  return null;
 }
 
 // ─── Decomposition ────────────────────────────────────────────────────────────
@@ -350,12 +220,6 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
     },
   });
 
-  // Gather repo context (Next.js only)
-  let repoContext = "No hay repositorio configurado.";
-  if (task.site?.githubRepo) {
-    repoContext = await gatherRepoContext(task.site.githubRepo);
-  }
-
   const platform = task.site?.platform ?? "OTRO";
 
   // Platform policy: block decomposition if not executable
@@ -376,8 +240,6 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
 
   // ── WP: capabilities + site profile + anti-cannibalization ──────────────────
   let wpCapabilitiesContext = "";
-  let wpCannibalContext = "";
-  let wpPagesContext = "";
 
   if (platform === "WORDPRESS" && cerebroClientId) {
     // Capabilities
@@ -392,59 +254,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
       wpCapabilitiesContext = `\nWP CAPABILITIES: no disponibles (${reason}). Todos los pasos AI deben degradarse a HUMAN.\n`;
     }
 
-    // Site profile (pages + content summary)
-    const siteProfile = await getWpSiteProfile(
-      cerebroClientId,
-      task.site?.client?.name ?? "Cliente",
-      task.site?.url ?? "",
-      taskId,
-    ).catch(() => null);
-
-    if (siteProfile && siteProfile.pages.length > 0) {
-      wpPagesContext = `\nPÁGINAS EXISTENTES EN EL SITIO (${siteProfile.pages.length} páginas):\n${siteProfile.pages
-        .map((p) => `- /${p.slug || ""} — "${p.title}"`)
-        .join("\n")}\n`;
-
-      // Anti-cannibalization check
-      const sourceRef = task.sourceRef as { keyword?: string } | null;
-      const keyword = sourceRef?.keyword ?? null;
-      const cannibal = detectCannibalization(siteProfile.pages, task.title, keyword);
-      if (cannibal) {
-        wpCannibalContext =
-          `\n⚠ CANIBALIZACIÓN DETECTADA: Ya existe una página similar.\n` +
-          `PÁGINA EXISTENTE: "${cannibal.page.title}" (/${cannibal.page.slug})\n` +
-          `Razón: ${cannibal.reason}\n` +
-          `INSTRUCCIÓN: Esta tarea DEBE optimizar la página existente, NO crear una nueva.\n` +
-          `Usa kind="optimization" en el paso content_package.\n`;
-      }
-    }
   }
-
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  // Include sourceRef snapshot as additional context for module-sourced tasks
-  const sourceRef = task.sourceRef as { module?: string; snapshot?: Record<string, unknown> } | null;
-  const sourceContext = sourceRef?.snapshot
-    ? `\nDATOS DE ORIGEN (módulo ${sourceRef.module}):\n${JSON.stringify(sourceRef.snapshot, null, 2).slice(0, 1500)}\n\nGenera una JUSTIFICACIÓN (qué dato respalda esta tarea) y un IMPACTO ESPERADO (qué mejora se espera) basados en estos datos. Inclúyelos en el título o en los criterios de aceptación del primer paso.`
-    : "";
-
-  const siteUrl = task.site?.url ?? "";
-
-  const userPrompt = `Descompón esta tarea en pasos:
-
-TAREA: ${task.title}
-OBJETIVO: ${task.objective}
-KIND: ${task.kind}
-MODE: ${task.mode}
-PRIORIDAD: ${task.priority}
-ESFUERZO: ${task.effort}
-PLATFORM: ${platform}
-SITE_URL: ${siteUrl}
-${wpCapabilitiesContext}${wpCannibalContext}${wpPagesContext}${sourceContext}
-CONTEXTO DEL SITIO:
-${repoContext}
-
-Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${platform}.`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // F1c: CATALOG-BASED DECOMPOSER — classifier + template steps + evidence
@@ -452,7 +262,7 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
 
   try {
   const { classifyTask } = await import("@/lib/plan/classify-task");
-  const { getCatalogEntry, isValidActionType } = await import("@/lib/plan/task-catalog");
+  const { getCatalogEntry } = await import("@/lib/plan/task-catalog");
   const { resolveStepsWithCapabilities } = await import("@/lib/plan/capabilities");
   const { resolveTaskEvidence } = await import("@/lib/plan/task-data-resolver");
 
@@ -664,49 +474,7 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
   }
 }
 
-// Legacy decomposer code removed in F1c — see git history (commit ca5237e)
-
-// Legacy decomposer code removed in F1c — see git history
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Infer actionType from task category, actionType field, and title.
- * Priority: 1) task.actionType (explicit), 2) category match, 3) title regex.
- * Order matters — more specific patterns first to avoid false matches
- * (e.g. "crear landing ... keyword" must match landing, not keyword).
- */
-function inferActionType(category: string, title: string): ActionType | null {
-  const cat = category.toLowerCase();
-  const t = title.toLowerCase();
-
-  // 1. Category match (most reliable — set explicitly)
-  if (cat === "blog" || cat === "articulo") return "create_blog";
-  if (cat === "meta" || cat === "seo") return "update_meta";
-  if (cat === "landing") return "create_landing";
-  if (cat === "keyword") return "keyword_research";
-  if (cat === "schema") return "schema";
-  if (cat === "enlazado") return "internal_links";
-  if (cat === "optimizacion") return "edit_page_text";
-  if (cat === "imagen") return "generate_image";
-
-  // 2. Title regex fallback (order: specific → generic to avoid false matches)
-  if (/\b(blog|artículo|articulo|post|redactar)\b/.test(t)) return "create_blog";
-  if (/\blanding\b/.test(t)) return "create_landing";
-  if (/\bmeta\s*(title|description|tag)|\byoast\b/.test(t)) return "update_meta";
-  if (/\bschema\b|\bjson-?ld\b/.test(t)) return "schema";
-  if (/\benlaces?\s*interno|\binternal\s*link/.test(t)) return "internal_links";
-  if (/\boptimizar\s*(texto|contenido|copy)|\beditar\s*(texto|contenido)/.test(t)) return "edit_page_text";
-  // keyword LAST — many titles mention "keyword" as context, not as the action
-  if (/\binvestigar.*keyword|\bseleccionar.*keyword|\bpalabras?\s*clave/.test(t)) return "keyword_research";
-  if (/\bimagen\b.*\b(generar|crear|ai)\b/.test(t)) return "generate_image";
-
-  // Tasks that don't have templates but shouldn't be free-form AI
-  // (they'll use the fallback HUMAN step in the decomposer)
-  // No return null — let them fall through to free-form decomposition
-  // which will then degrade AI→HUMAN for WP via the validator above
-
-  return null;
-}
 
 /** Extract capabilities list from the WP capabilities context string. */
 function extractCapsList(wpCapabilitiesContext: string): string[] | null {

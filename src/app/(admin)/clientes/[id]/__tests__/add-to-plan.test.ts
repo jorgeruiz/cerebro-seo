@@ -17,10 +17,10 @@ describe("add-to-plan infrastructure", () => {
     expect(source).toContain("NO proponer duplicados");
   });
 
-  it("decomposer includes sourceRef snapshot in context", () => {
+  it("decomposer uses catalog-based classification", () => {
     const source = readFileSync(join(ROOT, "src", "server", "jobs", "processors", "task-decomposer.ts"), "utf-8");
-    expect(source).toContain("sourceRef");
-    expect(source).toContain("IMPACTO ESPERADO");
+    expect(source).toContain("classifyTask");
+    expect(source).toContain("getCatalogEntry");
   });
 
   it("add-to-plan action has deduplication by sourceRef", () => {
