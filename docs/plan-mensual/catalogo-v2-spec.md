@@ -101,11 +101,12 @@
 
 ### 1.5 Reglas anti-invención (aplican a todas las tareas)
 
-1. **Una tarea = un actionType = un target** (una URL o una keyword). Los objetivos compuestos se dividen. Por ejemplo, "crear blog y enlazarlo desde servicios" son `create_blog` + `internal_links`.
+1. **Una tarea = un actionType = un target** (una URL o una keyword) **o un lote homogéneo**: varias URLs con el mismo actionType y la lista concreta en `evidence` (p. ej. metas de 19 URLs del audit). Los objetivos compuestos (dos actionTypes distintos) se dividen. Por ejemplo, "crear blog y enlazarlo desde servicios" son `create_blog` + `internal_links`.
 2. **Los pasos son los de la plantilla.** El decomposer no agrega, quita ni reordena pasos; solo llena los parámetros.
 3. **Si falta un input, la tarea no se ejecuta.** Pasa a `NEEDS_INPUT` y genera un paso HM `input`; no se asume nada.
 4. **Datos que nunca se generan sin una fuente:** cifras, años de experiencia, número de clientes, certificaciones, testimonios, casos de éxito, reseñas o `aggregateRating`, precios, horarios, direcciones, fotos que aparenten ser reales (producto, equipo, instalaciones).
 5. **Solo se enlazan URLs existentes** (200) y servicios verificados.
+6b. **El Análisis Claude no propone tareas sobre el propio sistema** (verificar el plugin, correr el audit, depurar el rank tracker, configurar GSC/herramientas internas). Esas van a una lista de "Salud del sistema" en la UI, no al Plan mensual.
 6. **El `analysis` IA nunca escribe.** Si un análisis concluye que hay que cambiar algo, crea tareas hijas del catálogo.
 7. **No hay pasos con referencias genéricas.** Un paso que dice "las URLs con 404", "las keywords a posicionar" o "las páginas con meta duplicada" **debe incluir la lista concreta** como tabla en el paso: URL, keyword, valor actual, valor propuesto, métrica de origen y fecha del dato. Cada actionType declara sus `dataSources` (GSC, audit, rank tracking, GA4, DataForSEO, crawl, repo, plugin), y el decomposer las consulta **antes** de redactar los pasos. Si la fuente no tiene datos, la tarea pasa a `NEEDS_INPUT` o agrega un paso `analysis` previo; no se inventa la lista. Esto aplica igual a los pasos manuales.
 
@@ -479,12 +480,30 @@ Se registra un `SitePackage(siteId, packageId, version, installedAt, status)`. E
 
 Un actionType sube de nivel después de 5 ejecuciones seguidas sin corrección humana.
 
-### 9.6 Hoja de ruta
+### 9.6 Composición del plan mensual
+
+El Análisis Claude **propone** las candidatas (ya clasificadas y con evidencia). **El código elige** cuáles entran al plan, con reglas fijas.
+
+| Tipo | Definición (determinística) | Cuota |
+|---|---|---|
+| Urgente | Pérdida activa de tráfico o de confianza: 404 con tráfico o backlinks, URLs importantes desindexadas, robots o noindex bloqueando, caída >X% en GSC, hallazgo de seguridad CRITICAL | Van primero, tope ~30% |
+| Easy win | Riesgo `low` + modo IA + complejidad `low` + un dato de respaldo (posiciones 4–20, CTR bajo con impresiones altas, metas duplicadas o faltantes) | ~50% |
+| Estratégica | Lo demás con impacto alto: landings nuevas, clusters, AEO/GEO, paquetes | ~25–30% |
+
+Reglas adicionales:
+- **Mínimos por categoría, configurables por cliente.** Los valores por defecto: 1 técnica, 2 de contenido y 1 de AEO/GEO. Autoridad/local solo si aplica; medición solo si falta tracking.
+- **Tope de capacidad humana:** minutos de pasos HM al mes por cliente. Cada paso HM del catálogo lleva `humanMinutes`. Si el plan se pasa del tope, se cambia una tarea con pasos humanos por una automática.
+- **Tope de costo de API** por plan.
+- **Sin repeticiones:** no se repite una tarea hecha en los últimos N meses sobre el mismo target, salvo que los datos hayan cambiado.
+- Cada tarea seleccionada guarda **por qué entró** (tipo, puntuación, dato que la respalda). Cada candidata excluida guarda **por qué no entró** (cuota, gate, capacidad, duplicada).
+
+### 9.7 Hoja de ruta
 
 | Fase | Sesiones | Criterio de salida |
 |---|---|---|
 | 1. Catálogo y clasificación | F1a diagnóstico + catálogo en código · F1b clasificador + `other` · F1c decomposer acotado + gates + evaluación | Set de pruebas con más del 90% correcto; un plan real ejecutado sin pasos inventados |
 | 2. Categorías y paquetes | F2 (`blog_bootstrap` primero) | El planificador propone instalar el paquete antes de proponer blogs |
+| 2b. Composición del plan | F2b | Un plan propuesto cumple las cuotas, los mínimos por categoría y el tope humano, y explica por qué entró cada tarea |
 | 3. Herramientas para la Oficina | F3 | Una tarea creada desde la Oficina aparece en el plan con el flujo normal |
 | 4. Autonomía y cron | F4 | 1–2 clientes en nivel 1 durante un mes sin incidentes |
 
@@ -496,4 +515,5 @@ Un actionType sube de nivel después de 5 ejecuciones seguidas sin corrección h
 
 | Tarea observada | Cliente | Veces/mes | ¿Qué debería ser? | actionType propuesto | Modo | Pasos WP | Pasos Next.js |
 |---|---|---|---|---|---|---|---|
-| | | | | | | | |
+| Auditoría AEO de contenido existente (respuestas directas, FAQ, H2 como preguntas) | Química Ecológica | 1 | diagnóstico que genera `add_faq`/`schema`/`edit_page_text` | `aeo_content_audit` | HÍBRIDO | analysis → review | analysis → review |
+| Verificar que una tarea anterior se aplicó (QA) | Química Ecológica | 1 | diagnóstico | `verify_previous_task` | HÍBRIDO | analysis → review | analysis → review |

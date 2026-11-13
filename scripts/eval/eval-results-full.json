@@ -1,163 +1,188 @@
 {
   "mode": "full",
-  "date": "2026-11-13T06:24:13.179Z",
-  "total": 60,
-  "correct": 55,
-  "accuracy": 91.7,
-  "otherRate": 8.3,
+  "date": "2026-11-13T23:42:40.540Z",
+  "fixturesFile": "/Users/clicksociety/Documents/Antigravity Projects/Cerebro Click Society/Cerebro SEO/scripts/eval/production-fixtures.json",
+  "totalFixtures": 60,
+  "dudososExcluded": 13,
+  "evaluated": 47,
+  "correct": 32,
+  "accuracy": 68.1,
+  "otherRate": 38.3,
   "byType": {
     "add_faq": {
-      "total": 2,
-      "correct": 2
-    },
-    "add_human_evidence": {
-      "total": 2,
-      "correct": 2
-    },
-    "add_image": {
-      "total": 2,
-      "correct": 2
-    },
-    "aeo_readiness": {
-      "total": 2,
-      "correct": 2
-    },
-    "audit_duplicate": {
-      "total": 2,
-      "correct": 2
-    },
-    "configure_canonical": {
-      "total": 2,
-      "correct": 2
+      "total": 1,
+      "correct": 0
     },
     "configure_robots": {
-      "total": 2,
-      "correct": 2
-    },
-    "configure_sitemap": {
-      "total": 2,
-      "correct": 2
+      "total": 1,
+      "correct": 1
     },
     "create_blog": {
-      "total": 3,
-      "correct": 3
+      "total": 8,
+      "correct": 2
     },
     "create_landing": {
-      "total": 4,
+      "total": 7,
       "correct": 4
     },
     "edit_page_text": {
-      "total": 2,
-      "correct": 1
-    },
-    "fix_broken_links": {
-      "total": 2,
-      "correct": 2
-    },
-    "fix_headings": {
-      "total": 2,
-      "correct": 2
+      "total": 1,
+      "correct": 0
     },
     "fix_redirect": {
-      "total": 2,
-      "correct": 2
+      "total": 1,
+      "correct": 1
     },
     "improve_speed": {
-      "total": 2,
+      "total": 1,
       "correct": 1
     },
     "internal_links": {
       "total": 1,
       "correct": 1
     },
-    "keyword_research": {
-      "total": 4,
+    "other": {
+      "total": 5,
       "correct": 3
-    },
-    "link_building": {
-      "total": 2,
-      "correct": 2
-    },
-    "merge_content": {
-      "total": 2,
-      "correct": 2
-    },
-    "optimize_alt_text": {
-      "total": 2,
-      "correct": 1
-    },
-    "optimize_images": {
-      "total": 1,
-      "correct": 1
-    },
-    "refresh_content": {
-      "total": 1,
-      "correct": 1
     },
     "schema": {
       "total": 2,
       "correct": 2
     },
-    "security_fix": {
-      "total": 2,
-      "correct": 2
-    },
-    "setup_gbp": {
+    "split": {
       "total": 2,
       "correct": 2
     },
     "update_meta": {
-      "total": 3,
-      "correct": 3
-    },
-    "verify_analytics": {
-      "total": 2,
-      "correct": 2
+      "total": 16,
+      "correct": 15
     },
     "verify_indexation": {
-      "total": 3,
-      "correct": 2
+      "total": 1,
+      "correct": 0
     }
   },
   "failed": [
     {
-      "id": 7,
-      "title": "Optimizar el copy de la landing de productos químicos",
-      "expected": "edit_page_text",
+      "id": 6,
+      "title": "Crear artículo de blog: 'CCTV Monterrey: cómo elegir el sistema de videovigilanc",
+      "expected": "create_blog",
       "predicted": "other",
-      "confidence": 0.62
+      "confidence": 0.72,
+      "nota": ""
     },
     {
-      "id": 36,
-      "title": "Investigar las keywords más buscadas y crear un artículo del top 1",
-      "expected": "keyword_research",
+      "id": 7,
+      "title": "Crear artículo de blog: '¿Qué son los integradores de soluciones tecnológicas?'",
+      "expected": "create_blog",
       "predicted": "other",
       "confidence": 0.6,
-      "note": "ambigua: mezcla research y blog, primero debe investigar"
+      "nota": ""
     },
     {
-      "id": 37,
-      "title": "Revisar indexación y corregir meta description de páginas no indexadas",
-      "expected": "verify_indexation",
+      "id": 16,
+      "title": "Crear contenido: Bacterias para Biodigestor: Cómo Optimizar tu Sistema",
+      "expected": "create_blog",
+      "predicted": "other",
+      "confidence": 0.82,
+      "nota": ""
+    },
+    {
+      "id": 17,
+      "title": "Crear contenido: Qué es la Bioaumentación y Cómo Funciona",
+      "expected": "create_blog",
+      "predicted": "other",
+      "confidence": 0.72,
+      "nota": "Artículo informativo 'qué es'. Antes era create_landing (mal)."
+    },
+    {
+      "id": 22,
+      "title": "Verificar configuración de tracking de keywords — 0 posiciones en 20 keywords ra",
+      "expected": "other",
+      "predicted": "keyword_research",
+      "confidence": 0.82,
+      "nota": "Depurar el rank tracker de Cerebro SEO: problema interno, no tarea del sitio."
+    },
+    {
+      "id": 27,
+      "title": "Añadir schema FAQPage + bloques de respuesta directa en landings de servicio",
+      "expected": "add_faq",
+      "predicted": "other",
+      "confidence": 0.2,
+      "nota": "Redactar FAQ visibles + FAQPage. Antes era schema."
+    },
+    {
+      "id": 31,
+      "title": "Crear landing /seguridad-electronica/cctv-monterrey — keyword local de mayor vol",
+      "expected": "create_landing",
       "predicted": "other",
       "confidence": 0.4,
-      "note": "ambigua: indexación + meta; la acción primaria es indexación"
+      "nota": "Antes era update_meta (mal)."
+    },
+    {
+      "id": 35,
+      "title": "Configurar tracking de las 20 keywords prioritarias en herramienta SEO con domin",
+      "expected": "other",
+      "predicted": "keyword_research",
+      "confidence": 0.85,
+      "nota": "Inventa herramientas (Semrush/Ahrefs) que no se usan. El tracking vive en Cerebro SEO."
     },
     {
       "id": 38,
-      "title": "Mejorar velocidad y optimizar imágenes del catálogo",
-      "expected": "improve_speed",
+      "title": "Optimizar meta title + description + focus keyword del artículo /bacterias-para-",
+      "expected": "update_meta",
       "predicted": "other",
       "confidence": 0.6,
-      "note": "ambigua: velocidad + imágenes; CWV es la acción principal"
+      "nota": ""
+    },
+    {
+      "id": 41,
+      "title": "Verificar indexación de los 4 artículos del ciclo agosto 2026 en GSC",
+      "expected": "verify_indexation",
+      "predicted": "other",
+      "confidence": 0.5,
+      "nota": "Antes era create_blog (mal)."
+    },
+    {
+      "id": 53,
+      "title": "Landing: Custom Food Boxes with Logo — captura Q4 2026",
+      "expected": "create_landing",
+      "predicted": "other",
+      "confidence": 0.6,
+      "nota": ""
     },
     {
       "id": 57,
-      "title": "Optimizar alt text y comprimir las 30 imágenes de productos",
-      "expected": "optimize_alt_text",
+      "title": "Landing: Venta de Panel Aislante en México | Panel CT",
+      "expected": "create_landing",
       "predicted": "other",
       "confidence": 0.4,
-      "note": "ambigua: alt + comprimir; alt text es la señal más fuerte"
+      "nota": ""
+    },
+    {
+      "id": 58,
+      "title": "Crear artículo pilar: Conexiones Industriales — Tipos, Normas y Aplicaciones",
+      "expected": "create_blog",
+      "predicted": "other",
+      "confidence": 0.6,
+      "nota": "Antes no tenía tipo."
+    },
+    {
+      "id": 59,
+      "title": "Optimizar on-page de página de Tuberías Industriales Monterrey (H1, H2, keywords",
+      "expected": "edit_page_text",
+      "predicted": "other",
+      "confidence": 0.6,
+      "nota": "On-page de página existente (H1/H2/contenido)."
+    },
+    {
+      "id": 60,
+      "title": "Publicar pilar AEO: Guía Completa de Bridas Industriales (ASME, tipos, normas)",
+      "expected": "create_blog",
+      "predicted": "other",
+      "confidence": 0.4,
+      "nota": "Revisar borradores existentes antes (posible refresh_content)."
     }
-  ]
+  ],
+  "expectedStatusPending": 60
 }

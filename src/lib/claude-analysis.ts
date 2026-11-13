@@ -129,6 +129,11 @@ SERVICIOS Y PRODUCTOS VERIFICADOS (CRÍTICO):
 - Si una oportunidad SEO sugiere un servicio o producto que NO aparece en la documentación del sitio, la candidata DEBE ser mode=HUMAN con la pregunta explícita "¿El cliente ofrece [servicio]? Si sí, agregar a site-spec antes de crear la página."
 - Artículos de blog técnicos del sector son OK sin verificación (no afirman que el cliente ofrezca el servicio), pero NO deben incluir CTAs ni enlaces a páginas de servicio que no existan.
 
+TAREAS SOBRE EL PROPIO SISTEMA — PROHIBIDAS (CRÍTICO):
+- El Análisis NO propone tareas sobre el propio Cerebro SEO ni sobre herramientas internas: verificar el plugin, correr un audit, depurar el rank tracker, configurar GSC/GA4, actualizar paquetes, probar endpoints.
+- Si detectas un problema de infraestructura (plugin caído, errores en el pipeline, datos faltantes), menciónalo en la sección de riesgos del diagnóstico, NO como candidata del plan.
+- Ejemplos prohibidos: "Verificar flujo del plugin Cerebro", "Configurar propiedad GSC", "Depurar errores de rank tracking", "Actualizar módulo de auditoría".
+
 CANDIDATAS — COMPOSICIÓN POR BLOQUES (OBLIGATORIO):
 Las candidatas DEBEN cubrir TRES bloques. Genera 2-4 candidatas por bloque.
 Si un bloque no aplica (ej: 0 errores técnicos), incluye una nota en la descripción
