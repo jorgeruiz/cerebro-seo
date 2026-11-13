@@ -1,0 +1,274 @@
+{
+  "mode": "quick",
+  "date": "2026-11-13T06:13:48.732Z",
+  "total": 60,
+  "correct": 39,
+  "accuracy": 65,
+  "otherRate": 5,
+  "byType": {
+    "add_faq": {
+      "total": 2,
+      "correct": 0
+    },
+    "add_human_evidence": {
+      "total": 2,
+      "correct": 2
+    },
+    "add_image": {
+      "total": 2,
+      "correct": 1
+    },
+    "aeo_readiness": {
+      "total": 2,
+      "correct": 2
+    },
+    "audit_duplicate": {
+      "total": 2,
+      "correct": 1
+    },
+    "configure_canonical": {
+      "total": 2,
+      "correct": 0
+    },
+    "configure_robots": {
+      "total": 2,
+      "correct": 2
+    },
+    "configure_sitemap": {
+      "total": 2,
+      "correct": 1
+    },
+    "create_blog": {
+      "total": 3,
+      "correct": 2
+    },
+    "create_landing": {
+      "total": 4,
+      "correct": 4
+    },
+    "edit_page_text": {
+      "total": 2,
+      "correct": 1
+    },
+    "fix_broken_links": {
+      "total": 2,
+      "correct": 0
+    },
+    "fix_headings": {
+      "total": 2,
+      "correct": 1
+    },
+    "fix_redirect": {
+      "total": 2,
+      "correct": 2
+    },
+    "improve_speed": {
+      "total": 2,
+      "correct": 2
+    },
+    "internal_links": {
+      "total": 1,
+      "correct": 0
+    },
+    "keyword_research": {
+      "total": 4,
+      "correct": 3
+    },
+    "link_building": {
+      "total": 2,
+      "correct": 2
+    },
+    "merge_content": {
+      "total": 2,
+      "correct": 0
+    },
+    "optimize_alt_text": {
+      "total": 2,
+      "correct": 2
+    },
+    "optimize_images": {
+      "total": 1,
+      "correct": 1
+    },
+    "refresh_content": {
+      "total": 1,
+      "correct": 1
+    },
+    "schema": {
+      "total": 2,
+      "correct": 1
+    },
+    "security_fix": {
+      "total": 2,
+      "correct": 2
+    },
+    "setup_gbp": {
+      "total": 2,
+      "correct": 2
+    },
+    "update_meta": {
+      "total": 3,
+      "correct": 2
+    },
+    "verify_analytics": {
+      "total": 2,
+      "correct": 2
+    },
+    "verify_indexation": {
+      "total": 3,
+      "correct": 0
+    }
+  },
+  "failed": [
+    {
+      "id": 6,
+      "title": "Agregar enlaces internos desde el blog hacia las landings de servicios",
+      "expected": "internal_links",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    },
+    {
+      "id": 7,
+      "title": "Optimizar el copy de la landing de productos químicos",
+      "expected": "edit_page_text",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 9,
+      "title": "Verificar indexación de las 5 landings nuevas en GSC",
+      "expected": "verify_indexation",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 13,
+      "title": "Configurar sitemap.xml y enviarlo a GSC",
+      "expected": "configure_sitemap",
+      "predicted": "verify_indexation",
+      "confidence": 0.7
+    },
+    {
+      "id": 19,
+      "title": "Configurar canonical en las páginas de paginación del blog",
+      "expected": "configure_canonical",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    },
+    {
+      "id": 22,
+      "title": "Reparar enlaces rotos internos detectados en el crawl",
+      "expected": "fix_broken_links",
+      "predicted": "other",
+      "confidence": 0.3
+    },
+    {
+      "id": 24,
+      "title": "Agregar sección de preguntas frecuentes a la landing de servicios",
+      "expected": "add_faq",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 26,
+      "title": "Fusionar /quimicos y /productos-quimicos en una sola página con redirect",
+      "expected": "merge_content",
+      "predicted": "fix_redirect",
+      "confidence": 0.7
+    },
+    {
+      "id": 30,
+      "title": "Editar metadata de la página de precios",
+      "expected": "update_meta",
+      "predicted": "other",
+      "confidence": 0.3
+    },
+    {
+      "id": 33,
+      "title": "Agregar datos estructurados Article a todos los posts del blog",
+      "expected": "schema",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    },
+    {
+      "id": 36,
+      "title": "Investigar las keywords más buscadas y crear un artículo del top 1",
+      "expected": "keyword_research",
+      "predicted": "create_blog",
+      "confidence": 0.7,
+      "note": "ambigua: mezcla research y blog, primero debe investigar"
+    },
+    {
+      "id": 37,
+      "title": "Revisar indexación y corregir meta description de páginas no indexadas",
+      "expected": "verify_indexation",
+      "predicted": "update_meta",
+      "confidence": 0.7,
+      "note": "ambigua: indexación + meta; la acción primaria es indexación"
+    },
+    {
+      "id": 40,
+      "title": "Agregar FAQ con schema FAQPage a /servicios/fabricacion",
+      "expected": "add_faq",
+      "predicted": "schema",
+      "confidence": 0.7
+    },
+    {
+      "id": 41,
+      "title": "Publicar nuevo artículo: Guía completa de conexiones bridadas",
+      "expected": "create_blog",
+      "predicted": "other",
+      "confidence": 0.3
+    },
+    {
+      "id": 45,
+      "title": "Corregir H1 duplicado en la página de productos",
+      "expected": "fix_headings",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 46,
+      "title": "Generar imagen con IA para la portada del blog de mantenimiento",
+      "expected": "add_image",
+      "predicted": "create_blog",
+      "confidence": 0.7,
+      "note": "señal: 'generar imagen' (alias deprecated → add_image)"
+    },
+    {
+      "id": 47,
+      "title": "Listar y reparar enlaces que dan error 404 en el blog",
+      "expected": "fix_broken_links",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    },
+    {
+      "id": 48,
+      "title": "Configurar canónica self-referencing en todas las landing pages",
+      "expected": "configure_canonical",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 52,
+      "title": "Consolidar 3 artículos viejos de blog sobre tuberías en uno solo",
+      "expected": "merge_content",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    },
+    {
+      "id": 59,
+      "title": "Verificar si las landings de ciudades están indexadas correctamente",
+      "expected": "verify_indexation",
+      "predicted": "create_landing",
+      "confidence": 0.7
+    },
+    {
+      "id": 60,
+      "title": "Analizar si hay contenido duplicado entre blog y landings de servicio",
+      "expected": "audit_duplicate",
+      "predicted": "create_blog",
+      "confidence": 0.7
+    }
+  ]
+}
