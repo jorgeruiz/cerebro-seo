@@ -2,9 +2,63 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-12 (F1b — clasificador único + NEEDS_DEFINITION + eliminar WpActionType)
-**Fase actual:** S2e+S3+S4a+S4c+S2f+S3a+WP1+WP2+WP3+IMG+CONTENT-LANE+DATA-STEPS+PLAN-FIXES+NOTION-UPLOAD+VERIFY+COHERENCE+UI-FIXES completas. S4b/S4d/S4e pendientes.
-**Próximo hito:** Deploy y probar plan completo Brainet (Next.js) + Química Ecológica (WP) de principio a fin.
+**Última actualización:** 2026-11-13 (F1c cerrado — decomposer acotado + gates + eval 91.7%)
+**Fase actual:** F1 (catálogo v2) COMPLETO. S4b/S4d/S4e pendientes.
+**Próximo hito:** E2E en producción con Quicsa (WP) y Navalsa (WP) — probar flujo completo Análisis→Plan→Ejecución.
+
+### ✅ F1c — Decomposer acotado + Gates + Evaluación (2026-11-13)
+
+**Clasificador LLM (F1b)**:
+- `classifyTask()`: Claude tool-use con enum cerrado de 29 actionTypes
+- `classifyTaskQuick()`: señales-only (para tests/pre-filtro, nunca como clasificador final)
+- Disambiguation: 40 reglas declarativas del spec §6
+- NEEDS_DEFINITION: si confidence < 0.75 o `other`
+- DEPRECATED_ALIASES: edit_page_widgets→edit_page_text, upload_media→add_image, etc.
+
+**Decomposer (F1c-1)**:
+- LLM ya NO genera estructura de pasos — solo llena parámetros
+- Steps vienen del catálogo (task-catalog.ts, 29 entradas)
+- `resolveStepsWithCapabilities()`: fallback automático si plugin WP no tiene capability
+- `resolveTaskEvidence()`: evidencia de BD (audit issues, keywords, targets) inyectada en prompts
+
+**Gates G1-G8 (F1c-2)**:
+- G1: cliente activo con servicio SEO (real)
+- G2: plataforma migración (real)
+- G3: Next.js requiere githubRepo (real)
+- G4-G6: stubs (verificación en ejecución)
+- G7: anti-canibalización keyword (real)
+- G8: stub (verificación en ejecución)
+
+**Worker adjustments (F1c-3)**:
+- Image guard: blog OR declared slot (usage=featured_image|inline)
+- Word range: 1200-1800 informacional, 600-900 AEO, 800-1200 landing
+- Dead code cleanup: ~250 líneas eliminadas del decomposer legacy
+
+**Evaluación (F1c-4)**:
+- 60 fixtures (28 actionTypes, 7 ambiguos marcados)
+- Quick (señales): 65.0% — esperado bajo, substring matching
+- Full (LLM): **91.7% (55/60)** — 5 fallos son todos tareas multi-acción ambiguas
+- Tasa de other: 8.3% (solo tareas que mezclan 2 acciones)
+- Script: `npx tsx scripts/eval/run-classification-eval.ts --mode=full`
+
+**Archivos nuevos:**
+- `src/lib/plan/task-catalog.ts` — 29 actionTypes, steps, gates, signals, acceptance
+- `src/lib/plan/classify-task.ts` — classifyTask (LLM), classifyTaskQuick (señales)
+- `src/lib/plan/disambiguation.ts` — 40 reglas declarativas
+- `src/lib/plan/capabilities.ts` — mapeo capability→endpoint WP
+- `src/lib/plan/plan-gates.ts` — evaluateGates G1-G8
+- `src/lib/plan/task-data-resolver.ts` — resolveTaskEvidence
+- `scripts/eval/` — fixtures + eval script + resultados
+
+**Archivos modificados:**
+- `src/server/jobs/processors/task-decomposer.ts` — reescrito: classifier→gates→catalog→steps
+- `src/lib/claude-analysis.ts` — prompt con 29 actionTypes del catálogo
+- `src/app/.../actions.ts` — actionReclassifyTask, actionSetManualTask
+- `src/app/.../PlanMensualPanel.tsx` — NeedsDefinitionCard, BLOCKED/NEEDS_INPUT cards
+
+**Migraciones:** add_classification_fields, add_classification_event
+
+**Tests: 52 archivos, 529 tests, 0 fallos, 0 lint errors**
 
 ### ✅ UI-FIXES — Botones, terminal, análisis background (2026-11-06)
 

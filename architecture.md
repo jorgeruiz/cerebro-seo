@@ -193,11 +193,27 @@ Tres carriles de ejecución:
 - **Carril de contenido** (blogs Next.js): Claude genera datos del artículo → staged en PlanStep → user revisa → "Publicar" → commit atómico a main vía GitHub API. Sin rama, sin PR, sin merge.
 - **Carril de datos** (keyword research, análisis): APIs internas (DataForSEO, GSC, GA4) + Claude → stagedChange → HUMAN aprueba → AI aplica a BD. Sin terminal ni repo.
 
-**Plantillas determinísticas** (`src/lib/task-templates.ts`):
-- Catálogo por (actionType × platform): create_blog, update_meta, keyword_research, schema, internal_links, edit_page_text, create_landing, upload_media, generate_image.
-- `resolveTaskMode(steps)` = única fuente de verdad para task.mode.
-- `applyCapabilities(template, wpCaps)` degrada AI→HUMAN si falta endpoint WP.
-- Si hay template → decomposer usa pasos fijos; si no → generación libre con LLM.
+**Catálogo de tareas v2** (`src/lib/plan/task-catalog.ts`):
+- 29 actionTypes como enum cerrado. Cada entrada tiene: steps por plataforma, gates, signals, negativeSignals, acceptance, complexity, risk, wordRange.
+- `resolveStepsWithCapabilities()` degrada AI→HUMAN si falta endpoint WP.
+- `DEPRECATED_ALIASES` mapea tipos legacy a los canónicos.
+- `WORD_RANGES`: informational (1200-1800), short_answer_aeo (600-900), landing (800-1200).
+
+**Clasificador** (`src/lib/plan/classify-task.ts`):
+- `classifyTask()`: Claude tool-use con enum cerrado + validación determinista (disambiguation, negative signals, confidence threshold 0.75).
+- `classifyTaskQuick()`: señales-only, sin LLM — solo para tests y pre-filtros, nunca como clasificador final.
+- Disambiguation: 40 reglas declarativas en `src/lib/plan/disambiguation.ts`.
+
+**Gates** (`src/lib/plan/plan-gates.ts`):
+- G1-G8 evaluados antes de descomponer. G1 (cliente activo), G3 (githubRepo), G7 (anti-canibalización) tienen lógica real. G4-G6, G8 diferidos a ejecución.
+
+**Evidence** (`src/lib/plan/task-data-resolver.ts`):
+- Queries a BD (audit issues, keywords, targets) inyectadas en prompts de pasos.
+
+**Decomposer** (`src/server/jobs/processors/task-decomposer.ts`):
+- Flow: classifyTask() → evaluateGates() → getCatalogEntry() → resolveStepsWithCapabilities() → resolveTaskEvidence() → crear PlanSteps.
+- LLM NO genera estructura — solo llena parámetros dentro de steps del catálogo.
+- Estados: NEEDS_DEFINITION (clasificación fallida), NEEDS_INPUT (inputs incompletos), BLOCKED (gate fallido).
 
 **Post-completion** (`src/lib/task-verifier.ts`, `src/lib/notion-bitacora.ts`):
 - Botón "Verificar": fetch URL producción → meta tags, schema, HTTP status (✓/⚠/✗).
@@ -210,9 +226,9 @@ Tres carriles de ejecución:
 - `getPlatformPolicy(platform)` — fuente única de verdad para: executable, needsRepo, closeFlow, kindLabels, humanReasons, usesTerminal, ineligibilityReason.
 - Reemplaza los if/else dispersos en actions.ts, decomposer, site-platform.
 
-**Coherencia del decomposer** (`src/lib/task-coherence.ts`):
-- `validateTaskCoherence()` valida actionType vs título, corrige category, extrae keyword.
-- Corre antes de generar pasos — auto-corrige sin intervención humana.
+**Templates legacy** (`src/lib/task-templates.ts`):
+- `resolveTaskMode(steps)` = fuente de verdad para task.mode (still used).
+- `DECOMPOSER_VERSION` = versión del generador (para redo de tareas outdated).
 
 **Preflight del plan** (en actions.ts):
 - `actionRunPreflight()` verifica: sitio, URL, plataforma, repo (Next.js), cerebroClientId (WP).
