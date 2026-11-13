@@ -517,6 +517,34 @@ Genera los pasos como JSON array. Aplica las reglas de la sección PLATFORM=${pl
     return;
   }
 
+  // Step 1b: Evaluate gates
+  const { evaluateGates } = await import("@/lib/plan/plan-gates");
+  const catalogEntryForGates = getCatalogEntry(classification.actionType);
+  if (catalogEntryForGates) {
+    const gateResult = await evaluateGates(catalogEntryForGates.gates, {
+      clientId,
+      siteId: task.siteId,
+      platform,
+      targetUrl: classification.targetUrl,
+      targetKeyword: classification.targetKeyword ?? task.targetKeyword,
+      actionType: classification.actionType,
+      wpCapabilities: wpCaps,
+    });
+
+    if (!gateResult.allPassed) {
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: {
+          status: "BLOCKED",
+          blockedReason: gateResult.blockedReason,
+          remedy: gateResult.remedy,
+        },
+      });
+      console.log(`[task-decomposer] "${task.title}" → BLOCKED: ${gateResult.blockedReason}`);
+      return;
+    }
+  }
+
   // Step 2: Get catalog entry and resolve steps
   const catalogEntry = getCatalogEntry(classification.actionType);
   if (!catalogEntry) {
