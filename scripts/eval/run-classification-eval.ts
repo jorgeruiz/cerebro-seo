@@ -173,11 +173,11 @@ async function runEval(): Promise<void> {
 
   if (confusion.size > 0) {
     console.log("─── CONFUSIONES FRECUENTES ──────────────────────────");
-    for (const [expected, predictions] of confusion) {
-      for (const [predicted, count] of predictions) {
+    Array.from(confusion.entries()).forEach(([expected, predictions]) => {
+      Array.from(predictions.entries()).forEach(([predicted, count]) => {
         console.log(`  ${expected} → ${predicted}: ${count}x`);
-      }
-    }
+      });
+    });
     console.log();
   }
 
