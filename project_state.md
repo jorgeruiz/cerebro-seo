@@ -2,9 +2,42 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-13 (F1c cerrado — decomposer acotado + gates + eval 91.7%)
-**Fase actual:** F1 (catálogo v2) COMPLETO. S4b/S4d/S4e pendientes.
-**Próximo hito:** E2E en producción con Quicsa (WP) y Navalsa (WP) — probar flujo completo Análisis→Plan→Ejecución.
+**Última actualización:** 2026-11-13 (F1d — cierre de gaps Fase 1)
+**Fase actual:** F1 (catálogo v2) COMPLETO — todos los criterios de salida cumplidos.
+**Próximo hito:** E2E en producción con Quicsa (WP) y Navalsa (WP). Correr scripts de migración.
+
+### ✅ F1d — Cierre de gaps Fase 1 (2026-11-13)
+
+**P1: Evidence concreta en pasos**:
+- REQUIRED_EVIDENCE por actionType (fix_redirect, fix_broken_links, verify_indexation, etc.)
+- Evidence insuficiente → NEEDS_INPUT con descripción y remedio
+- Evidence almacenada en step.stagedChange {type:"evidence", rows:[...]}
+- EvidenceTable component: tabla en "Qué hacer" de pasos HM (URL, valor, propuesto, fuente, fecha)
+- validateNoVagueReferences: rechaza "las URLs"/"las keywords" sin filas concretas
+
+**P2: Gates reales G4, G6, G8**:
+- G4: fetch catalog-schemas.md via GitHub API, verificar ## Blog / ## Landing Pages → BLOCKED si falta
+- G6: create_landing en Next.js requiere site-spec.md; WP requiere plugin activo
+- G8: WP page lookup via proxy — si targetUrl no matchea slug → BLOCKED
+- G5: tests confirman fallback AI→HM (9 tests)
+
+**P3: Tarjeta NEEDS_DEFINITION completa**:
+- 4 acciones: Reclasificar, Manual libre, Dividir, Anular
+- Dividir: N objetivos → N sub-tareas, cada una clasificada independientemente
+- Anular: VOIDED + ClassificationEvent
+- Todas registran ClassificationEvent
+
+**P4: Word range dinámico + checkPreDone**:
+- wp-executor lee WORD_RANGES del catálogo (informational 1200-1800, AEO 600-900, landing 800-1200)
+- checkPreDone: H1 presente, meta_title 50-65, meta_description 140-160, sin [COMPLETAR]
+- Si falla → WAITING_HUMAN con detalle de issues
+
+**P5: Scripts producción + runbook**:
+- docs/plan-mensual/runbook-produccion.md: 4 comandos documentados
+- export-classification-fixtures.ts: exporta tareas reales como fixtures
+- eval-classifier.ts: confirmación de costo si >$1 USD
+
+**Tests: 54 archivos, 550 tests, 0 fallos, 0 lint errors**
 
 ### ✅ F1c — Decomposer acotado + Gates + Evaluación (2026-11-13)
 
