@@ -558,7 +558,7 @@ RESPONDE SOLO con JSON válido (sin markdown, sin texto):
   const ctaUrl = cta_hint ? `/${cta_hint.slug}` : "/contacto";
 
   const kindInstructions: Record<string, string> = {
-    blog: `Artículo de blog informativo de 1200-1800 palabras sobre "${keyword}". Mínimo 4 secciones H2, 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
+    blog: `Artículo de blog informativo de 1200-1800 palabras (informacional) sobre "${keyword}". Mínimo 4 secciones H2, 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
     landing: `Página de servicio/producto sobre "${keyword}". Mínimo 5 secciones H2, tabla de especificaciones/tipos (normas sectoriales ok, precios → [COMPLETAR]), 4 FAQ, 2 enlaces internos. CTA url: "${ctaUrl}".`,
     optimization: `Mejoras específicas para la página "${targetPageTitle}" (/${targetPageSlug}). optimization_changes DEBE usar los widgets reales listados en PÁGINA A OPTIMIZAR. widget_id obligatorio para cada cambio.`,
   };
@@ -811,7 +811,7 @@ async function executeWpPublish(
     "3. Contenido informativo del sector que no requiera verificacion -> puedes incluirlo.",
     "4. PROHIBIDO inventar: testimonios falsos, estadisticas del cliente, certificaciones no mencionadas.",
     "5. HTML semantico sin <html>/<body>/<head>. Usa <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>.",
-    "6. Entre 1500 y 2500 palabras.",
+    "6. Entre 1200 y 1800 palabras (rango estándar informacional).",
   ].join("\n");
 
   const userPrompt = [

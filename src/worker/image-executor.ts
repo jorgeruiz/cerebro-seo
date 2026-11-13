@@ -310,11 +310,12 @@ export async function executeImage(
     taskCategory?: string;
   },
 ): Promise<ImageStepResult> {
-  // ── Blog-only guard — imágenes AI solo para artículos de blog ──────
+  // ── Image guard — blog or declared slot (add_image actionType) ──────
   const isBlogContext = isBlogTask(context.taskKind, context.taskCategory);
-  if (!isBlogContext) {
+  const hasDeclaredSlot = action.payload?.usage === "featured_image" || action.payload?.usage === "inline";
+  if (!isBlogContext && !hasDeclaredSlot) {
     return {
-      notes: `image:human-required — Imágenes AI solo permitidas para blog. Tarea kind=${context.taskKind ?? "?"} category=${context.taskCategory ?? "?"}. Solicitar/tomar foto real.`,
+      notes: `image:human-required — Imágenes AI requieren contexto de blog o slot declarado (usage). Tarea kind=${context.taskKind ?? "?"} category=${context.taskCategory ?? "?"}. Solicitar/tomar foto real.`,
     };
   }
 
