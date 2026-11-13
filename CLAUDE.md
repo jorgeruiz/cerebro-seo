@@ -202,6 +202,20 @@ Cerebro ya resolvió varios problemas. Antes de inventar, revisar cómo se hizo 
 
 ## Reglas críticas
 
+### Build antes de cada push — regla permanente
+**Antes de cada push a main, los dos comandos deben pasar sin errores:**
+1. `SKIP_ENV_VALIDATION=1 npm run build` — es lo que corre Docker en producción. Valida tipos en código de producción (no tests).
+2. `npx next lint` — ya lo corre el pre-push hook.
+
+**Vitest NO valida tipos.** Un test puede pasar con `any` o con propiedades faltantes. El build de producción sí valida tipos estrictos. Si lint y tests pasan pero el build falla, el deploy se rompe.
+
+Errores comunes que solo el build atrapa:
+- `Map.entries()` spread sin `Array.from()` (target ES5)
+- Campos requeridos faltantes en `prisma.*.create()` (`order`, `prompt`)
+- Filtros JSON de Prisma (`{ not: null }` → `{ NOT: { field: { equals: Prisma.DbNull } } }`)
+- `select` con campos que no existen en el modelo
+- Imports de funciones inexistentes (`getAiQueue` vs `decomposeQueue`)
+
 ### Secretos — regla permanente e incondicional
 **NUNCA imprimir en chat, reportes, tablas, comandos de ejemplo ni ninguna salida de texto:**
 - Valores de API keys, tokens de acceso o autenticación

@@ -15,6 +15,7 @@
  */
 
 import { query, type SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
+import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { createCanUseTool } from "./agent-permissions";
@@ -1148,7 +1149,7 @@ async function processWpTask(
 
     // Pre-DONE acceptance check on staged content
     const doneSteps = await prisma.planStep.findMany({
-      where: { taskId, status: "DONE", stagedChange: { not: null } },
+      where: { taskId, status: "DONE", NOT: { stagedChange: { equals: Prisma.DbNull } } },
       select: { stagedChange: true },
     });
     const stagedChanges = doneSteps.map((s) => s.stagedChange).filter(Boolean);

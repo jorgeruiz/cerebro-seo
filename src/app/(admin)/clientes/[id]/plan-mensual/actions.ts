@@ -1561,9 +1561,8 @@ export async function actionSplitTask(
       },
     });
 
-    const { getAiQueue } = await import("@/server/jobs/workers/base-worker");
-    const queue = getAiQueue();
-    await queue.add("task:decompose", {
+    const { decomposeQueue } = await import("@/server/jobs/queues");
+    await decomposeQueue.add("task:decompose", {
       taskId: newTask.id,
       clientId: task.planId,
       candidateId: "split",

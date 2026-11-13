@@ -124,7 +124,7 @@ export async function resolveTaskEvidence(
           },
           take: 20,
           orderBy: { audit: { date: "desc" } },
-          select: { affectedUrl: true, title: true, details: true, audit: { select: { date: true } } },
+          select: { affectedUrl: true, title: true, audit: { select: { date: true } } },
         });
         for (const issue of brokenLinks) {
           if (issue.affectedUrl) {
