@@ -581,7 +581,9 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
   const [isPending, startTransition] = useTransition();
   const [selectedType, setSelectedType] = useState("");
   const [manualInstructions, setManualInstructions] = useState("");
-  const [mode, setMode] = useState<"select" | "manual">("select");
+  const [splitObjectives, setSplitObjectives] = useState(["", ""]);
+  const [voidReason, setVoidReason] = useState("");
+  const [mode, setMode] = useState<"select" | "manual" | "split" | "void">("select");
 
   const meta = task.classificationMeta as { candidates?: Array<{ actionType: string; reason: string }> } | null;
 
@@ -597,6 +599,25 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
     if (!manualInstructions.trim()) return;
     startTransition(async () => {
       const res = await actionSetManualTask(task.id, manualInstructions);
+      if (res.ok) window.location.reload();
+    });
+  };
+
+  const handleSplit = () => {
+    const valid = splitObjectives.filter((o) => o.trim().length > 0);
+    if (valid.length < 2) return;
+    startTransition(async () => {
+      const { actionSplitTask } = await import("./actions");
+      const res = await actionSplitTask(task.id, valid);
+      if (res.ok) window.location.reload();
+    });
+  };
+
+  const handleVoid = () => {
+    if (!confirm("¿Anular esta tarea? No se puede deshacer.")) return;
+    startTransition(async () => {
+      const { actionVoidNeedsDefinition } = await import("./actions");
+      const res = await actionVoidNeedsDefinition(task.id, voidReason);
       if (res.ok) window.location.reload();
     });
   };
@@ -619,7 +640,7 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button onClick={() => setMode("select")}
           className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "select" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground")}>
           Reclasificar
@@ -627,6 +648,14 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
         <button onClick={() => setMode("manual")}
           className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "manual" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground")}>
           Manual libre
+        </button>
+        <button onClick={() => setMode("split")}
+          className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "split" ? "bg-amber-500/10 border-amber-500/40 text-amber-500" : "border-border text-muted-foreground")}>
+          Dividir
+        </button>
+        <button onClick={() => setMode("void")}
+          className={cn("font-mono text-[0.6rem] px-2 py-1 rounded border", mode === "void" ? "bg-red-500/10 border-red-500/40 text-red-500" : "border-border text-muted-foreground")}>
+          Anular
         </button>
       </div>
 
@@ -679,6 +708,45 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
           <button onClick={handleManual} disabled={isPending || !manualInstructions.trim()}
             className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-7 text-[0.6rem]")}>
             {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Crear paso manual"}
+          </button>
+        </div>
+      )}
+
+      {mode === "split" && (
+        <div className="space-y-2">
+          <p className="font-mono text-[0.55rem] text-muted-foreground">
+            Escribe un objetivo por sub-tarea (min. 2, max. 5). Cada una se clasifica independientemente.
+          </p>
+          {splitObjectives.map((obj, i) => (
+            <input key={i} value={obj}
+              onChange={(e) => { const arr = [...splitObjectives]; arr[i] = e.target.value; setSplitObjectives(arr); }}
+              placeholder={`Objetivo ${i + 1}...`}
+              className="w-full font-mono text-[0.65rem] border border-border rounded px-2 py-1 bg-card" />
+          ))}
+          <div className="flex gap-2">
+            {splitObjectives.length < 5 && (
+              <button onClick={() => setSplitObjectives([...splitObjectives, ""])}
+                className="font-mono text-[0.55rem] text-muted-foreground hover:text-foreground">
+                + Agregar
+              </button>
+            )}
+            <button onClick={handleSplit}
+              disabled={isPending || splitObjectives.filter((o) => o.trim()).length < 2}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-7 text-[0.6rem]")}>
+              {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Dividir"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "void" && (
+        <div className="space-y-2">
+          <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)}
+            placeholder="Razón (opcional)..."
+            className="w-full font-mono text-[0.65rem] border border-red-500/30 rounded px-2 py-1 bg-card" />
+          <button onClick={handleVoid} disabled={isPending}
+            className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "h-7 text-[0.6rem]")}>
+            {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "Anular tarea"}
           </button>
         </div>
       )}

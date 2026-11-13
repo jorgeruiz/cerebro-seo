@@ -1495,3 +1495,120 @@ export async function actionSetManualTask(
 
   return { ok: true };
 }
+
+/**
+ * Split a NEEDS_DEFINITION task into N sub-tasks.
+ * Each sub-task gets classified independently.
+ * The original task is marked VOIDED with reason "dividida".
+ */
+export async function actionSplitTask(
+  taskId: string,
+  objectives: string[],
+): Promise<{ ok: true; created: number } | { ok: false; error: string }> {
+  "use server";
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (objectives.length < 2) return { ok: false, error: "Se necesitan al menos 2 objetivos." };
+  if (objectives.length > 5) return { ok: false, error: "Máximo 5 sub-tareas." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true, planId: true, siteId: true, kind: true,
+      category: true, priority: true, effort: true, actionType: true,
+      targetKeyword: true,
+    },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+
+  await prisma.classificationEvent.create({
+    data: {
+      taskId,
+      originalType: task.actionType,
+      finalType: "SPLIT",
+      actor: `human:${session.user.email}`,
+      reason: `Dividida en ${objectives.length} sub-tareas`,
+    },
+  });
+
+  let created = 0;
+  for (const objective of objectives) {
+    const trimmed = objective.trim();
+    if (!trimmed) continue;
+
+    const newTask = await prisma.planTask.create({
+      data: {
+        planId: task.planId,
+        siteId: task.siteId,
+        title: trimmed,
+        objective: trimmed,
+        kind: task.kind,
+        category: task.category,
+        priority: task.priority,
+        effort: task.effort,
+        status: "PLANNING",
+        mode: "AI",
+        targetKeyword: task.targetKeyword,
+        sourceRef: { splitFrom: taskId } as unknown as Parameters<typeof prisma.planTask.create>[0]["data"]["sourceRef"],
+      },
+    });
+
+    const { getAiQueue } = await import("@/server/jobs/workers/base-worker");
+    const queue = getAiQueue();
+    await queue.add("task:decompose", {
+      taskId: newTask.id,
+      clientId: task.planId,
+      candidateId: "split",
+    }, { jobId: `decompose-${newTask.id}` });
+
+    created++;
+  }
+
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      status: "VOIDED",
+      failureReason: `Dividida en ${created} sub-tareas por ${session.user.email}`,
+    },
+  });
+
+  return { ok: true, created };
+}
+
+/**
+ * Void a NEEDS_DEFINITION task with a ClassificationEvent.
+ */
+export async function actionVoidNeedsDefinition(
+  taskId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  "use server";
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    select: { id: true, actionType: true },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+
+  await prisma.classificationEvent.create({
+    data: {
+      taskId,
+      originalType: task.actionType,
+      finalType: "VOIDED",
+      actor: `human:${session.user.email}`,
+      reason: reason || "Anulada desde tarjeta de definición",
+    },
+  });
+
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      status: "VOIDED",
+      failureReason: reason || "Anulada por el equipo",
+    },
+  });
+
+  return { ok: true };
+}
