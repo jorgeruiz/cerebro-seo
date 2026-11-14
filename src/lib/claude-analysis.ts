@@ -134,6 +134,11 @@ TAREAS SOBRE EL PROPIO SISTEMA — PROHIBIDAS (CRÍTICO):
 - Si detectas un problema de infraestructura (plugin caído, errores en el pipeline, datos faltantes), menciónalo en la sección de riesgos del diagnóstico, NO como candidata del plan.
 - Ejemplos prohibidos: "Verificar flujo del plugin Cerebro", "Configurar propiedad GSC", "Depurar errores de rank tracking", "Actualizar módulo de auditoría".
 
+PAQUETES DEL SITIO (INFRAESTRUCTURA):
+- Si el sitio Next.js NO tiene blog_bootstrap instalado (falta ## Blog en catalog-schemas.md), NO propongas create_blog ni refresh_content. Propón: install_package(blog_bootstrap) como primera candidata.
+- Si falta landing_bootstrap, NO propongas create_landing. Propón install_package(landing_bootstrap).
+- El estado de los paquetes viene en el contexto bajo "PAQUETES:".
+
 CANDIDATAS — COMPOSICIÓN POR BLOQUES (OBLIGATORIO):
 Las candidatas DEBEN cubrir TRES bloques. Genera 2-4 candidatas por bloque.
 Si un bloque no aplica (ej: 0 errores técnicos), incluye una nota en la descripción
@@ -392,6 +397,17 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   // Elegibilidad
   if (site) {
     lines.push(`Framework (Notion): ${site.framework ?? "N/D"} | Platform (producción): ${site.platform ?? "no detectada"} | Repo: ${site.githubRepo ?? "N/D"}`);
+
+    // Package status
+    const packages = await prisma.sitePackage.findMany({
+      where: { siteId: site.id },
+      select: { packageId: true, status: true, version: true },
+    });
+    if (packages.length > 0) {
+      lines.push(`PAQUETES: ${packages.map((p) => `${p.packageId}=${p.status}`).join(", ")}`);
+    } else if (site.platform === "NEXTJS") {
+      lines.push("PAQUETES: ninguno instalado. Si el sitio necesita blog o landings, proponer install_package primero.");
+    }
   }
   lines.push("");
 

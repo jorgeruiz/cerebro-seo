@@ -50,6 +50,9 @@ export const ACTION_TYPES = [
   "add_human_evidence",
   "security_fix",
 
+  // §9.2 — Infrastructure packages
+  "install_package",
+
   // Catch-all
   "other",
 ] as const;
@@ -1045,6 +1048,41 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "high",
+  },
+
+  // ── INFRASTRUCTURE (§9.2) ────────────────────────────────────────────────
+
+  {
+    actionType: "install_package",
+    class: "execution",
+    category: "infrastructure",
+    tags: ["bootstrap", "package", "setup"],
+    modes: {
+      NEXTJS: { mode: "HYBRID" },
+      WORDPRESS: { mode: "MANUAL" },
+    },
+    steps: {
+      // Steps are dynamic — loaded from the package definition at decomposition time.
+      // These are placeholders; the decomposer replaces them with PackageDefinition.installSteps.
+      NEXTJS: [
+        { kind: "agent", title: "Instalar paquete", type: "AI" },
+        { kind: "review", title: "Revisar y aprobar", type: "HM", humanReason: "Verificar compatibilidad con el sitio." },
+      ],
+      WORDPRESS: [
+        { kind: "wp_manual", title: "Instalar manualmente", type: "HM", humanReason: "Paquetes WP se instalan desde el panel." },
+      ],
+    },
+    inputs: z.object({ packageId: z.string().min(1) }),
+    gates: ["G1", "G2", "G3"],
+    acceptance: [
+      "detect() retorna installed=true",
+      "verify() retorna passed=true",
+      "Build OK",
+    ],
+    signals: ["instalar paquete", "bootstrap", "instalar blog", "instalar landings", "configurar estructura"],
+    negativeSignals: [],
+    complexity: "high",
+    risk: "medium",
   },
 
   // ── OTHER (catch-all) ─────────────────────────────────────────────────────

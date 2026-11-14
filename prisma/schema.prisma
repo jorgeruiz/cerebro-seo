@@ -120,6 +120,35 @@ model Site {
   backlinks       Backlink[]
   researchReports ResearchReport[]
   planTasks       PlanTask[]
+  packages        SitePackage[]
+}
+
+// ─── Site Packages (infrastructure) ──────────────────────────────────────────
+
+enum PackageStatus {
+  PENDING      // Detected as needed but not installed
+  INSTALLING   // Installation in progress
+  INSTALLED    // Installed and verified
+  FAILED       // Installation or verification failed
+  ROLLBACK     // Rolled back
+}
+
+model SitePackage {
+  id           String        @id @default(cuid())
+  siteId       String
+  site         Site          @relation(fields: [siteId], references: [id])
+  packageId    String        // e.g. "blog_bootstrap", "landing_bootstrap"
+  version      String        @default("1")
+  status       PackageStatus @default(PENDING)
+  installedAt  DateTime?
+  verifiedAt   DateTime?
+  installedBy  String?       // taskId that installed it
+  meta         Json?         // package-specific metadata (e.g. { sections: ["Blog"] })
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([siteId, packageId])
+  @@index([siteId])
 }
 
 model MonthlyCycle {

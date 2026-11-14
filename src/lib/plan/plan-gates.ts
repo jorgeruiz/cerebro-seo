@@ -122,15 +122,19 @@ async function evaluateGate(
       const site = await prisma.site.findUnique({ where: { id: ctx.siteId }, select: { githubRepo: true } });
       if (!site?.githubRepo) return { gate, passed: true }; // G3 handles this
 
+      const needsBlog = ctx.actionType === "create_blog" || ctx.actionType === "refresh_content";
+      const needsLanding = ctx.actionType === "create_landing";
+
       // Fetch catalog-schemas.md via GitHub API
       const pat = process.env.GITHUB_PAT_CLIENT_REPOS;
       const catalogContent = await fetchGitHubFile(site.githubRepo, "docs/catalog-schemas.md", pat);
 
       if (!catalogContent) {
+        const packageId = needsBlog ? "blog_bootstrap" : "landing_bootstrap";
         return {
           gate, passed: false,
           reason: "catalog-schemas.md no encontrado en el repo",
-          remedy: "Instalar bootstrap del repo: crear docs/catalog-schemas.md con secciones ## Blog, ## Landing Pages",
+          remedy: `Agregar al plan: install_package(${packageId})`,
         };
       }
 
@@ -138,21 +142,18 @@ async function evaluateGate(
       const headings = catalogContent.match(/^##\s+.+$/gm) ?? [];
       const headingsLower = headings.map((h) => h.toLowerCase());
 
-      const needsBlog = ctx.actionType === "create_blog" || ctx.actionType === "refresh_content";
-      const needsLanding = ctx.actionType === "create_landing";
-
       if (needsBlog && !headingsLower.some((h) => h.includes("blog"))) {
         return {
           gate, passed: false,
           reason: "catalog-schemas.md no tiene sección ## Blog",
-          remedy: "Agregar sección ## Blog en docs/catalog-schemas.md con el schema del artículo",
+          remedy: "Agregar al plan: install_package(blog_bootstrap)",
         };
       }
       if (needsLanding && !headingsLower.some((h) => h.includes("landing"))) {
         return {
           gate, passed: false,
           reason: "catalog-schemas.md no tiene sección ## Landing Pages",
-          remedy: "Agregar sección ## Landing Pages en docs/catalog-schemas.md con el schema de la landing",
+          remedy: "Agregar al plan: install_package(landing_bootstrap)",
         };
       }
 
