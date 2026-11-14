@@ -87,33 +87,55 @@ interface LLMClassification {
 async function callClassifierLLM(input: ClassificationInput): Promise<LLMClassification> {
   const client = new Anthropic();
 
-  // Build the actionType descriptions for the prompt
+  // Build the actionType descriptions for the prompt, including absorbs
   const typeDescriptions = CATALOG
     .filter((e) => e.actionType !== "other")
     .map((e) => {
       const signals = e.signals.length > 0 ? `Señales: ${e.signals.join(", ")}` : "";
       const negSignals = e.negativeSignals.length > 0 ? `NO es esto si: ${e.negativeSignals.join(", ")}` : "";
-      return `- **${e.actionType}** (${e.class}, ${e.category}): ${e.acceptance[0] ?? ""}. ${signals}. ${negSignals}`;
+      const absorbs = e.absorbs && e.absorbs.length > 0
+        ? `Absorbe (misma URL): ${e.absorbs.join(", ")}`
+        : "";
+      return `- **${e.actionType}** (${e.class}, ${e.category}): ${e.acceptance[0] ?? ""}. ${signals}. ${negSignals}. ${absorbs}`;
     })
     .join("\n");
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
-    system: `Eres un clasificador de tareas SEO. Clasifica el objetivo en exactamente UN actionType del catálogo.
+    system: `Eres un clasificador de tareas SEO. Clasifica la tarea en exactamente UN actionType del catálogo.
 
-REGLAS:
-- Una tarea = un actionType = un target (URL o keyword). Si el objetivo es compuesto, devuelve splitInto.
-- Si no estás seguro (< 75% confianza), devuelve "other" con los 2 candidatos más cercanos.
-- Extrae targetUrl y targetKeyword del objetivo si están presentes.
+REGLA PRINCIPAL — EL TÍTULO DEFINE LA ACCIÓN:
+- El TÍTULO dice qué hacer (la acción). El OBJETIVO es contexto, evidencia y datos históricos.
+- No te confundas: un objetivo largo con métricas GSC, CTR, posiciones, etc. es EVIDENCIA del porqué, no una acción diferente.
+
+REGLA DE ABSORCIÓN (§1.5 1b):
+- Una tarea que crea o modifica UNA URL absorbe los elementos on-page de esa URL.
+- Si el título dice "Crear artículo de blog" y el objetivo menciona "meta title, FAQ, schema, enlaces internos", eso es create_blog (absorbe todo eso para la misma URL).
+- Si el título dice "Crear landing" y el objetivo menciona "H1, metas, schema, FAQ", eso es create_landing.
+- Solo es compuesto (split) si el objetivo nombra OTRA URL existente que también hay que modificar.
+- Cada tipo lista qué absorbe en su descripción.
+
+DESEMPATE FAQ vs SCHEMA:
+- Si se crea contenido FAQ visible (preguntas + respuestas nuevas) → add_faq (incluye FAQPage schema).
+- Si solo se agrega schema JSON-LD a contenido que ya existe → schema.
+
+TAREAS DEL SISTEMA → other:
+- Verificar el plugin Cerebro, correr audit, depurar el rank tracker, configurar GSC, configurar herramientas internas (Semrush, Ahrefs), probar endpoints → siempre "other". No son tareas del sitio.
+
+REGLAS GENERALES:
+- Una tarea = un actionType = un target (URL o keyword). Si es compuesto con URLs distintas, devuelve splitInto.
+- Si no estás seguro (< 75% confianza), devuelve "other".
+- Extrae targetUrl y targetKeyword del título/objetivo si están presentes.
 
 CATÁLOGO:
 ${typeDescriptions}
-- **other**: lo que no encaja claramente en ninguno de los anteriores.`,
+- **other**: tareas del sistema, tareas compuestas no resueltas, o lo que no encaja.`,
     messages: [
       {
         role: "user",
-        content: `Clasifica esta tarea:
+        content: `Clasifica esta tarea. El TÍTULO define la acción; el OBJETIVO es contexto/evidencia.
+
 TÍTULO: ${input.title}
 OBJETIVO: ${input.objective}
 PLATAFORMA: ${input.platform ?? "desconocida"}`,

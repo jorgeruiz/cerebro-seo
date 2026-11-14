@@ -152,6 +152,14 @@ export interface CatalogEntry {
   signals: string[];
   negativeSignals: string[];
 
+  /**
+   * Absorption rule (spec §1.5 regla 1b): when a task creates or rewrites
+   * a single URL, it absorbs on-page elements of that URL. Mentions of
+   * absorbed types targeting the same URL are NOT a conflict nor do they
+   * make the task composite.
+   */
+  absorbs?: ActionType[];
+
   complexity: Complexity;
   risk: Risk;
 
@@ -242,8 +250,9 @@ export const CATALOG: CatalogEntry[] = [
       "sin [COMPLETAR",
       "máx. 2 imágenes",
     ],
-    signals: ["blog", "artículo nuevo", "redactar artículo", "crear artículo", "nota de blog"],
+    signals: ["blog", "artículo nuevo", "redactar artículo", "crear artículo", "nota de blog", "artículo pilar", "publicar artículo", "artículo de blog", "guía completa"],
     negativeSignals: ["actualizar artículo", "artículo existente", "URL de /blog/ ya existente"],
+    absorbs: ["update_meta", "fix_headings", "add_faq", "schema", "internal_links", "add_image"],
     complexity: "high",
     risk: "low",
     wordRange: WORD_RANGES.informational,
@@ -308,8 +317,9 @@ export const CATALOG: CatalogEntry[] = [
       "CTA y formulario existentes del sitio",
       "sin datos inventados",
     ],
-    signals: ["landing", "página de servicio", "página para ciudad", "página de producto"],
+    signals: ["landing", "página de servicio", "página para ciudad", "página de producto", "crear landing", "landing page"],
     negativeSignals: ["blog", "artículo", "crear página sin servicio ni ubicación"],
+    absorbs: ["update_meta", "fix_headings", "schema", "add_faq", "internal_links"],
     complexity: "high",
     risk: "medium",
     wordRange: WORD_RANGES.landing,
@@ -344,7 +354,7 @@ export const CATALOG: CatalogEntry[] = [
       "Costo registrado en ApiUsage",
     ],
     signals: ["investigar keywords", "palabras clave prioritarias", "keyword research", "configurar keywords", "rank tracking"],
-    negativeSignals: ["competencia sin keywords", "competidores sin keywords"],
+    negativeSignals: ["competencia sin keywords", "competidores sin keywords", "verificar tracking", "configurar tracking en herramienta", "rank tracker", "depurar", "Semrush", "Ahrefs", "plugin Cerebro"],
     complexity: "medium",
     risk: "low",
   },
@@ -438,8 +448,9 @@ export const CATALOG: CatalogEntry[] = [
       "Keyword en H1/H2/primer párrafo sin stuffing",
       "Diff legible antes→después",
     ],
-    signals: ["optimizar texto", "reescribir contenido", "mejorar copy", "ampliar contenido"],
+    signals: ["optimizar texto", "reescribir contenido", "mejorar copy", "ampliar contenido", "optimizar on-page", "optimizar contenido"],
     negativeSignals: ["meta", "title tag", "H1 solo", "artículo de blog", "FAQ"],
+    absorbs: ["update_meta", "fix_headings"],
     complexity: "medium",
     risk: "medium",
   },
@@ -918,8 +929,9 @@ export const CATALOG: CatalogEntry[] = [
     inputs: urlInput,
     gates: ["G1", "G2", "G8"],
     acceptance: ["Respuestas solo con información verificada", "FAQPage schema válido"],
-    signals: ["FAQ", "preguntas frecuentes", "featured snippet", "respuestas directas"],
+    signals: ["FAQ", "preguntas frecuentes", "featured snippet", "respuestas directas", "bloques de respuesta"],
     negativeSignals: [],
+    absorbs: ["schema"],
     complexity: "medium",
     risk: "low",
     wordRange: WORD_RANGES.short_answer_aeo,
