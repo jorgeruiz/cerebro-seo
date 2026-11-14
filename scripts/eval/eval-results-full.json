@@ -1,13 +1,13 @@
 {
   "mode": "full",
-  "date": "2026-11-14T04:53:21.341Z",
+  "date": "2026-11-14T05:53:55.265Z",
   "fixturesFile": "/Users/clicksociety/Documents/Antigravity Projects/Cerebro Click Society/Cerebro SEO/scripts/eval/production-fixtures.json",
   "totalFixtures": 60,
   "dudososExcluded": 13,
   "evaluated": 47,
-  "correct": 38,
-  "accuracy": 80.9,
-  "otherRate": 31.9,
+  "correct": 40,
+  "accuracy": 85.1,
+  "otherRate": 25.5,
   "byType": {
     "add_faq": {
       "total": 1,
@@ -27,7 +27,7 @@
     },
     "edit_page_text": {
       "total": 2,
-      "correct": 1
+      "correct": 2
     },
     "fix_redirect": {
       "total": 1,
@@ -47,7 +47,7 @@
     },
     "schema": {
       "total": 2,
-      "correct": 1
+      "correct": 2
     },
     "split": {
       "total": 1,
@@ -84,24 +84,8 @@
       "title": "Añadir schema FAQPage + bloques de respuesta directa en landings de servicio",
       "expected": "add_faq",
       "predicted": "other",
-      "confidence": 0.9,
+      "confidence": 0.88,
       "nota": "Redactar FAQ visibles + FAQPage. Antes era schema."
-    },
-    {
-      "id": 28,
-      "title": "Implementar schema JSON-LD LocalBusiness + Service en landings de servicio",
-      "expected": "schema",
-      "predicted": "other",
-      "confidence": 0.92,
-      "nota": ""
-    },
-    {
-      "id": 34,
-      "title": "Optimizar homepage de brinar.mx para keyword de marca 'Brinar acero distribuidor",
-      "expected": "edit_page_text",
-      "predicted": "other",
-      "confidence": 0.5,
-      "nota": "Misma URL (home): H1 + contenido + metas los absorbe edit_page_text (regla de absorción)."
     },
     {
       "id": 38,

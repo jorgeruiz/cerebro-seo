@@ -113,6 +113,7 @@ async function callClassifierLLM(input: ClassificationInput): Promise<LLMClassif
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
+    temperature: 0,
     system: `Eres un clasificador de tareas SEO. Clasifica la tarea en exactamente UN actionType del catálogo.
 
 REGLA PRINCIPAL — EL TÍTULO DEFINE LA ACCIÓN:
@@ -144,9 +145,14 @@ LISTA FALTANTE ≠ other:
 - Si el objetivo no lista URLs o keywords concretas, eso NO cambia el actionType. Solo afecta el estado (NEEDS_INPUT). Clasifica por la acción, no por si hay lista.
 - Extrae todas las URLs que veas en el título u objetivo como targetUrl (la primera) y menciónalo en el reasoning.
 
-COMPOUND vs LOTE HOMOGÉNEO:
-- compound_multi_target SOLO cuando el objetivo nombra 2+ URLs o targets DISTINTOS que necesitan actionTypes DISTINTOS (ej: "crear blog y enlazarlo desde servicios" = create_blog + internal_links).
-- "las páginas de servicio", "los 4 artículos", "las landings" SIN URLs explícitas NO es compound. Es un lote homogéneo del MISMO actionType. La falta de lista solo afecta el estado (NEEDS_INPUT), no el tipo.
+COMPOUND vs LOTE HOMOGÉNEO (CRÍTICO — LEE BIEN):
+- compound_multi_target SOLO cuando el objetivo requiere 2+ actionTypes DISTINTOS sobre URLs DISTINTAS (ej: "crear blog Y enlazarlo desde servicios" = create_blog + internal_links).
+- NO es compound si:
+  · Varias URLs con el MISMO actionType ("metas de 19 URLs" = update_meta en lote)
+  · Una URL con múltiples acciones on-page absorbidas ("H1 + metas + FAQ en /servicios" = edit_page_text o add_faq)
+  · 2 tipos de schema en la misma URL o las mismas URLs ("LocalBusiness + Service" = schema)
+  · "las landings", "los artículos", "las páginas de servicio" sin URLs explícitas = lote homogéneo
+- En caso de duda entre compound y lote homogéneo: elige el actionType del TÍTULO y clasifica como lote. Nunca other por esto.
 
 otherReason OBLIGATORIO cuando actionType = "other":
 - system_task: tarea sobre el propio Cerebro SEO / herramientas internas
@@ -300,12 +306,27 @@ function validateClassification(
     }
   }
 
-  // 4. Check negative signals
+  // 4. Check negative signals (skip if the signal refers to an absorbed type on same URL)
   if (actionType !== "other") {
     const entry = getCatalogEntry(actionType);
     if (entry) {
+      const absorbedTypes = entry.absorbs ?? [];
       for (const neg of entry.negativeSignals) {
         if (text.includes(neg.toLowerCase())) {
+          // If this neg signal corresponds to an absorbed type AND there's a single target URL,
+          // it's not a conflict — it's absorption.
+          const negLower = neg.toLowerCase();
+          const isAbsorbed = absorbedTypes.some((absType) => {
+            const absEntry = getCatalogEntry(absType);
+            return absEntry?.signals.some((s) => {
+              const sigLower = s.toLowerCase().split(",")[0];
+              return negLower.includes(sigLower) || sigLower.includes(negLower);
+            });
+          });
+          if (isAbsorbed && llm.targetUrl) {
+            // Absorbed on same URL — not a conflict
+            continue;
+          }
           conflicts.push(`Señal negativa "${neg}" contradice ${actionType}`);
           confidence = Math.min(confidence, 0.5);
         }
