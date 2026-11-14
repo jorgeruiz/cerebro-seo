@@ -168,7 +168,26 @@ export interface CatalogEntry {
 
   /** Word range [min, max] for content generation, or null if N/A. */
   wordRange?: [number, number] | null;
+
+  /** Estimated human minutes for all HM steps combined. For plan capacity budgeting. */
+  humanMinutes: number;
+
+  /** Which metric backs the impact of this actionType. Used by the plan composer for scoring. */
+  impactBasis: ImpactBasis;
 }
+
+/** What data metric backs the impact of an actionType (for scoring). */
+export type ImpactBasis =
+  | "impressions_position"   // high impressions + position 4-20 = easy win (meta, headings)
+  | "ctr_impressions"        // low CTR + high impressions = meta optimization
+  | "traffic_loss"           // 404s, broken links, redirects — lost traffic
+  | "security_severity"      // audit severity CRITICAL/HIGH
+  | "keyword_gap"            // missing coverage, new content opportunity
+  | "ai_visibility"          // AEO/GEO: AI search mention rate
+  | "authority"              // backlinks, domain authority
+  | "content_freshness"      // stale content, outdated articles
+  | "conversion"             // GA4 events, form tracking
+  | "infrastructure";        // package install, no metric — always strategic
 
 // ─── Configuration constants ────────────────────────────────────────────────
 
@@ -259,6 +278,8 @@ export const CATALOG: CatalogEntry[] = [
     complexity: "high",
     risk: "low",
     wordRange: WORD_RANGES.informational,
+    humanMinutes: 30,
+    impactBasis: "keyword_gap",
   },
 
   {
@@ -290,6 +311,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["H1", "encabezado", "schema", "datos estructurados", "yoast sola"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 0,
+    impactBasis: "ctr_impressions",
   },
 
   {
@@ -326,6 +349,8 @@ export const CATALOG: CatalogEntry[] = [
     complexity: "high",
     risk: "medium",
     wordRange: WORD_RANGES.landing,
+    humanMinutes: 30,
+    impactBasis: "keyword_gap",
   },
 
   {
@@ -360,6 +385,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["competencia sin keywords", "competidores sin keywords", "verificar tracking", "configurar tracking en herramienta", "rank tracker", "depurar", "Semrush", "Ahrefs", "plugin Cerebro"],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 15,
+    impactBasis: "keyword_gap",
   },
 
   {
@@ -391,6 +418,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["meta title", "meta description"],
     complexity: "medium",
     risk: "medium",
+    humanMinutes: 10,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -424,6 +453,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["backlinks", "enlaces externos", "enlaces rotos"],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 0,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -456,6 +487,8 @@ export const CATALOG: CatalogEntry[] = [
     absorbs: ["update_meta", "fix_headings"],
     complexity: "medium",
     risk: "medium",
+    humanMinutes: 10,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -489,6 +522,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["alt text solo"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 15,
+    impactBasis: "keyword_gap",
   },
 
   // ── §3 HUMAN-FOCUSED ──────────────────────────────────────────────────────
@@ -519,6 +554,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["noindex", "desindexar", "bloquear"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 10,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -547,6 +584,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["enlace roto interno", "404 sola"],
     complexity: "low",
     risk: "medium",
+    humanMinutes: 15,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -575,6 +614,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["rastreo", "crawl", "posiciones", "ranking"],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 20,
+    impactBasis: "conversion",
   },
 
   // ── §4.1 NEW FROM AUDIT ───────────────────────────────────────────────────
@@ -604,6 +645,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["imagen nueva", "generar imagen"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 10,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -631,6 +674,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["robots.txt"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 10,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -658,6 +703,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "high",
     risk: "high",
+    humanMinutes: 20,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -687,6 +734,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 30,
+    impactBasis: "authority",
   },
 
   {
@@ -714,6 +763,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["fusionar con URLs"],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 15,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -739,6 +790,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["alt text", "generar imagen"],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 10,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -770,6 +823,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["sitemap"],
     complexity: "low",
     risk: "high",
+    humanMinutes: 10,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -796,6 +851,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["duplicado sin decisión"],
     complexity: "low",
     risk: "medium",
+    humanMinutes: 10,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -825,6 +882,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["enlaces internos"],
     complexity: "high",
     risk: "low",
+    humanMinutes: 30,
+    impactBasis: "authority",
   },
 
   // ── §4.2 NEW FROM AUDIT (additional) ──────────────────────────────────────
@@ -853,6 +912,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["meta title", "title tag"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 0,
+    impactBasis: "impressions_position",
   },
 
   {
@@ -881,6 +942,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["redirección", "301"],
     complexity: "low",
     risk: "low",
+    humanMinutes: 10,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -910,6 +973,8 @@ export const CATALOG: CatalogEntry[] = [
     complexity: "medium",
     risk: "medium",
     wordRange: WORD_RANGES.informational,
+    humanMinutes: 20,
+    impactBasis: "content_freshness",
   },
 
   {
@@ -938,6 +1003,8 @@ export const CATALOG: CatalogEntry[] = [
     complexity: "medium",
     risk: "low",
     wordRange: WORD_RANGES.short_answer_aeo,
+    humanMinutes: 10,
+    impactBasis: "ai_visibility",
   },
 
   {
@@ -964,6 +1031,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "medium",
+    humanMinutes: 10,
+    impactBasis: "ai_visibility",
   },
 
   {
@@ -993,6 +1062,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: ["duplicado sin decisión"],
     complexity: "high",
     risk: "high",
+    humanMinutes: 20,
+    impactBasis: "traffic_loss",
   },
 
   {
@@ -1022,6 +1093,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "high",
+    humanMinutes: 30,
+    impactBasis: "content_freshness",
   },
 
   {
@@ -1048,6 +1121,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "high",
+    humanMinutes: 15,
+    impactBasis: "security_severity",
   },
 
   // ── INFRASTRUCTURE (§9.2) ────────────────────────────────────────────────
@@ -1083,6 +1158,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "high",
     risk: "medium",
+    humanMinutes: 15,
+    impactBasis: "infrastructure",
   },
 
   // ── OTHER (catch-all) ─────────────────────────────────────────────────────
@@ -1110,6 +1187,8 @@ export const CATALOG: CatalogEntry[] = [
     negativeSignals: [],
     complexity: "medium",
     risk: "low",
+    humanMinutes: 30,
+    impactBasis: "infrastructure",
   },
 ];
 

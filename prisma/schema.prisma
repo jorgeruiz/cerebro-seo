@@ -99,6 +99,7 @@ model Client {
   aeoResearches          AeoResearch[]
   researchReports        ResearchReport[]
   monthlyPlans           MonthlyPlan[]
+  planConfig             Json?   // ClientPlanConfig — see src/lib/plan/plan-composer.ts
 }
 
 model Site {
