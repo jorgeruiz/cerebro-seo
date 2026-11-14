@@ -38,7 +38,8 @@ export type OtherReason =
   | "system_task"          // task about Cerebro SEO / internal tooling
   | "compound_multi_target" // multiple URLs/targets that need splitting
   | "no_object"            // no clear action object (just "optimizar")
-  | "out_of_catalog";      // genuine new type not in catalog
+  | "out_of_catalog"       // genuine new type not in catalog
+  | "validation_conflict"; // post-LLM validation forced other (conflicts in title)
 
 export interface ClassificationResult {
   actionType: ActionType;
@@ -278,77 +279,81 @@ function validateClassification(
   let actionType: ActionType = isValidActionType(llm.actionType) ? llm.actionType : "other";
   let confidence = llm.confidence;
 
-  // 1. Resolve alias if LLM returned a legacy value
+  // ── 1. Resolve alias ──────────────────────────────────────────────────
   const resolved = resolveAlias(llm.actionType);
   if (resolved && resolved !== llm.actionType) {
     actionType = resolved;
   }
 
-  // 2. Check existing actionType (from analysis) — if it disagrees, note conflict
+  // ── 2. Existing actionType: telemetry only, NOT a conflict ────────────
   if (existingResolved && existingResolved !== actionType && existingResolved !== "other") {
-    conflicts.push(`Análisis dijo "${existingResolved}" pero clasificador dice "${actionType}"`);
-    // Trust the classifier over legacy analysis
-    candidates.push({ actionType: existingResolved, reason: "Del análisis previo" });
+    // Save as candidate for the UI, but trust the LLM over the old label
+    candidates.push({ actionType: existingResolved, reason: "Del análisis previo (no afecta clasificación)" });
   }
 
-  // 3. Check disambiguation rules
-  const text = `${input.title} ${input.objective}`.toLowerCase();
+  // ── 3. Disambiguation rules — TITLE ONLY ─────────────────────────────
+  // The objective is evidence/context — signals there don't generate conflicts
+  const titleLower = input.title.toLowerCase();
   for (const rule of DISAMBIGUATION_RULES) {
-    if (text.includes(rule.trigger.toLowerCase())) {
+    if (titleLower.includes(rule.trigger.toLowerCase())) {
       if (rule.result !== actionType) {
-        // Check if the context matches
-        if (rule.context !== "—" && !text.includes(rule.context.toLowerCase().split(",")[0])) {
-          continue; // context doesn't match this rule
+        if (rule.context !== "—") {
+          // Context can match in title OR objective (it's a qualifier, not a signal)
+          const fullText = `${input.title} ${input.objective}`.toLowerCase();
+          if (!fullText.includes(rule.context.toLowerCase().split(",")[0])) {
+            continue;
+          }
         }
-        conflicts.push(`Regla de desambiguación: "${rule.trigger}" + "${rule.context}" → ${rule.result}`);
+        conflicts.push(`Regla: "${rule.trigger}" + "${rule.context}" → ${rule.result}`);
         candidates.push({ actionType: rule.result, reason: `Regla: ${rule.trigger} + ${rule.context}` });
       }
     }
   }
 
-  // 4. Check negative signals (skip if the signal refers to an absorbed type on same URL)
+  // ── 4. Negative signals — TITLE ONLY, absorption-aware ────────────────
+  // The objective can mention "noindex", "H1", "FAQ" as context without triggering negatives
   if (actionType !== "other") {
-    const entry = getCatalogEntry(actionType);
-    if (entry) {
-      const absorbedTypes = entry.absorbs ?? [];
-      for (const neg of entry.negativeSignals) {
-        if (text.includes(neg.toLowerCase())) {
-          // If this neg signal corresponds to an absorbed type AND there's a single target URL,
-          // it's not a conflict — it's absorption.
-          const negLower = neg.toLowerCase();
-          const isAbsorbed = absorbedTypes.some((absType) => {
-            const absEntry = getCatalogEntry(absType);
-            return absEntry?.signals.some((s) => {
-              const sigLower = s.toLowerCase().split(",")[0];
-              return negLower.includes(sigLower) || sigLower.includes(negLower);
-            });
+    const catEntry = getCatalogEntry(actionType);
+    if (catEntry) {
+      const absorbedTypes = catEntry.absorbs ?? [];
+      for (const neg of catEntry.negativeSignals) {
+        const negLower = neg.toLowerCase();
+        if (!titleLower.includes(negLower)) continue; // Only match in TITLE
+
+        // Skip if it's an absorbed type on the same URL
+        const isAbsorbed = absorbedTypes.some((absType) => {
+          const absEntry = getCatalogEntry(absType);
+          return absEntry?.signals.some((s) => {
+            const sigLower = s.toLowerCase().split(",")[0];
+            return negLower.includes(sigLower) || sigLower.includes(negLower);
           });
-          if (isAbsorbed && llm.targetUrl) {
-            // Absorbed on same URL — not a conflict
-            continue;
-          }
-          conflicts.push(`Señal negativa "${neg}" contradice ${actionType}`);
-          confidence = Math.min(confidence, 0.5);
-        }
+        });
+        if (isAbsorbed && llm.targetUrl) continue;
+
+        // Real conflict in title: reduce confidence by 0.15 per conflict
+        conflicts.push(`Señal negativa "${neg}" en título contradice ${actionType}`);
+        confidence -= 0.15;
       }
     }
   }
 
-  // 5. Low confidence or conflicts → other + NEEDS_DEFINITION
+  // ── 5. Go to other ONLY if confidence < threshold OR LLM said other ───
+  // No "2+ conflicts → other" rule. Conflicts reduce confidence; threshold decides.
   let otherReason: OtherReason | null = llm.otherReason as OtherReason | null;
-  if (confidence < OTHER_CONFIDENCE_THRESHOLD || (conflicts.length >= 2 && actionType !== "other")) {
-    if (actionType !== "other") {
-      candidates.unshift({ actionType, reason: llm.reasoning });
-    }
+  if (actionType !== "other" && confidence < OTHER_CONFIDENCE_THRESHOLD) {
+    candidates.unshift({ actionType, reason: llm.reasoning });
     actionType = "other";
-    if (!otherReason) otherReason = "no_object";
+    otherReason = conflicts.length > 0 ? "validation_conflict" : (otherReason ?? "no_object");
+  }
+  // If LLM already said other, keep its reason
+  if (actionType === "other" && !otherReason) {
+    otherReason = "no_object";
   }
 
-  // 6. Platform does NOT affect actionType — only mode and gates.
-  //    Unknown platform → mode defaults to MANUAL, gates handle BLOCKED.
+  // ── 6. Platform does NOT affect actionType — only mode and gates ──────
   const entry = getCatalogEntry(actionType);
 
-  // 7. Resolve mode from catalog + capabilities (platform affects THIS, not actionType)
+  // ── 7. Resolve mode from catalog + capabilities ───────────────────────
   let mode: "AI" | "HYBRID" | "MANUAL" = "MANUAL";
   let category = "technical";
   if (entry) {
@@ -365,7 +370,7 @@ function validateClassification(
     }
   }
 
-  // 7b. Telemetry: out_of_catalog with high confidence → candidate for new type
+  // ── 7b. Telemetry ─────────────────────────────────────────────────────
   if (actionType === "other" && otherReason === "out_of_catalog" && confidence >= 0.9) {
     console.log(`[classify-task] TELEMETRY: out_of_catalog candidate conf=${confidence.toFixed(2)} "${input.title.slice(0, 80)}"`);
   }
@@ -459,3 +464,6 @@ export function classifyTaskQuick(input: {
 
   return { actionType: "other", confidence: 0.3 };
 }
+
+/** @internal Exported only for unit tests — do not use in production code. */
+export const _validateClassificationForTest = validateClassification;

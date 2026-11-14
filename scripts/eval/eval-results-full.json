@@ -1,13 +1,13 @@
 {
   "mode": "full",
-  "date": "2026-11-14T05:53:55.265Z",
+  "date": "2026-11-14T06:21:04.965Z",
   "fixturesFile": "/Users/clicksociety/Documents/Antigravity Projects/Cerebro Click Society/Cerebro SEO/scripts/eval/production-fixtures.json",
   "totalFixtures": 60,
   "dudososExcluded": 13,
   "evaluated": 47,
-  "correct": 40,
-  "accuracy": 85.1,
-  "otherRate": 25.5,
+  "correct": 45,
+  "accuracy": 95.7,
+  "otherRate": 14.9,
   "byType": {
     "add_faq": {
       "total": 1,
@@ -19,7 +19,7 @@
     },
     "create_blog": {
       "total": 8,
-      "correct": 5
+      "correct": 8
     },
     "create_landing": {
       "total": 7,
@@ -55,30 +55,14 @@
     },
     "update_meta": {
       "total": 16,
-      "correct": 15
+      "correct": 16
     },
     "verify_indexation": {
       "total": 1,
-      "correct": 0
+      "correct": 1
     }
   },
   "failed": [
-    {
-      "id": 16,
-      "title": "Crear contenido: Bacterias para Biodigestor: Cómo Optimizar tu Sistema",
-      "expected": "create_blog",
-      "predicted": "other",
-      "confidence": 0.97,
-      "nota": ""
-    },
-    {
-      "id": 17,
-      "title": "Crear contenido: Qué es la Bioaumentación y Cómo Funciona",
-      "expected": "create_blog",
-      "predicted": "other",
-      "confidence": 0.95,
-      "nota": "Artículo informativo 'qué es'. Antes era create_landing (mal)."
-    },
     {
       "id": 27,
       "title": "Añadir schema FAQPage + bloques de respuesta directa en landings de servicio",
@@ -88,36 +72,12 @@
       "nota": "Redactar FAQ visibles + FAQPage. Antes era schema."
     },
     {
-      "id": 38,
-      "title": "Optimizar meta title + description + focus keyword del artículo /bacterias-para-",
-      "expected": "update_meta",
-      "predicted": "other",
-      "confidence": 0.5,
-      "nota": ""
-    },
-    {
-      "id": 41,
-      "title": "Verificar indexación de los 4 artículos del ciclo agosto 2026 en GSC",
-      "expected": "verify_indexation",
-      "predicted": "other",
-      "confidence": 0.5,
-      "nota": "Antes era create_blog (mal)."
-    },
-    {
       "id": 43,
       "title": "Implementar interlinking blog → landings de servicio en ambos artículos de octub",
       "expected": "internal_links",
       "predicted": "other",
       "confidence": 0.85,
       "nota": "Depende de que los artículos estén publicados. Antes no tenía tipo."
-    },
-    {
-      "id": 58,
-      "title": "Crear artículo pilar: Conexiones Industriales — Tipos, Normas y Aplicaciones",
-      "expected": "create_blog",
-      "predicted": "other",
-      "confidence": 0.97,
-      "nota": "Antes no tenía tipo."
     }
   ],
   "expectedStatusPending": 47

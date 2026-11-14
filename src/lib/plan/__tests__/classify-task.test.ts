@@ -89,6 +89,54 @@ describe("classifyTaskQuick", () => {
       expect(r.actionType).toBe("update_meta");
     });
   });
+});
+
+// Tests for validateClassification behavior (via exported helper)
+import { _validateClassificationForTest } from "../classify-task";
+
+describe("validateClassification rules", () => {
+  it("#41: 'noindex' in objective does NOT trigger negative signal for verify_indexation", () => {
+    const result = _validateClassificationForTest(
+      { actionType: "verify_indexation", confidence: 0.97, targetUrl: "/page", targetKeyword: null, splitInto: null, reasoning: "indexation check", otherReason: null, costUsd: 0 },
+      { title: "Verificar indexación de los 4 artículos del ciclo agosto 2026", objective: "Verificar que no estén noindex. Confirmar en GSC.", platform: "WORDPRESS" },
+      null,
+    );
+    expect(result.actionType).toBe("verify_indexation");
+    expect(result.confidence).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it("#17: old label create_landing does NOT override LLM's create_blog", () => {
+    const result = _validateClassificationForTest(
+      { actionType: "create_blog", confidence: 0.95, targetUrl: null, targetKeyword: "bioaumentación", splitInto: null, reasoning: "informational article", otherReason: null, costUsd: 0 },
+      { title: "Crear contenido: Qué es la Bioaumentación", objective: "Artículo informativo", platform: "WORDPRESS" },
+      "create_landing", // old label from analysis
+    );
+    expect(result.actionType).toBe("create_blog");
+    expect(result.confidence).toBe(0.95); // unchanged
+  });
+
+  it("negative signal in TITLE reduces confidence by 0.15, does not force other", () => {
+    const result = _validateClassificationForTest(
+      { actionType: "edit_page_text", confidence: 0.92, targetUrl: "/servicios", targetKeyword: null, splitInto: null, reasoning: "edit text", otherReason: null, costUsd: 0 },
+      { title: "Optimizar FAQ de la página de servicios", objective: "Agregar preguntas", platform: "WORDPRESS" },
+      null,
+    );
+    // "FAQ" is a negative signal for edit_page_text and IS in the title
+    expect(result.confidence).toBe(0.92 - 0.15);
+    // But 0.77 > 0.75 threshold, so it stays edit_page_text
+    expect(result.actionType).toBe("edit_page_text");
+  });
+
+  it("negative signal only in objective does NOT reduce confidence", () => {
+    const result = _validateClassificationForTest(
+      { actionType: "edit_page_text", confidence: 0.90, targetUrl: "/home", targetKeyword: "brinar", splitInto: null, reasoning: "edit", otherReason: null, costUsd: 0 },
+      { title: "Optimizar homepage de brinar.mx", objective: "Asegurar H1, meta title y meta description correctos", platform: "OTRO" },
+      null,
+    );
+    // "meta" is negative for edit_page_text but only in OBJECTIVE → no penalty
+    expect(result.actionType).toBe("edit_page_text");
+    expect(result.confidence).toBe(0.90);
+  });
 
   describe("disambiguation", () => {
     it("optimizar + meta → update_meta", () => {
