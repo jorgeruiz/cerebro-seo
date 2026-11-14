@@ -435,10 +435,10 @@
     "platform": "OTRO",
     "category": "keyword",
     "oldActionType": "other",
-    "expected": "split",
-    "expectedStatus": "NEEDS_DEFINITION",
+    "expected": "edit_page_text",
+    "expectedStatus": "READY",
     "dudoso": false,
-    "nota": "Compuesta: edit_page_text (H1 + contenido) + update_meta (home).",
+    "nota": "Misma URL (home): H1 + contenido + metas los absorbe edit_page_text (regla de absorción).",
     "status": "propuesto_claude"
   },
   {

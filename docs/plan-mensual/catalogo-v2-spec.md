@@ -106,6 +106,12 @@
 3. **Si falta un input, la tarea no se ejecuta.** Pasa a `NEEDS_INPUT` y genera un paso HM `input`; no se asume nada.
 4. **Datos que nunca se generan sin una fuente:** cifras, años de experiencia, número de clientes, certificaciones, testimonios, casos de éxito, reseñas o `aggregateRating`, precios, horarios, direcciones, fotos que aparenten ser reales (producto, equipo, instalaciones).
 5. **Solo se enlazan URLs existentes** (200) y servicios verificados.
+1b. **Regla de absorción:** una tarea que crea o reescribe **una misma URL** absorbe los elementos on-page de esa URL; no son tareas separadas ni la vuelven compuesta.
+   - `create_blog` absorbe: metas, H1/H2, FAQ dentro del artículo, schema Article/FAQPage, enlaces internos salientes e imagen de portada.
+   - `create_landing` absorbe: metas, H1, schema Service/Product/LocalBusiness, FAQ, CTA y enlaces salientes.
+   - `edit_page_text` absorbe: H1/H2 y metas de la misma URL.
+   - `add_faq` absorbe el schema FAQPage. `schema` es solo para marcar contenido **ya existente**.
+   - Solo es compuesta (split) cuando hay **otro target** (otra URL existente que cambiar) o dos acciones sobre URLs distintas.
 6b. **El Análisis Claude no propone tareas sobre el propio sistema** (verificar el plugin, correr el audit, depurar el rank tracker, configurar GSC/herramientas internas). Esas van a una lista de "Salud del sistema" en la UI, no al Plan mensual.
 6. **El `analysis` IA nunca escribe.** Si un análisis concluye que hay que cambiar algo, crea tareas hijas del catálogo.
 7. **No hay pasos con referencias genéricas.** Un paso que dice "las URLs con 404", "las keywords a posicionar" o "las páginas con meta duplicada" **debe incluir la lista concreta** como tabla en el paso: URL, keyword, valor actual, valor propuesto, métrica de origen y fecha del dato. Cada actionType declara sus `dataSources` (GSC, audit, rank tracking, GA4, DataForSEO, crawl, repo, plugin), y el decomposer las consulta **antes** de redactar los pasos. Si la fuente no tiene datos, la tarea pasa a `NEEDS_INPUT` o agrega un paso `analysis` previo; no se inventa la lista. Esto aplica igual a los pasos manuales.

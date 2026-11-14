@@ -36,7 +36,7 @@ describe("GET /api/internal/cerebro/clients/[id]/monthly-summary", () => {
     vi.mocked(prisma.client.findFirst).mockResolvedValue({
       id: "local-1", cerebroClientId: VALID_NOTION_ID,
       sites: [{ gscProperty: null, ga4Property: null }],
-    } as ReturnType<typeof prisma.client.findFirst> extends Promise<infer T> ? T : never);
+    } as unknown as ReturnType<typeof prisma.client.findFirst> extends Promise<infer T> ? T : never);
     vi.mocked(prisma.monthlyCycle.findFirst).mockResolvedValue(null);
 
     const { GET } = await import("./route");

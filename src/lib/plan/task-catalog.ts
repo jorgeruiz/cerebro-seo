@@ -250,7 +250,7 @@ export const CATALOG: CatalogEntry[] = [
       "sin [COMPLETAR",
       "máx. 2 imágenes",
     ],
-    signals: ["blog", "artículo nuevo", "redactar artículo", "crear artículo", "nota de blog", "artículo pilar", "publicar artículo", "artículo de blog", "guía completa"],
+    signals: ["blog", "artículo nuevo", "redactar artículo", "crear artículo", "nota de blog", "artículo pilar", "publicar artículo", "artículo de blog", "guía completa", "crear contenido", "página pilar"],
     negativeSignals: ["actualizar artículo", "artículo existente", "URL de /blog/ ya existente"],
     absorbs: ["update_meta", "fix_headings", "add_faq", "schema", "internal_links", "add_image"],
     complexity: "high",

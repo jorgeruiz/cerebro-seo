@@ -209,7 +209,7 @@ describe("BUILD_BUSY is retriable, not FAILED", () => {
     expect(source).toContain('"PLAN_LOCKED"');
     expect(source).toContain('"REPO_LOCKED"');
     // All three should be in the same if block
-    const match = source.match(/if \(.*PLAN_LOCKED.*REPO_LOCKED.*BUILD_BUSY/s);
+    const match = source.match(/if \(.*PLAN_LOCKED.*REPO_LOCKED.*BUILD_BUSY[\s\S]*/);
     expect(match).not.toBeNull();
   });
 });

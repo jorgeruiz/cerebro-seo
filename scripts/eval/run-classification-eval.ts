@@ -46,6 +46,10 @@ interface EvalResult {
   correct: boolean;
   nota?: string;
   dudoso: boolean;
+  otherReason?: string | null;
+  expectedStatus?: string;
+  predictedStatus?: string;
+  statusCorrect?: boolean;
 }
 
 // ─── Load fixtures ──────────────────────────────────────────────────────────
@@ -120,6 +124,8 @@ async function runEval(): Promise<void> {
           platform: f.platform,
           existingActionType: null,
         });
+        // Map classifier status to expected format
+        const predictedStatus = result.status === "PLANNING" ? "READY" : result.status;
         results.push({
           id: f.id,
           title: f.title,
@@ -129,6 +135,10 @@ async function runEval(): Promise<void> {
           correct: isCorrect(f.expected, result.actionType),
           nota: f.nota ?? f.note,
           dudoso: !!f.dudoso,
+          otherReason: result.otherReason,
+          expectedStatus: f.expectedStatus,
+          predictedStatus,
+          statusCorrect: f.expectedStatus ? f.expectedStatus === predictedStatus : undefined,
         });
         await new Promise((r) => setTimeout(r, 100));
       } catch (err) {
@@ -188,7 +198,7 @@ async function runEval(): Promise<void> {
     console.log("─── CASOS FALLIDOS ──────────────────────────────────");
     for (const f of failed) {
       console.log(`  #${f.id} "${f.title.slice(0, 60)}..."`);
-      console.log(`     Expected: ${f.expected}  ->  Got: ${f.predicted} (conf=${f.confidence.toFixed(2)})`);
+      console.log(`     Expected: ${f.expected}  ->  Got: ${f.predicted} (conf=${f.confidence.toFixed(2)})${f.otherReason ? ` [${f.otherReason}]` : ""}`);
       if (f.nota) console.log(`     Nota: ${f.nota}`);
       console.log();
     }
@@ -206,13 +216,30 @@ async function runEval(): Promise<void> {
     console.log();
   }
 
-  // ─── expectedStatus (pendiente de producción) ─────────────────────────
+  // ─── expectedStatus ────────────────────────────────────────────────────
 
-  const withStatus = allFixtures.filter((f) => f.expectedStatus);
+  const withStatus = scored.filter((r) => r.expectedStatus && r.predictedStatus);
   if (withStatus.length > 0) {
-    console.log("─── expectedStatus (requiere gates con datos reales) ─");
-    console.log(`  ${withStatus.length} fixtures tienen expectedStatus.`);
-    console.log("  Verificación pendiente de producción — gates requieren BD real.");
+    const statusCorrectCount = withStatus.filter((r) => r.statusCorrect).length;
+    const statusAccuracy = (statusCorrectCount / withStatus.length * 100).toFixed(1);
+    console.log("─── expectedStatus ──────────────────────────────────");
+    console.log(`  Acierto: ${statusCorrectCount}/${withStatus.length} (${statusAccuracy}%)`);
+    // Breakdown
+    const statusPairs = new Map<string, number>();
+    for (const r of withStatus) {
+      if (!r.statusCorrect) {
+        const key = `${r.expectedStatus} -> ${r.predictedStatus}`;
+        statusPairs.set(key, (statusPairs.get(key) ?? 0) + 1);
+      }
+    }
+    if (statusPairs.size > 0) {
+      console.log("  Errores de estado:");
+      Array.from(statusPairs.entries()).forEach(([pair, count]) => {
+        console.log(`    ${pair}: ${count}x`);
+      });
+    }
+    console.log("  Nota: expectedStatus depende de gates con datos reales (BD producción).");
+    console.log("  READY/NEEDS_INPUT/BLOCKED verificables solo en E2E.");
     console.log();
   }
 

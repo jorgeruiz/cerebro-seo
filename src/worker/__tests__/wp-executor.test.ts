@@ -101,11 +101,12 @@ const MOCK_PROFILE: WpSiteProfile = {
   clientName: "Test Client",
   siteUrl: "https://example.com",
   pages: [
-    { id: 1, title: "Inicio", slug: "", link: "https://example.com/" },
-    { id: 2, title: "Servicios", slug: "servicios", link: "https://example.com/servicios/" },
+    { title: "Inicio", slug: "" },
+    { title: "Servicios", slug: "servicios" },
   ],
   contentSummary: "",
-  fetchedAt: new Date().toISOString(),
+  hasContent: false,
+  buildAt: new Date().toISOString(),
 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

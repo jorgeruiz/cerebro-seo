@@ -200,7 +200,7 @@ describe("image-executor", () => {
       {
         action: "image",
         endpoint: "POST /media",
-        payload: { aspect_ratio: "16:9", subject_type: "conceptual" },
+        payload: { aspect_ratio: "16:9", subject_type: "conceptual" } as unknown as { usage: "featured_image"; },
         content_brief: "Landing page hero image",
       },
       {
@@ -225,7 +225,7 @@ describe("image-executor", () => {
       {
         action: "image",
         endpoint: "POST /media",
-        payload: { aspect_ratio: "16:9", subject_type: "conceptual" },
+        payload: { aspect_ratio: "16:9", subject_type: "conceptual" } as unknown as { usage: "featured_image"; },
         content_brief: "Service page hero",
       },
       {

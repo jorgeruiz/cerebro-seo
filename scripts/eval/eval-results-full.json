@@ -1,17 +1,17 @@
 {
   "mode": "full",
-  "date": "2026-11-14T03:50:38.989Z",
+  "date": "2026-11-14T04:53:21.341Z",
   "fixturesFile": "/Users/clicksociety/Documents/Antigravity Projects/Cerebro Click Society/Cerebro SEO/scripts/eval/production-fixtures.json",
   "totalFixtures": 60,
   "dudososExcluded": 13,
   "evaluated": 47,
-  "correct": 41,
-  "accuracy": 87.2,
-  "otherRate": 23.4,
+  "correct": 38,
+  "accuracy": 80.9,
+  "otherRate": 31.9,
   "byType": {
     "add_faq": {
       "total": 1,
-      "correct": 1
+      "correct": 0
     },
     "configure_robots": {
       "total": 1,
@@ -39,7 +39,7 @@
     },
     "internal_links": {
       "total": 1,
-      "correct": 1
+      "correct": 0
     },
     "other": {
       "total": 5,
@@ -47,7 +47,7 @@
     },
     "schema": {
       "total": 2,
-      "correct": 2
+      "correct": 1
     },
     "split": {
       "total": 1,
@@ -68,7 +68,7 @@
       "title": "Crear contenido: Bacterias para Biodigestor: Cómo Optimizar tu Sistema",
       "expected": "create_blog",
       "predicted": "other",
-      "confidence": 0.95,
+      "confidence": 0.97,
       "nota": ""
     },
     {
@@ -78,6 +78,22 @@
       "predicted": "other",
       "confidence": 0.95,
       "nota": "Artículo informativo 'qué es'. Antes era create_landing (mal)."
+    },
+    {
+      "id": 27,
+      "title": "Añadir schema FAQPage + bloques de respuesta directa en landings de servicio",
+      "expected": "add_faq",
+      "predicted": "other",
+      "confidence": 0.9,
+      "nota": "Redactar FAQ visibles + FAQPage. Antes era schema."
+    },
+    {
+      "id": 28,
+      "title": "Implementar schema JSON-LD LocalBusiness + Service en landings de servicio",
+      "expected": "schema",
+      "predicted": "other",
+      "confidence": 0.92,
+      "nota": ""
     },
     {
       "id": 34,
@@ -104,6 +120,14 @@
       "nota": "Antes era create_blog (mal)."
     },
     {
+      "id": 43,
+      "title": "Implementar interlinking blog → landings de servicio en ambos artículos de octub",
+      "expected": "internal_links",
+      "predicted": "other",
+      "confidence": 0.85,
+      "nota": "Depende de que los artículos estén publicados. Antes no tenía tipo."
+    },
+    {
       "id": 58,
       "title": "Crear artículo pilar: Conexiones Industriales — Tipos, Normas y Aplicaciones",
       "expected": "create_blog",
@@ -112,5 +136,5 @@
       "nota": "Antes no tenía tipo."
     }
   ],
-  "expectedStatusPending": 60
+  "expectedStatusPending": 47
 }

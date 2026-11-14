@@ -54,11 +54,11 @@ describe("schedulers — pilot filter", () => {
     const { initSchedulers } = await import("./schedulers");
     await initSchedulers();
 
-    const insightsCalls = mockQueueAdd.mock.calls.filter(
-      ([name]: [string]) => name === "insights:generate"
+    const insightsCalls = (mockQueueAdd.mock.calls as [string, ...unknown[]][]).filter(
+      ([name]) => name === "insights:generate"
     );
     expect(insightsCalls).toHaveLength(2);
-    const clientIds = insightsCalls.map(([, data]: [string, { clientId: string }]) => data.clientId);
+    const clientIds = insightsCalls.map(([, data]) => (data as { clientId: string }).clientId);
     expect(clientIds).toContain("client-1");
     expect(clientIds).toContain("client-2");
   });
@@ -83,11 +83,11 @@ describe("schedulers — pilot filter", () => {
     const { initSchedulers } = await import("./schedulers");
     await initSchedulers();
 
-    const insightsCalls = mockQueueAdd.mock.calls.filter(
-      ([name]: [string]) => name === "insights:generate"
+    const insightsCalls = (mockQueueAdd.mock.calls as [string, ...unknown[]][]).filter(
+      ([name]) => name === "insights:generate"
     );
     expect(insightsCalls).toHaveLength(2);
-    const clientIds = insightsCalls.map(([, data]: [string, { clientId: string }]) => data.clientId);
+    const clientIds = insightsCalls.map(([, data]) => (data as { clientId: string }).clientId);
     expect(clientIds).toContain("client-1");
     expect(clientIds).toContain("client-3");
     expect(clientIds).not.toContain("client-2");
@@ -112,8 +112,8 @@ describe("schedulers — pilot filter", () => {
     const { initSchedulers } = await import("./schedulers");
     await initSchedulers();
 
-    const insightsCalls = mockQueueAdd.mock.calls.filter(
-      ([name]: [string]) => name === "insights:generate"
+    const insightsCalls = (mockQueueAdd.mock.calls as [string, ...unknown[]][]).filter(
+      ([name]) => name === "insights:generate"
     );
     expect(insightsCalls).toHaveLength(2);
   });
@@ -136,8 +136,8 @@ describe("schedulers — pilot filter", () => {
     const { initSchedulers } = await import("./schedulers");
     await initSchedulers();
 
-    const insightsCall = mockQueueAdd.mock.calls.find(
-      ([name]: [string]) => name === "insights:generate"
+    const insightsCall = (mockQueueAdd.mock.calls as [string, ...unknown[]][]).find(
+      ([name]) => name === "insights:generate"
     );
     expect(insightsCall).toBeDefined();
     const opts = insightsCall![2] as { jobId?: string };

@@ -1,11 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 
 // We test the detection logic by mocking fetch
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Import after mocking
-const { detectPlatform, isEligibleForExecution, ineligibilityReason } = await import("../site-platform");
+// Import after mocking — use dynamic import inside tests to avoid top-level await
+let detectPlatform: Awaited<typeof import("../site-platform")>["detectPlatform"];
+let isEligibleForExecution: Awaited<typeof import("../site-platform")>["isEligibleForExecution"];
+let ineligibilityReason: Awaited<typeof import("../site-platform")>["ineligibilityReason"];
+
+beforeAll(async () => {
+  const mod = await import("../site-platform");
+  detectPlatform = mod.detectPlatform;
+  isEligibleForExecution = mod.isEligibleForExecution;
+  ineligibilityReason = mod.ineligibilityReason;
+});
 
 function mockHtml(html: string, wpJsonOk = false) {
   mockFetch.mockImplementation(async (url: string) => {

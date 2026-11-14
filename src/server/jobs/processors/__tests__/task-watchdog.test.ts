@@ -33,7 +33,8 @@ describe("task-watchdog", () => {
 
   // Helper: mock the 3 findMany calls in order (PLANNING tasks, RUNNING runs, stuck enqueued tasks)
   function mockFinds(
-    prisma: { planTask: { findMany: ReturnType<typeof vi.fn> }; taskRun: { findMany: ReturnType<typeof vi.fn> } },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prisma: any,
     planning: unknown[] = [],
     runs: unknown[] = [],
     enqueued: unknown[] = []

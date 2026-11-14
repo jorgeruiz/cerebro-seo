@@ -11,25 +11,25 @@ describe("resolveStepsWithCapabilities (G5 fallback)", () => {
   it("uses primary step when capability is present", () => {
     const resolved = resolveStepsWithCapabilities(steps, ["GET /seo/{id}", "POST /seo/{id}"]);
     expect(resolved[0].type).toBe("AI");
-    expect((resolved[0] as { kind: string }).kind).toBe("seo");
+    expect((resolved[0] as unknown as { kind: string }).kind).toBe("seo");
   });
 
   it("uses fallback when capability is absent", () => {
     const resolved = resolveStepsWithCapabilities(steps, ["GET /pages"]);
     expect(resolved[0].type).toBe("HM");
-    expect((resolved[0] as { kind: string }).kind).toBe("wp_manual");
+    expect((resolved[0] as unknown as { kind: string }).kind).toBe("wp_manual");
   });
 
   it("uses fallback for all capability-dependent steps when capabilities is null", () => {
     const resolved = resolveStepsWithCapabilities(steps, null);
     expect(resolved[0].type).toBe("HM");
-    expect((resolved[0] as { kind: string }).kind).toBe("wp_manual");
+    expect((resolved[0] as unknown as { kind: string }).kind).toBe("wp_manual");
   });
 
   it("keeps non-capability steps unchanged regardless of capabilities", () => {
     const resolved = resolveStepsWithCapabilities(steps, null);
     expect(resolved[1].type).toBe("HM");
-    expect((resolved[1] as { kind: string }).kind).toBe("review");
+    expect((resolved[1] as unknown as { kind: string }).kind).toBe("review");
   });
 });
 

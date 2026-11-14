@@ -33,6 +33,13 @@ export interface ClassificationInput {
   existingActionType?: string | null;
 }
 
+/** Closed list of reasons for "other" classification. */
+export type OtherReason =
+  | "system_task"          // task about Cerebro SEO / internal tooling
+  | "compound_multi_target" // multiple URLs/targets that need splitting
+  | "no_object"            // no clear action object (just "optimizar")
+  | "out_of_catalog";      // genuine new type not in catalog
+
 export interface ClassificationResult {
   actionType: ActionType;
   confidence: number;
@@ -44,6 +51,8 @@ export interface ClassificationResult {
   splitInto: Array<{ title: string; actionType: ActionType }> | null;
   /** Reasoning from the LLM */
   reasoning: string;
+  /** When actionType is "other", the reason from a closed list */
+  otherReason: OtherReason | null;
   /** Candidates considered (for NEEDS_DEFINITION UI) */
   candidates: Array<{ actionType: ActionType; reason: string }>;
   /** Missing inputs (for NEEDS_INPUT) */
@@ -81,6 +90,7 @@ interface LLMClassification {
   targetKeyword: string | null;
   splitInto: Array<{ title: string; actionType: string }> | null;
   reasoning: string;
+  otherReason: string | null;
   costUsd: number;
 }
 
@@ -120,25 +130,44 @@ DESEMPATE FAQ vs SCHEMA:
 - Si se crea contenido FAQ visible (preguntas + respuestas nuevas) → add_faq (incluye FAQPage schema).
 - Si solo se agrega schema JSON-LD a contenido que ya existe → schema.
 
-TAREAS DEL SISTEMA → other:
-- Verificar el plugin Cerebro, correr audit, depurar el rank tracker, configurar GSC, configurar herramientas internas (Semrush, Ahrefs), probar endpoints → siempre "other". No son tareas del sitio.
+DESEMPATE INFORMACIONAL vs TRANSACCIONAL:
+- "Crear contenido", "guía", "artículo pilar", "página pilar", "qué es…", "cómo…" con intención informativa (tipos, normas, tutorial) → create_blog.
+- Los mismos con intención transaccional (venta, cotización, precio, servicio, ciudad) → create_landing.
+
+TAREAS DEL SISTEMA → other (system_task):
+- Verificar el plugin Cerebro, correr audit, depurar el rank tracker, configurar GSC, configurar herramientas internas (Semrush, Ahrefs), probar endpoints → siempre "other" con otherReason="system_task".
+
+PLATAFORMA NO AFECTA LA CLASIFICACIÓN:
+- Clasifica igual sin importar la plataforma (WP, Next.js, OTRO). La plataforma solo afecta el modo y los gates, no el actionType.
+
+LISTA FALTANTE ≠ other:
+- Si el objetivo no lista URLs o keywords concretas, eso NO cambia el actionType. Solo afecta el estado (NEEDS_INPUT). Clasifica por la acción, no por si hay lista.
+- Extrae todas las URLs que veas en el título u objetivo como targetUrl (la primera) y menciónalo en el reasoning.
+
+COMPOUND vs LOTE HOMOGÉNEO:
+- compound_multi_target SOLO cuando el objetivo nombra 2+ URLs o targets DISTINTOS que necesitan actionTypes DISTINTOS (ej: "crear blog y enlazarlo desde servicios" = create_blog + internal_links).
+- "las páginas de servicio", "los 4 artículos", "las landings" SIN URLs explícitas NO es compound. Es un lote homogéneo del MISMO actionType. La falta de lista solo afecta el estado (NEEDS_INPUT), no el tipo.
+
+otherReason OBLIGATORIO cuando actionType = "other":
+- system_task: tarea sobre el propio Cerebro SEO / herramientas internas
+- compound_multi_target: 2+ targets con actionTypes DISTINTOS nombrados explícitamente
+- no_object: no hay objeto claro de la acción ("optimizar" sin decir qué)
+- out_of_catalog: acción genuinamente nueva que no encaja en ningún tipo
 
 REGLAS GENERALES:
-- Una tarea = un actionType = un target (URL o keyword). Si es compuesto con URLs distintas, devuelve splitInto.
-- Si no estás seguro (< 75% confianza), devuelve "other".
-- Extrae targetUrl y targetKeyword del título/objetivo si están presentes.
+- Una tarea = un actionType = un target. Si es compuesto con URLs distintas, devuelve splitInto.
+- Si no estás seguro (< 75% confianza), devuelve "other" con otherReason.
 
 CATÁLOGO:
 ${typeDescriptions}
-- **other**: tareas del sistema, tareas compuestas no resueltas, o lo que no encaja.`,
+- **other**: tareas del sistema, compuestas no resueltas, sin objeto, o fuera del catálogo.`,
     messages: [
       {
         role: "user",
         content: `Clasifica esta tarea. El TÍTULO define la acción; el OBJETIVO es contexto/evidencia.
 
 TÍTULO: ${input.title}
-OBJETIVO: ${input.objective}
-PLATAFORMA: ${input.platform ?? "desconocida"}`,
+OBJETIVO: ${input.objective}`,
       },
     ],
     tools: [
@@ -181,6 +210,11 @@ PLATAFORMA: ${input.platform ?? "desconocida"}`,
               type: "string",
               description: "Razón breve de la clasificación",
             },
+            otherReason: {
+              type: "string",
+              enum: ["system_task", "compound_multi_target", "no_object", "out_of_catalog"],
+              description: "OBLIGATORIO si actionType='other'. Razón de la lista cerrada.",
+            },
           },
           required: ["actionType", "confidence", "reasoning"],
         },
@@ -197,15 +231,33 @@ PLATAFORMA: ${input.platform ?? "desconocida"}`,
   const outputTokens = response.usage.output_tokens;
   const costUsd = (inputTokens * 3 + outputTokens * 15) / 1_000_000;
 
+  // Extract URLs from objective if LLM didn't find one
+  let targetUrl = toolInput.targetUrl ? String(toolInput.targetUrl) : null;
+  if (!targetUrl) {
+    targetUrl = extractFirstUrl(`${input.title} ${input.objective}`);
+  }
+
+  const otherReasonRaw = toolInput.otherReason ? String(toolInput.otherReason) : null;
+  const VALID_OTHER_REASONS = ["system_task", "compound_multi_target", "no_object", "out_of_catalog"];
+  const otherReason = otherReasonRaw && VALID_OTHER_REASONS.includes(otherReasonRaw) ? otherReasonRaw : null;
+
   return {
     actionType: String(toolInput.actionType ?? "other"),
     confidence: Number(toolInput.confidence ?? 0),
-    targetUrl: toolInput.targetUrl ? String(toolInput.targetUrl) : null,
+    targetUrl,
     targetKeyword: toolInput.targetKeyword ? String(toolInput.targetKeyword) : null,
     splitInto: Array.isArray(toolInput.splitInto) ? toolInput.splitInto as Array<{ title: string; actionType: string }> : null,
     reasoning: String(toolInput.reasoning ?? ""),
+    otherReason,
     costUsd,
   };
+}
+
+/** Extract the first URL (absolute or path) from text. */
+function extractFirstUrl(text: string): string | null {
+  // Match /path/to/page or https://...
+  const match = text.match(/(?:https?:\/\/[^\s,)]+|\/[a-z0-9][a-z0-9\-_/]*)/i);
+  return match ? match[0] : null;
 }
 
 // ─── Deterministic Validation ───────────────────────────────────────────────
@@ -262,25 +314,20 @@ function validateClassification(
   }
 
   // 5. Low confidence or conflicts → other + NEEDS_DEFINITION
+  let otherReason: OtherReason | null = llm.otherReason as OtherReason | null;
   if (confidence < OTHER_CONFIDENCE_THRESHOLD || (conflicts.length >= 2 && actionType !== "other")) {
-    // Add current as candidate
     if (actionType !== "other") {
       candidates.unshift({ actionType, reason: llm.reasoning });
     }
     actionType = "other";
+    if (!otherReason) otherReason = "no_object";
   }
 
-  // 6. Check platform compatibility
+  // 6. Platform does NOT affect actionType — only mode and gates.
+  //    Unknown platform → mode defaults to MANUAL, gates handle BLOCKED.
   const entry = getCatalogEntry(actionType);
-  if (entry && input.platform) {
-    const platformKey = input.platform === "NEXTJS" ? "NEXTJS" : input.platform === "WORDPRESS" ? "WORDPRESS" : null;
-    if (platformKey && !entry.modes[platformKey]) {
-      conflicts.push(`${actionType} no compatible con plataforma ${input.platform}`);
-      actionType = "other";
-    }
-  }
 
-  // 7. Resolve mode from catalog + capabilities
+  // 7. Resolve mode from catalog + capabilities (platform affects THIS, not actionType)
   let mode: "AI" | "HYBRID" | "MANUAL" = "MANUAL";
   let category = "technical";
   if (entry) {
@@ -289,13 +336,17 @@ function validateClassification(
     const platformMode = entry.modes[platformKey];
     if (platformMode) {
       mode = platformMode.mode;
-      // Check if capability condition applies
       if (platformMode.condition && input.wpCapabilities) {
         if (!hasCapability(platformMode.condition, input.wpCapabilities)) {
           mode = platformMode.fallbackMode ?? "HYBRID";
         }
       }
     }
+  }
+
+  // 7b. Telemetry: out_of_catalog with high confidence → candidate for new type
+  if (actionType === "other" && otherReason === "out_of_catalog" && confidence >= 0.9) {
+    console.log(`[classify-task] TELEMETRY: out_of_catalog candidate conf=${confidence.toFixed(2)} "${input.title.slice(0, 80)}"`);
   }
 
   // 8. Check required inputs
@@ -350,6 +401,7 @@ function validateClassification(
     targetKeyword: llm.targetKeyword,
     splitInto,
     reasoning: llm.reasoning,
+    otherReason: actionType === "other" ? otherReason : null,
     candidates,
     missingInputs,
     status,

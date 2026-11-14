@@ -71,6 +71,17 @@ export const DISAMBIGUATION_RULES: DisambiguationRule[] = [
   { trigger: "imagen", context: "alt", result: "optimize_alt_text" },
   { trigger: "imagen", context: "foto real, del cliente", result: "add_human_evidence" },
 
+  // "crear contenido" / "guía" / "artículo pilar" / "página pilar" — intent decides
+  { trigger: "crear contenido", context: "informacional, qué es, cómo, guía, tipos", result: "create_blog" },
+  { trigger: "crear contenido", context: "venta, cotización, precio, servicio, ciudad", result: "create_landing" },
+  { trigger: "guía", context: "informacional, qué es, cómo, tipos, normas", result: "create_blog" },
+  { trigger: "guía", context: "precio, cotización, venta, servicio", result: "create_landing" },
+  { trigger: "artículo pilar", context: "—", result: "create_blog" },
+  { trigger: "página pilar", context: "informacional, guía, tipos", result: "create_blog" },
+  { trigger: "página pilar", context: "servicio, producto, venta", result: "create_landing" },
+  { trigger: "qué es", context: "—", result: "create_blog" },
+  { trigger: "cómo", context: "informacional, guía, tutorial", result: "create_blog" },
+
   // Specific topics
   { trigger: "testimonios", context: "—", result: "add_human_evidence" },
   { trigger: "casos de éxito", context: "—", result: "add_human_evidence" },

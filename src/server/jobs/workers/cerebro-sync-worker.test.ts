@@ -41,7 +41,7 @@ describe("cerebro-sync-worker logic", () => {
     const { prisma } = await import("@/lib/db");
 
     vi.mocked(getClientsFromNotion).mockResolvedValue([
-      { notionPageId: "abc123", name: "Nuevo Cliente", domain: "nuevo.mx", estado: "Activo", gscProperty: null, ga4PropertyId: null, services: ["seo"] },
+      { notionPageId: "abc123", name: "Nuevo Cliente", domain: "nuevo.mx", estado: "Activo", gscProperty: null, ga4PropertyId: null, services: ["seo"], siteUrl: "https://nuevo.mx", framework: null },
     ]);
     vi.mocked(prisma.client.findUnique).mockResolvedValue(null);
 
@@ -70,12 +70,12 @@ describe("cerebro-sync-worker logic", () => {
     const { prisma } = await import("@/lib/db");
 
     vi.mocked(getClientsFromNotion).mockResolvedValue([
-      { notionPageId: "existing123", name: "Cliente Actualizado", domain: "cliente.mx", estado: "Activo", gscProperty: null, ga4PropertyId: null, services: ["seo", "google_ads"] },
+      { notionPageId: "existing123", name: "Cliente Actualizado", domain: "cliente.mx", estado: "Activo", gscProperty: null, ga4PropertyId: null, services: ["seo", "google_ads"], siteUrl: "https://cliente.mx", framework: null },
     ]);
     vi.mocked(prisma.client.findUnique).mockResolvedValue({
       id: "local-id-1", cerebroClientId: "existing123",
       sites: [{ id: "site-1", gscProperty: "https://cliente.mx/", ga4Property: "properties/12345" }],
-    } as ReturnType<typeof prisma.client.findUnique> extends Promise<infer T> ? T : never);
+    } as unknown as ReturnType<typeof prisma.client.findUnique> extends Promise<infer T> ? T : never);
 
     const clients = await getClientsFromNotion();
     const nc = clients[0];
@@ -97,7 +97,7 @@ describe("cerebro-sync-worker logic", () => {
     const { prisma } = await import("@/lib/db");
 
     vi.mocked(getClientsFromNotion).mockResolvedValue([
-      { notionPageId: "paused456", name: "Cliente Pausado", domain: "pausado.mx", estado: "En Pausa", gscProperty: null, ga4PropertyId: null, services: ["seo"] },
+      { notionPageId: "paused456", name: "Cliente Pausado", domain: "pausado.mx", estado: "En Pausa", gscProperty: null, ga4PropertyId: null, services: ["seo"], siteUrl: "https://pausado.mx", framework: null },
     ]);
     vi.mocked(prisma.client.findUnique).mockResolvedValue(null);
 
