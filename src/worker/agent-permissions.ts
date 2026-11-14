@@ -60,8 +60,9 @@ function isEnvFile(filePath: string): boolean {
   return FORBIDDEN_PATH_PATTERNS.some((p) => name.startsWith(p.split("/").pop()!));
 }
 
-/** Paths allowed for content-only tasks (blog articles) */
-const CONTENT_ALLOWED_PREFIXES = ["content/blog/", "public/blog/"];
+/** Paths allowed for content-only tasks (blog articles) — from blog contract */
+import { BLOG_WRITE_PREFIXES } from "@/lib/plan/packages/blog-contract";
+const CONTENT_ALLOWED_PREFIXES = BLOG_WRITE_PREFIXES;
 
 function isContentAllowedPath(filePath: string, repoCwd: string): boolean {
   const resolved = resolve(repoCwd, filePath);

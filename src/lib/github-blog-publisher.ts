@@ -10,6 +10,14 @@
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+import {
+  BLOG_CONTENT_PATH,
+  BLOG_COVER_PATH,
+  BLOG_COVER_RELATIVE,
+  CATALOG_SECTION_REGEX,
+  NOT_IMPLEMENTED_REGEX,
+} from "@/lib/plan/packages/blog-contract";
+
 export interface BlogArticleData {
   titulo: string;
   slug: string;
@@ -99,12 +107,10 @@ export function buildMdxContent(data: BlogArticleData): string {
 export function hasSection(schemas: string | null, sectionName: string): boolean {
   if (!schemas) return false;
 
-  // Match heading: "## Blog" optionally followed by space + decorator (—, -, :, ()
-  // but NOT followed by more word characters (rejects "Blog Post", "Blogs")
-  const headingRegex = new RegExp(
-    `^##\\s+${escapeRegex(sectionName)}\\s*(?:$|[—\\-:(])`,
-    "m"
-  );
+  // Use contract regex for Blog section; generic regex for others
+  const headingRegex = sectionName === "Blog"
+    ? CATALOG_SECTION_REGEX
+    : new RegExp(`^##\\s+${escapeRegex(sectionName)}\\s*(?:$|[—\\-:(])`, "m");
 
   const headingMatch = schemas.match(headingRegex);
   if (!headingMatch) return false;
@@ -117,15 +123,14 @@ export function hasSection(schemas: string | null, sectionName: string): boolean
     ? rest.slice(0, nextHeading.index!)
     : rest;
 
-  // Only check the heading line and **Estado:** line for "not implemented" markers.
-  // Body text like "categorías pendientes de definir" should NOT block.
+  // Only check heading + **Estado:** for "not implemented" markers (contract regex).
   const sectionLines = sectionContent.split("\n");
   const headingLine = sectionLines[0] ?? "";
-  if (/no implementado|pendiente/i.test(headingLine)) {
+  if (NOT_IMPLEMENTED_REGEX.test(headingLine)) {
     return false;
   }
   for (const line of sectionLines) {
-    if (/^\*\*Estado:\*\*/i.test(line.trim()) && /no implementado|pendiente/i.test(line)) {
+    if (/^\*\*Estado:\*\*/i.test(line.trim()) && NOT_IMPLEMENTED_REGEX.test(line)) {
       return false;
     }
   }
@@ -364,7 +369,7 @@ export async function publishBlogArticle(
   const slug = data.slug;
 
   // Guard: slug must not already exist
-  const existing = await readGitHubFile(owner, repo, `content/blog/${slug}.mdx`, pat, defaultBranch);
+  const existing = await readGitHubFile(owner, repo, BLOG_CONTENT_PATH(slug), pat, defaultBranch);
   if (existing !== null) {
     throw new Error(`SLUG_EXISTS: El artículo /blog/${slug} ya existe en main. No se puede sobrescribir.`);
   }
@@ -375,7 +380,7 @@ export async function publishBlogArticle(
 
   // Inject cover image path if provided
   if (coverImageBase64) {
-    data.imagen_portada = `/blog/${slug}/portada.webp`;
+    data.imagen_portada = BLOG_COVER_RELATIVE(slug);
   }
 
   // Build files to commit
@@ -383,12 +388,12 @@ export async function publishBlogArticle(
 
   // 1. MDX article
   const mdxContent = buildMdxContent(data);
-  files.push({ path: `content/blog/${slug}.mdx`, content: mdxContent });
+  files.push({ path: BLOG_CONTENT_PATH(slug), content: mdxContent });
 
   // 2. Cover image (binary, base64)
   if (coverImageBase64) {
     files.push({
-      path: `public/blog/${slug}/portada.webp`,
+      path: BLOG_COVER_PATH(slug),
       content: coverImageBase64,
       encoding: "base64",
     });

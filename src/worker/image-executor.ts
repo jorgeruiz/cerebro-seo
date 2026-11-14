@@ -487,13 +487,15 @@ async function finalizeImage(
   const { writeFile, mkdir } = await import("fs/promises");
   const { join } = await import("path");
 
-  const imgDir = join(context.repoDir, "public", "images", "blog");
+  // Use the blog contract path: public/blog/{slug}/
+  const slug = filename.replace(/\.[^.]+$/, ""); // remove extension
+  const imgDir = join(context.repoDir, "public", "blog", slug);
   await mkdir(imgDir, { recursive: true });
 
   const imgPath = join(imgDir, filename);
   await writeFile(imgPath, optimized);
 
-  const relativePath = `/images/blog/${filename}`;
+  const relativePath = `/blog/${slug}/${filename}`;
 
   return {
     notes: [

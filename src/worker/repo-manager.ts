@@ -14,6 +14,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import { globSync } from "glob";
+import { BLOG_CONTENT_DIR, BLOG_CONTENT_ALT_DIRS } from "@/lib/plan/packages/blog-contract";
 import { workerEnv } from "./env";
 
 const PAT = workerEnv.GITHUB_PAT_CLIENT_REPOS;
@@ -689,16 +690,14 @@ export function scanExistingRoutes(dir: string): Map<string, string> {
     if (route && route !== "/") routes.set(route, fp);
   }
 
-  // Blog MDX: content/blog/*.mdx → /blog/slug
-  const mdxFiles: string[] = globSync("content/blog/*.mdx", { cwd: dir, nodir: true }) as string[];
-  for (const fp of mdxFiles) {
-    const slug = fp.replace(/^content\/blog\//, "").replace(/\.mdx$/, "");
-    routes.set(`/blog/${slug}`, fp);
-  }
-  const srcMdxFiles: string[] = globSync("src/content/blog/*.mdx", { cwd: dir, nodir: true }) as string[];
-  for (const fp of srcMdxFiles) {
-    const slug = fp.replace(/^src\/content\/blog\//, "").replace(/\.mdx$/, "");
-    routes.set(`/blog/${slug}`, fp);
+  // Blog MDX: content/blog/*.mdx → /blog/slug (paths from blog contract)
+  const blogDirs = [BLOG_CONTENT_DIR, ...BLOG_CONTENT_ALT_DIRS];
+  for (const blogDir of blogDirs) {
+    const mdxFiles: string[] = globSync(`${blogDir}/*.mdx`, { cwd: dir, nodir: true }) as string[];
+    for (const fp of mdxFiles) {
+      const slug = fp.replace(new RegExp(`^${blogDir}/`), "").replace(/\.mdx$/, "");
+      routes.set(`/blog/${slug}`, fp);
+    }
   }
 
   return routes;
