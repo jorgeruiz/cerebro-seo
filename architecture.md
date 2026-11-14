@@ -226,6 +226,14 @@ Tres carriles de ejecución:
 - `getPlatformPolicy(platform)` — fuente única de verdad para: executable, needsRepo, closeFlow, kindLabels, humanReasons, usesTerminal, ineligibilityReason.
 - Reemplaza los if/else dispersos en actions.ts, decomposer, site-platform.
 
+**Paquetes de infraestructura** (`src/lib/plan/packages/`):
+- PackageDefinition interface: id, preflight, detect, installSteps, verify.
+- SitePackage model: tracks installed packages per site (status, version, installedBy).
+- blog_bootstrap (v1): detect ## Blog in catalog-schemas.md + /blog route; install via agent.
+- landing_bootstrap, microsite_bootstrap: v0 (defined, not active).
+- install_package actionType: creates PlanTask from PackageDefinition.installSteps.
+- Análisis recibe "PAQUETES:" en contexto; G4 remedy enlaza al paquete faltante.
+
 **Templates legacy** (`src/lib/task-templates.ts`):
 - `resolveTaskMode(steps)` = fuente de verdad para task.mode (still used).
 - `DECOMPOSER_VERSION` = versión del generador (para redo de tareas outdated).

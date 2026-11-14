@@ -2,9 +2,23 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-13 (F1d — cierre de gaps Fase 1)
-**Fase actual:** F1 (catálogo v2) COMPLETO — todos los criterios de salida cumplidos.
-**Próximo hito:** E2E en producción con Quicsa (WP) y Navalsa (WP). Correr scripts de migración.
+**Última actualización:** 2026-11-14 (F2 — blog_bootstrap + SitePackage)
+**Fase actual:** F2 (paquetes de infraestructura) — blog_bootstrap implementado.
+**Próximo hito:** E2E: instalar blog_bootstrap en un sitio Next.js real. Correr migrate-action-types en producción.
+
+### ✅ F2 — Paquetes de infraestructura: blog_bootstrap (2026-11-14)
+
+- SitePackage model con PackageStatus enum (PENDING/INSTALLING/INSTALLED/FAILED/ROLLBACK)
+- PackageDefinition interface: preflight, detect, installSteps, verify
+- blog_bootstrap (v1): detect catalog-schemas ## Blog + /blog route; install via agent
+- landing_bootstrap (v0) y microsite_bootstrap (v0) definidos pero no activos
+- install_package actionType en catálogo (infrastructure, HYBRID)
+- G4 remedy enlazado: "Agregar al plan: install_package(blog_bootstrap)"
+- Análisis Claude: recibe paquetes en contexto; no propone create_blog sin blog_bootstrap
+- UI /clientes/[id]/paquetes: cards + auto-detect + "Agregar al plan"
+- UI /admin/preparacion-sitios: tabla de readiness de todos los sitios Next.js
+- landing_bootstrap faltante: template de landing, detección de Elementor (WP), convención de rutas
+- microsite_bootstrap faltante: convención de rutas (subdomain vs path), layout compartido
 
 ### ✅ F1d — Cierre de gaps Fase 1 (2026-11-13)
 
