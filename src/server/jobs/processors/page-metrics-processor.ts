@@ -1,22 +1,18 @@
 /**
- * Page Metrics Processor — fetches GSC page data and writes to PageMetric.
+ * Page Metrics Processor — fetches GSC page×date data and writes to PageMetric.
  *
- * For each active site with GSC:
- *   1. Call GSC Search Analytics API with dimensions ["page", "date"]
- *   2. Upsert rows into PageMetric (source = "gsc")
- *   3. Optionally fetch GA4 per-page data (sessions, conversions)
- *
- * Normalizes URLs with normalizeUrl() before storing.
+ * Uses dimensions ["page", "date"] so each row has its own date.
+ * Paginates with startRow to fetch all data (not capped at 1000).
+ * Normalizes URLs to path-only with normalizeUrl().
  */
 
 import { prisma } from "@/lib/db";
+import { google } from "googleapis";
 import { getServiceOAuth2Client } from "@/lib/google-oauth";
-import { GoogleSearchConsoleProvider } from "@/server/providers/google-search-console";
 import { normalizeUrl } from "@/lib/plan/plan-bridge";
 
 export interface PageMetricsJobData {
   clientId: string;
-  /** Backfill: number of days to fetch (default 1 for daily, 90 for backfill) */
   days?: number;
 }
 
@@ -27,12 +23,13 @@ export interface PageMetricsResult {
   source: string;
 }
 
+const PAGE_SIZE = 5000; // GSC max per request is 25000, but 5000 is safer
+
 export async function runPageMetricsProcessor(
   data: PageMetricsJobData,
 ): Promise<PageMetricsResult> {
   const { clientId, days = 1 } = data;
 
-  // Find the site with GSC property
   const site = await prisma.site.findFirst({
     where: {
       client: { id: clientId, status: "ACTIVE", services: { has: "seo" } },
@@ -42,94 +39,103 @@ export async function runPageMetricsProcessor(
   });
 
   if (!site?.gscProperty) {
-    console.log(`[page-metrics] ${clientId}: no GSC property configured, skipping`);
+    console.log(`[page-metrics] ${clientId}: no GSC property, skipping`);
     return { siteId: "", rowsWritten: 0, daysProcessed: 0, source: "gsc" };
   }
 
-  // Get OAuth client
   const auth = await getServiceOAuth2Client();
   if (!auth) {
-    console.warn(`[page-metrics] ${clientId}: no service OAuth client available`);
+    console.warn(`[page-metrics] ${clientId}: no service OAuth client`);
     return { siteId: site.id, rowsWritten: 0, daysProcessed: 0, source: "gsc" };
   }
 
-  const gsc = new GoogleSearchConsoleProvider(auth);
-
-  // Date range: last N days (GSC data is ~2 days behind)
+  // Date range (GSC data is ~2 days behind)
   const endDate = new Date();
-  endDate.setDate(endDate.getDate() - 2); // GSC delay
+  endDate.setDate(endDate.getDate() - 2);
   const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - days);
 
   const startStr = startDate.toISOString().slice(0, 10);
   const endStr = endDate.toISOString().slice(0, 10);
 
-  console.log(`[page-metrics] ${clientId}: fetching GSC pages ${startStr} → ${endStr}`);
+  console.log(`[page-metrics] ${clientId}: fetching GSC page×date ${startStr} → ${endStr}`);
 
-  // Fetch pages data from GSC
-  const pages = await gsc.getPages({
-    siteUrl: site.gscProperty,
-    startDate: startStr,
-    endDate: endStr,
-    rowLimit: 1000,
-  });
-
-  // Write to PageMetric
+  // Fetch ALL rows with pagination using dimensions ["page", "date"]
+  const sc = google.webmasters({ version: "v3", auth });
+  let startRow = 0;
   let rowsWritten = 0;
-  const batchDate = endDate; // Use end date as the metric date for daily
+  let hasMore = true;
 
-  for (const page of pages) {
-    const url = normalizeUrl(page.page);
-    if (!url) continue;
-
-    await prisma.pageMetric.upsert({
-      where: {
-        siteId_url_date_source: {
-          siteId: site.id,
-          url,
-          date: batchDate,
-          source: "gsc",
-        },
-      },
-      update: {
-        clicks: page.clicks,
-        impressions: page.impressions,
-        ctr: page.ctr,
-        position: page.position,
-      },
-      create: {
-        siteId: site.id,
-        url,
-        date: batchDate,
-        source: "gsc",
-        clicks: page.clicks,
-        impressions: page.impressions,
-        ctr: page.ctr,
-        position: page.position,
+  while (hasMore) {
+    const { data: gscData } = await sc.searchanalytics.query({
+      siteUrl: site.gscProperty,
+      requestBody: {
+        startDate: startStr,
+        endDate: endStr,
+        dimensions: ["page", "date"],
+        rowLimit: PAGE_SIZE,
+        startRow,
       },
     });
-    rowsWritten++;
+
+    const rows = gscData.rows ?? [];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      const rawPage = row.keys?.[0] ?? "";
+      const rawDate = row.keys?.[1] ?? ""; // YYYY-MM-DD
+      if (!rawPage || !rawDate) continue;
+
+      const url = normalizeUrl(rawPage);
+      const date = new Date(rawDate + "T00:00:00Z");
+
+      await prisma.pageMetric.upsert({
+        where: {
+          siteId_url_date_source: { siteId: site.id, url, date, source: "gsc" },
+        },
+        update: {
+          clicks: row.clicks ?? 0,
+          impressions: row.impressions ?? 0,
+          ctr: parseFloat(((row.ctr ?? 0) * 100).toFixed(2)),
+          position: parseFloat((row.position ?? 0).toFixed(1)),
+        },
+        create: {
+          siteId: site.id,
+          url,
+          date,
+          source: "gsc",
+          clicks: row.clicks ?? 0,
+          impressions: row.impressions ?? 0,
+          ctr: parseFloat(((row.ctr ?? 0) * 100).toFixed(2)),
+          position: parseFloat((row.position ?? 0).toFixed(1)),
+        },
+      });
+      rowsWritten++;
+    }
+
+    startRow += rows.length;
+    hasMore = rows.length === PAGE_SIZE;
+    if (hasMore) {
+      console.log(`[page-metrics] ${clientId}: page ${Math.floor(startRow / PAGE_SIZE) + 1} (${startRow} rows so far)`);
+    }
   }
 
-  // GA4: fetch per-page sessions + conversions if available
+  // GA4: fetch per-page sessions + conversions (aggregated for the period)
   if (site.ga4Property) {
     try {
       const { GoogleAnalytics4Provider } = await import("@/server/providers/google-analytics-4");
       const ga4 = new GoogleAnalytics4Provider(auth);
       const ga4Pages = await ga4.getPagesMetrics(site.ga4Property, startStr, endStr);
+      const batchDate = endDate; // GA4 doesn't give per-day per-page easily
 
       for (const gp of ga4Pages) {
-        const url = normalizeUrl(gp.page.startsWith("/") ? `${site.url}${gp.page}` : gp.page);
+        const pagePath = gp.page.startsWith("/") ? gp.page : `/${gp.page}`;
+        const url = normalizeUrl(pagePath);
         if (!url) continue;
 
         await prisma.pageMetric.upsert({
           where: {
-            siteId_url_date_source: {
-              siteId: site.id,
-              url,
-              date: batchDate,
-              source: "ga4",
-            },
+            siteId_url_date_source: { siteId: site.id, url, date: batchDate, source: "ga4" },
           },
           update: {
             sessions: gp.sessions,
@@ -149,10 +155,10 @@ export async function runPageMetricsProcessor(
         rowsWritten++;
       }
     } catch (err) {
-      console.warn(`[page-metrics] ${clientId}: GA4 fetch failed: ${(err as Error).message}`);
+      console.warn(`[page-metrics] ${clientId}: GA4 failed: ${(err as Error).message}`);
     }
   }
 
-  console.log(`[page-metrics] ${clientId}: wrote ${rowsWritten} rows (${days}d)`);
+  console.log(`[page-metrics] ${clientId}: wrote ${rowsWritten} rows (${days}d, ${startStr}→${endStr})`);
   return { siteId: site.id, rowsWritten, daysProcessed: days, source: "gsc+ga4" };
 }

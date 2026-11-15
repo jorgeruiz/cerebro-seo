@@ -18,7 +18,8 @@ async function main() {
   const days = daysArg ? parseInt(daysArg.replace("--days=", ""), 10) : 90;
   const filterClient = clientArg ? clientArg.replace("--client=", "") : null;
 
-  console.log(`\n=== PageMetric Backfill (${days} days) ===\n`);
+  const purge = process.argv.includes("--purge");
+  console.log(`\n=== PageMetric Backfill (${days} days${purge ? ", PURGE first" : ""}) ===\n`);
 
   // Find all active SEO clients with GSC
   const clients = await prisma.client.findMany({
@@ -44,6 +45,11 @@ async function main() {
     if (!site) {
       console.log(`  ${client.name}: no site with GSC, skipping`);
       continue;
+    }
+
+    if (purge) {
+      const deleted = await prisma.pageMetric.deleteMany({ where: { siteId: site.id } });
+      console.log(`  ${client.name}: purged ${deleted.count} old rows`);
     }
 
     console.log(`  ${client.name} (${site.gscProperty}): backfilling ${days}d...`);

@@ -242,13 +242,51 @@ function buildCandidateUrgency(
   };
 }
 
-/** Normalize URL for comparison: strip protocol, www, trailing slash. */
+/**
+ * Normalize URL to path-only for comparison and storage.
+ * Strips scheme, host, www. Home = "/". Trailing slash removed except home.
+ * Decodes percent-encoded chars. Lowercased.
+ *
+ * Examples:
+ *   "https://www.dominio.mx/ruta/" → "/ruta"
+ *   "/ruta"                        → "/ruta"
+ *   "dominio.mx/ruta"              → "/ruta"
+ *   "https://dominio.mx/"          → "/"
+ *   "https://dominio.mx"           → "/"
+ */
 export function normalizeUrl(url: string): string {
-  return url
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
+  let path: string;
+
+  // If starts with "/" it's already a path
+  if (url.startsWith("/")) {
+    path = url;
+  } else if (url.startsWith("http")) {
+    // Full URL — extract pathname
+    try {
+      path = decodeURIComponent(new URL(url).pathname);
+    } catch {
+      path = url.replace(/^https?:\/\/[^/]*/, "") || "/";
+    }
+  } else {
+    // Bare domain+path like "dominio.mx/ruta" — strip host
+    const slashIdx = url.indexOf("/");
+    path = slashIdx >= 0 ? url.slice(slashIdx) : "/";
+  }
+
+  try { path = decodeURIComponent(path); } catch { /* keep as-is */ }
+
+  // Lowercase
+  path = path.toLowerCase();
+
+  // Remove trailing slash except for home
+  if (path.length > 1 && path.endsWith("/")) {
+    path = path.replace(/\/+$/, "");
+  }
+
+  // Ensure starts with /
+  if (!path.startsWith("/")) path = "/" + path;
+
+  return path;
 }
 
 function mapBloqueToCategory(bloque?: string | null): TaskCategory | null {
