@@ -20,11 +20,17 @@
 - selectionReason y exclusionReason en cada candidata
 - 18 tests: clasificación, scoring, topes, mínimos, duplicados, determinismo
 
-**Pendiente (siguiente sesión):**
-- UI de propuesta de plan (barras de mezcla, lista de excluidas, config editable)
-- Integración del compositor con el análisis (candidatas → scored → composePlan)
-- Ajuste del prompt del análisis para generar en todas las categorías
-- Config editable desde la vista del cliente
+**Integración (completada):**
+- Análisis Claude: 6 categorías (no 3 bloques), sin priority/effort/mode del LLM
+- Plan Bridge: tráfico delta 28d vs 28d, urgency signals, package candidates
+- composeProposal: candidates → scored → composePlan → proposal
+- ProposalPanel: stats + mix bars + seleccionadas/excluidas + quitar/restaurar + confirmar
+- PlanConfigEditor: config editable con guardar/restaurar defaults
+- actionComposeProposal + actionConfirmProposal (server actions)
+
+**Pendiente para E2E:**
+- Probar con análisis real en producción
+- Verificar que las 6 categorías se generan correctamente
 
 ### ✅ F2 — Paquetes de infraestructura: blog_bootstrap (2026-11-14)
 
