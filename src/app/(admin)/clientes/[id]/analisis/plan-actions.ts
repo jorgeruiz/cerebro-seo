@@ -331,3 +331,64 @@ function inferCategory(candidate: { actionType?: string | null; titulo: string; 
   // Fallback to kind-based
   return candidate.kind === "CONTENT" ? "contenido" : candidate.kind === "CODE" ? "tecnico" : "setup";
 }
+
+// ─── Compose Proposal (F2b) ─────────────────────────────────────────────────
+
+import type { ComposedPlan } from "@/lib/plan/plan-composer";
+
+/**
+ * Run the plan composer on analysis candidates.
+ * Returns a proposal that the user reviews before confirming.
+ */
+export async function actionComposeProposal(
+  clientId: string,
+  analysisId: string,
+): Promise<{ ok: true; proposal: ComposedPlan } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const analysis = await prisma.clientAnalysis.findUnique({
+    where: { id: analysisId },
+    select: { content: true },
+  });
+  if (!analysis?.content) return { ok: false, error: "Análisis no encontrado." };
+
+  const parsed = JSON.parse(analysis.content) as { candidatas?: AnalysisCandidate[] };
+  const candidates = parsed.candidatas ?? [];
+  if (candidates.length === 0) return { ok: false, error: "El análisis no tiene candidatas." };
+
+  const site = await resolveSite(clientId).catch(() => null);
+  if (!site) return { ok: false, error: "No hay sitio configurado." };
+
+  const { composeProposal } = await import("@/lib/plan/plan-bridge");
+  const proposal = await composeProposal(clientId, site.id, candidates);
+
+  return { ok: true, proposal };
+}
+
+/**
+ * Confirm a composed proposal: create tasks from selected candidates.
+ */
+export async function actionConfirmProposal(
+  clientId: string,
+  analysisId: string,
+  selectedIds: string[],
+): Promise<{ ok: true; result: SendToPlanResult } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const analysis = await prisma.clientAnalysis.findUnique({
+    where: { id: analysisId },
+    select: { content: true },
+  });
+  if (!analysis?.content) return { ok: false, error: "Análisis no encontrado." };
+
+  const parsed = JSON.parse(analysis.content) as { candidatas?: AnalysisCandidate[] };
+  const allCandidates = parsed.candidatas ?? [];
+  const selected = allCandidates.filter((c) => selectedIds.includes(c.id));
+
+  if (selected.length === 0) return { ok: false, error: "No hay candidatas seleccionadas." };
+
+  // Use the existing actionSendToPlan for the actual task creation
+  return actionSendToPlan(clientId, analysisId, selected);
+}

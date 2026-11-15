@@ -39,22 +39,38 @@ export type WpActionType = string;
 
 export type CandidateBloque = "tecnico" | "contenido" | "aeo_geo";
 
+/** LLM output categories (the 6 catalog categories). */
+export type CandidateCategory =
+  | "technical"
+  | "content"
+  | "aeo_geo"
+  | "authority_local"
+  | "measurement_conversion"
+  | "infrastructure";
+
 export interface AnalysisCandidate {
   id: string; // UUID estable para selección
   titulo: string;
   descripcion: string;
-  bloque?: CandidateBloque | null; // tecnico | contenido | aeo_geo
+  /** @deprecated Use categoria instead. Kept for backward compat. */
+  bloque?: CandidateBloque | null;
+  /** Category from the 6 catalog categories. */
+  categoria?: CandidateCategory | null;
   kind: CandidateKind;
+  /** @deprecated Mode comes from catalog + capabilities, not the LLM. */
   mode: CandidateMode;
+  /** @deprecated Mode comes from catalog + capabilities. */
   modeReason: string;
-  priority: number; // 1-5, 1 = más urgente
+  /** @deprecated Priority comes from the composer scoring. */
+  priority: number;
+  /** @deprecated Effort comes from catalog complexity + humanMinutes. */
   effort: CandidateEffort;
   impactoEsperado: string;
   justificacion: string; // qué dato la respalda
   keywordObjetivo?: string | null;
   urlObjetivo?: string | null;
   fuente: CandidateSource;
-  /** Tipo de acción. Uses ActionType from task-catalog.ts. Legacy values are resolved via DEPRECATED_ALIASES. */
+  /** Tipo de acción. Uses ActionType from task-catalog.ts. */
   actionType?: string | null;
 }
 
@@ -63,18 +79,18 @@ export interface AnalysisCandidate {
 const candidateSchema = z.object({
   titulo: z.string().min(5).max(120),
   descripcion: z.string().min(10).max(500),
-  bloque: z.enum(["tecnico", "contenido", "aeo_geo"]).nullable().optional(),
-  kind: z.enum(["CONTENT", "CODE", "SETUP"]),
-  mode: z.enum(["AI", "HYBRID", "HUMAN"]),
-  modeReason: z.string().min(5).max(200),
-  priority: z.number().int().min(1).max(5),
-  effort: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  bloque: z.enum(["tecnico", "contenido", "aeo_geo"]).nullable().optional(), // legacy
+  categoria: z.enum(["technical", "content", "aeo_geo", "authority_local", "measurement_conversion", "infrastructure"]).nullable().optional(),
+  kind: z.enum(["CONTENT", "CODE", "SETUP"]).optional().default("CODE"),
+  mode: z.enum(["AI", "HYBRID", "HUMAN"]).optional().default("AI"), // deprecated: filled from catalog
+  modeReason: z.string().max(200).optional().default("Del catálogo"),
+  priority: z.number().int().min(1).max(5).optional().default(3), // deprecated: filled by composer
+  effort: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().default("MEDIUM"), // deprecated: from catalog
   impactoEsperado: z.string().min(5).max(200),
   justificacion: z.string().min(5).max(300),
   keywordObjetivo: z.string().nullable().optional(),
   urlObjetivo: z.string().nullable().optional(),
   fuente: z.enum(["signal", "contentplan", "analisis", "setup", "pendiente-anterior", "ciclo-anterior"]),
-  // Accept any string — the classifier (F1b) validates and resolves aliases
   actionType: z.string().nullable().optional(),
 });
 
@@ -93,7 +109,7 @@ export const analysisResultSchema = z.object({
   })),
   recomendaciones: z.array(z.string()),
   conclusionEstrategica: z.string(),
-  candidatas: z.array(candidateSchema).min(8, "Se esperan al menos 8 candidatas (4 CONTENT + 4 CODE)"),
+  candidatas: z.array(candidateSchema).min(6, "Se esperan al menos 6 candidatas (2 por categoría principal)"),
 });
 
 // ─── Clasificación de modo por plataforma ────────────────────────────────────

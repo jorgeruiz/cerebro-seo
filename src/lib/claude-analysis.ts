@@ -139,29 +139,23 @@ PAQUETES DEL SITIO (INFRAESTRUCTURA):
 - Si falta landing_bootstrap, NO propongas create_landing. Propón install_package(landing_bootstrap).
 - El estado de los paquetes viene en el contexto bajo "PAQUETES:".
 
-CANDIDATAS — COMPOSICIÓN POR BLOQUES (OBLIGATORIO):
-Las candidatas DEBEN cubrir TRES bloques. Genera 2-4 candidatas por bloque.
-Si un bloque no aplica (ej: 0 errores técnicos), incluye una nota en la descripción
-de la primera candidata del bloque explicando por qué y propón una tarea preventiva.
+CANDIDATAS — POR LAS 6 CATEGORÍAS DEL CATÁLOGO (OBLIGATORIO):
+Genera candidatas en TODAS las categorías que apliquen. Al menos 2 por categoría cuando haya datos.
+Si una categoría no tiene datos, devuelve una candidata con: "sin datos: <qué falta para proponer>".
 
-BLOQUE 1 — TÉCNICO (2-4 candidatas):
-Meta tags, H1, schema, redirects 301, errores 404, velocidad, sitemap, robots.txt,
-canonical, alt text de imágenes, enlaces rotos.
+1. **technical** (2-4): meta tags, H1, schema, redirects 301, 404, velocidad, sitemap, robots.txt, canonical, alt text, enlaces rotos, headings.
+2. **content** (2-4): blog nuevo, landing nueva, optimizar texto existente, actualizar contenido viejo, enlaces internos.
+3. **aeo_geo** (1-3): FAQ visible + schema, respuestas directas, AEO readiness (llms.txt, bots IA).
+4. **authority_local** (1-2): Google Business Profile, link building, directorios. Si no aplica, "sin datos: no hay ficha GBP ni estrategia de backlinks".
+5. **measurement_conversion** (0-2): GA4/GTM tracking, conversiones, formularios. Si ya está todo configurado, "sin datos: tracking completo".
+6. **infrastructure** (0-1): paquetes (blog_bootstrap, etc.). Las candidatas de paquetes se agregan automáticamente por el sistema — NO las generes.
 
-BLOQUE 2 — CONTENIDO (2-4 candidatas):
-Blog nuevo, landing nueva, optimizar texto existente, actualizar contenido viejo,
-ampliar artículos cortos, agregar secciones FAQ. Usa las ideas del Plan de Contenido
-vigente como fuente principal.
+TOTAL: 8-16 candidatas.
+- Solo sugiere lo que tenga justificación concreta — NO rellenes para llegar a un número.
+- Si hay datos sospechosos, genera candidatas de setup/verificación con fuente "setup".
 
-BLOQUE 3 — AEO/GEO (2-4 candidatas):
-FAQ schema para featured snippets, respuestas directas para AI Overviews,
-datos estructurados FAQPage/HowTo, contenido de pregunta-respuesta,
-elegibilidad para AI Search, optimizar para Perplexity/ChatGPT/Gemini.
-
-TOTAL: 6-12 candidatas (2-4 por bloque).
-- Orden: prioridad vs easy win (esfuerzo bajo + impacto alto primero)
-- Solo sugiere lo que tenga justificación concreta — NO rellenes para llegar a un número
-- Si hay datos sospechosos, genera candidatas de setup/verificación con fuente "setup"
+NO INCLUIR en el output: priority, effort ni mode. Esos campos los calcula el sistema.
+Sí incluir: titulo, descripcion, categoria, kind, impactoEsperado, justificacion, keywordObjetivo, urlObjetivo, fuente, actionType.
 
 CANDIDATAS — FUENTE:
 - "signal": responde a una señal detectada (caída de keyword, CTR bajo, backlink perdido)
