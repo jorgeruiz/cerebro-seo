@@ -21,6 +21,7 @@ export interface PageMetricsResult {
   rowsWritten: number;
   daysProcessed: number;
   source: string;
+  error?: string;
 }
 
 const PAGE_SIZE = 5000; // GSC max per request is 25000, but 5000 is safer
@@ -66,6 +67,7 @@ export async function runPageMetricsProcessor(
   let rowsWritten = 0;
   let hasMore = true;
 
+  try {
   while (hasMore) {
     const { data: gscData } = await sc.searchanalytics.query({
       siteUrl: site.gscProperty,
@@ -118,6 +120,42 @@ export async function runPageMetricsProcessor(
     if (hasMore) {
       console.log(`[page-metrics] ${clientId}: page ${Math.floor(startRow / PAGE_SIZE) + 1} (${startRow} rows so far)`);
     }
+  }
+  } catch (gscErr) {
+    const msg = (gscErr as Error).message ?? String(gscErr);
+    const isPermission = msg.includes("403") || msg.includes("forbidden") || msg.includes("permission") || msg.includes("User does not have");
+    console.error(`[page-metrics] ${clientId}: GSC error: ${msg}`);
+
+    // Save as Insight so it's visible in the client dashboard
+    const client = await prisma.client.findFirst({
+      where: { sites: { some: { id: site.id } } },
+      select: { id: true },
+    });
+    if (client) {
+      await prisma.insight.upsert({
+        where: { id: `gsc-access-${site.id}` },
+        update: {
+          description: `GSC error: ${msg.slice(0, 300)}`,
+          generatedAt: new Date(),
+        },
+        create: {
+          id: `gsc-access-${site.id}`,
+          clientId: client.id,
+          type: "WARNING",
+          severity: "high",
+          title: isPermission
+            ? "La cuenta no tiene acceso a esta propiedad de GSC"
+            : "Error al obtener datos de GSC",
+          description: `GSC error: ${msg.slice(0, 300)}`,
+          suggestedAction: isPermission
+            ? "Verificar que la cuenta de servicio tenga permisos de lectura en Search Console para esta propiedad."
+            : "Revisar la configuración de la propiedad GSC del sitio.",
+          affectedUrls: [],
+          affectedKeywords: [],
+        },
+      });
+    }
+    return { siteId: site.id, rowsWritten: 0, daysProcessed: days, source: "gsc", error: msg.slice(0, 200) };
   }
 
   // GA4: fetch per-page sessions + conversions (aggregated for the period)

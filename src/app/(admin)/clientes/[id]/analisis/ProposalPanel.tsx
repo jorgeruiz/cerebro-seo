@@ -120,8 +120,6 @@ export function ProposalPanel({
         <p className="font-mono text-[0.6rem] text-amber-500">
           {proposal.stats.freeSlots} lugar(es) libre(s)
           {proposal.stats.missingByType.easyWin > 0 && ` — faltan ${proposal.stats.missingByType.easyWin} easy win(s)`}
-          {proposal.stats.missingByType.urgent > 0 && ` — faltan ${proposal.stats.missingByType.urgent} urgente(s)`}
-          {proposal.stats.missingByType.strategic > 0 && ` — faltan ${proposal.stats.missingByType.strategic} estratégica(s)`}
         </p>
       )}
 

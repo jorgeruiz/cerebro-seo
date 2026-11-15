@@ -32,6 +32,11 @@ function parseGa4Date(raw: string): string {
     : raw;
 }
 
+/** Ensure propertyId is just the numeric ID, not "properties/123". */
+function normalizePropertyId(raw: string): string {
+  return raw.replace(/^properties\//, "");
+}
+
 export class GoogleAnalytics4Provider {
   constructor(private auth: OAuth2Client) {}
 
@@ -49,7 +54,7 @@ export class GoogleAnalytics4Provider {
 
     const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
     const { data } = await analyticsData.properties.runReport({
-      property: `properties/${propertyId}`,
+      property: `properties/${normalizePropertyId(propertyId)}`,
       requestBody: {
         dateRanges: [{ startDate, endDate }],
         dimensions: [{ name: "date" }],
@@ -98,7 +103,7 @@ export class GoogleAnalytics4Provider {
 
     const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
     const { data } = await analyticsData.properties.runReport({
-      property: `properties/${propertyId}`,
+      property: `properties/${normalizePropertyId(propertyId)}`,
       requestBody: {
         dateRanges: [{ startDate, endDate }],
         metrics: [
@@ -152,7 +157,7 @@ export class GoogleAnalytics4Provider {
 
     const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
     const { data } = await analyticsData.properties.runReport({
-      property: `properties/${propertyId}`,
+      property: `properties/${normalizePropertyId(propertyId)}`,
       requestBody: {
         dateRanges: [{ startDate, endDate }],
         dimensions: [{ name: "pagePath" }],
