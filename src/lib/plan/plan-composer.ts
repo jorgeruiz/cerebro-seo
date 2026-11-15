@@ -118,6 +118,10 @@ export interface ComposedPlan {
     easyWinCount: number;
     strategicCount: number;
     prerequisiteCount: number;
+    /** Slots that stayed empty because not enough candidates of a type */
+    freeSlots: number;
+    /** What's missing per type to fill the caps */
+    missingByType: { urgent: number; easyWin: number; strategic: number };
     humanMinutesTotal: number;
     humanMinutesCap: number;
     byCategory: Record<string, number>;
@@ -172,8 +176,8 @@ export function classifyCandidateType(
     return "urgent";
   }
 
-  // Easy win: low risk + AI mode + low complexity + data-backed
-  if (risk === "low" && (mode === "AI" || mode === "HYBRID") && complexity === "low" && impactValue !== null) {
+  // Easy win: low risk + AI mode + low complexity + data-backed (0 doesn't count)
+  if (risk === "low" && (mode === "AI" || mode === "HYBRID") && complexity === "low" && impactValue !== null && impactValue > 0) {
     return "easy_win";
   }
 
@@ -187,13 +191,12 @@ export function scoreCandidate(
   candidate: ScoredCandidate,
   categoryWeight: number,
 ): number {
-  // Impact: normalized 0-100 from impactValue
-  const impact = candidate.impactValue !== null
-    ? Math.min(candidate.impactValue, 100)
-    : 30; // default if no data
+  // Impact: normalized 0-100 from impactValue (0 = no data)
+  const hasData = candidate.impactValue !== null && candidate.impactValue > 0;
+  const impact = hasData ? Math.min(candidate.impactValue!, 100) : 30;
 
-  // Confidence: 1.0 if real data, 0.5 if no impactValue
-  const confidence = candidate.impactValue !== null ? 1.0 : 0.5;
+  // Confidence: 1.0 if real data (>0), 0.5 if none
+  const confidence = hasData ? 1.0 : 0.5;
 
   // Effort penalty: complexity + humanMinutes
   const complexityPenalty = candidate.complexity === "low" ? 1.0
@@ -273,24 +276,43 @@ export function composePlan(
     trySelect(c, `Prerrequisito: ${c.evidenceSummary}${unblocksStr}`);
   }
 
-  // Compute quotas based on remaining slots (after prerequisites)
+  // Compute CAPS (not fill targets) based on remaining slots after prerequisites
   const remainingSlots = maxTasks - selected.length;
   const urgentCap = Math.ceil(remainingSlots * config.mix.urgentCap);
+  const easyWinCap = Math.ceil(remainingSlots * config.mix.easyWinTarget);
+  const strategicCap = Math.ceil(remainingSlots * config.mix.strategicTarget);
+
+  // Track how many of each type we've taken
+  let urgentsTaken = 0;
+  let easyWinsTaken = 0;
+  let strategicsTaken = 0;
+
+  function typeCapReached(type: CandidateType): boolean {
+    if (type === "urgent") return urgentsTaken >= urgentCap;
+    if (type === "easy_win") return easyWinsTaken >= easyWinCap;
+    if (type === "strategic") return strategicsTaken >= strategicCap;
+    return false;
+  }
+
+  function trackType(type: CandidateType): void {
+    if (type === "urgent") urgentsTaken++;
+    else if (type === "easy_win") easyWinsTaken++;
+    else if (type === "strategic") strategicsTaken++;
+  }
 
   // 4a: Urgents (up to cap)
-  let urgentsTaken = 0;
   for (const c of regular) {
     if (c.type !== "urgent") continue;
     if (urgentsTaken >= urgentCap) {
-      excluded.push({ ...c, exclusionReason: `Cuota urgentes llena (${urgentCap})` });
+      excluded.push({ ...c, exclusionReason: `Tope urgentes (${urgentCap})` });
       continue;
     }
     if (trySelect(c, `Urgente (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`)) {
-      urgentsTaken++;
+      trackType("urgent");
     }
   }
 
-  // 4b: Category minimums (candidates keep their type — it counts toward quotas)
+  // 4b: Category minimums — only within type caps
   for (const [cat, min] of Object.entries(config.categoryMinimums)) {
     const current = categoryCounts[cat] ?? 0;
     if (current >= (min ?? 0)) continue;
@@ -300,35 +322,51 @@ export function composePlan(
 
     for (const c of catCandidates) {
       if ((categoryCounts[cat] ?? 0) >= (min ?? 0)) break;
-      // Type-aware reason
+      if (typeCapReached(c.type)) continue; // respect type cap even for minimums
       const typeLabel = c.type === "urgent" ? "urgente" : c.type === "easy_win" ? "easy win" : "estratégica";
-      trySelect(c, `Mínimo categoría ${cat}, ${typeLabel} (score=${c.score.toFixed(1)})`);
+      if (trySelect(c, `Mínimo categoría ${cat}, ${typeLabel} (score=${c.score.toFixed(1)})`)) {
+        trackType(c.type);
+      }
     }
   }
 
-  // 4c: Fill easy wins
+  // 4c: Easy wins (up to cap)
   for (const c of regular) {
     if (c.type !== "easy_win" || isSelected(c.id)) continue;
+    if (easyWinsTaken >= easyWinCap) break;
     if (selected.length >= maxTasks) break;
-    trySelect(c, `Easy win (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`);
+    if (trySelect(c, `Easy win (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`)) {
+      trackType("easy_win");
+    }
   }
 
-  // 4d: Fill strategic (excluding prerequisites already taken)
+  // 4d: Strategic (up to cap)
   for (const c of regular) {
     if (c.type !== "strategic" || isSelected(c.id)) continue;
+    if (strategicsTaken >= strategicCap) break;
     if (selected.length >= maxTasks) break;
-    trySelect(c, `Estratégica (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`);
+    if (trySelect(c, `Estratégica (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`)) {
+      trackType("strategic");
+    }
   }
 
-  // 4e: Remaining → excluded
+  // 4e: Remaining → excluded with specific reason
   for (const c of eligible) {
-    if (!isSelected(c.id) && !excluded.some((e) => e.id === c.id)) {
-      excluded.push({ ...c, exclusionReason: `Cuota llena (${selected.length}/${maxTasks})` });
-    }
+    if (isSelected(c.id) || excluded.some((e) => e.id === c.id)) continue;
+    const reason = typeCapReached(c.type)
+      ? `Tope ${c.type} alcanzado`
+      : `Cuota llena (${selected.length}/${maxTasks})`;
+    excluded.push({ ...c, exclusionReason: reason });
   }
 
   // Stats: computed from ALL selected (including those entered via category minimums)
   const prerequisiteCount = selected.filter((s) => s.isPrerequisite).length;
+  const freeSlots = maxTasks - selected.length;
+  const missingByType = {
+    urgent: Math.max(0, urgentCap - urgentsTaken),
+    easyWin: Math.max(0, easyWinCap - easyWinsTaken),
+    strategic: Math.max(0, strategicCap - strategicsTaken),
+  };
 
   return {
     selected,
@@ -339,10 +377,12 @@ export function composePlan(
       selected: selected.length,
       excluded: excluded.length,
       blocked: blocked.length,
-      urgentCount: selected.filter((s) => s.type === "urgent").length,
-      easyWinCount: selected.filter((s) => s.type === "easy_win").length,
-      strategicCount: selected.filter((s) => s.type === "strategic" && !s.isPrerequisite).length,
+      urgentCount: urgentsTaken,
+      easyWinCount: easyWinsTaken,
+      strategicCount: strategicsTaken,
       prerequisiteCount,
+      freeSlots,
+      missingByType,
       humanMinutesTotal,
       humanMinutesCap: config.humanMinutesCap,
       byCategory: categoryCounts,

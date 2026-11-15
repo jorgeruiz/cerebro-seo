@@ -62,6 +62,10 @@ describe("classifyCandidateType", () => {
   it("high complexity → strategic", () => {
     expect(classifyCandidateType("create_landing", "medium", "high", "HYBRID", noUrgency, 60)).toBe("strategic");
   });
+
+  it("impactValue 0 does NOT count as data — becomes strategic not easy_win", () => {
+    expect(classifyCandidateType("update_meta", "low", "low", "AI", noUrgency, 0)).toBe("strategic");
+  });
 });
 
 // ─── composePlan ────────────────────────────────────────────────────────────
@@ -212,6 +216,54 @@ describe("composePlan", () => {
     expect(pkg!.unblocks).toContain("b1");
     expect(pkg!.unblocks).toContain("b2");
     expect(pkg!.selectionReason).toContain("desbloquea");
+  });
+
+  // ── Quotas as caps (spec 9.6 decision) ──────────────────────────────
+
+  it("quotas are caps: not enough easy_wins → plan stays shorter with freeSlots", () => {
+    const config = { ...DEFAULT_PLAN_CONFIG, maxTasks: 10 };
+    // Only 2 easy wins, 1 strategic, 0 urgent → 3 selected, 7 free
+    const candidates = [
+      makeCandidate({ id: "ew1", type: "easy_win", score: 80, category: "technical" }),
+      makeCandidate({ id: "ew2", type: "easy_win", score: 70, category: "content" }),
+      makeCandidate({ id: "st1", type: "strategic", score: 60, category: "aeo_geo" }),
+    ];
+    const result = composePlan(candidates, [], config, new Set());
+    expect(result.selected.length).toBe(3);
+    expect(result.stats.freeSlots).toBe(7);
+    expect(result.stats.easyWinCount).toBe(2);
+    expect(result.stats.strategicCount).toBe(1);
+  });
+
+  it("easy_win cap prevents filling with more easy wins", () => {
+    const config = { ...DEFAULT_PLAN_CONFIG, maxTasks: 10 };
+    // easyWinTarget = 0.50 → cap = ceil(10 * 0.50) = 5
+    // 8 easy wins available → only 5 selected
+    const candidates = Array.from({ length: 8 }, (_, i) =>
+      makeCandidate({ id: `ew${i}`, type: "easy_win", score: 80 - i, category: i < 2 ? "content" : "technical" })
+    );
+    // Add 1 aeo_geo for minimum
+    candidates.push(makeCandidate({ id: "aeo1", type: "strategic", score: 30, category: "aeo_geo" }));
+    const result = composePlan(candidates, [], config, new Set());
+    expect(result.stats.easyWinCount).toBeLessThanOrEqual(5);
+    // Plan doesn't fill to 10 — it stays at easyWinCap + strategicCap + mins
+    expect(result.selected.length).toBeLessThan(10);
+    expect(result.stats.freeSlots).toBeGreaterThan(0);
+  });
+
+  it("freeSlots and missingByType are reported", () => {
+    const config = { ...DEFAULT_PLAN_CONFIG, maxTasks: 10 };
+    // 2 easy wins only
+    const candidates = [
+      makeCandidate({ id: "t1", type: "easy_win", score: 80, category: "technical" }),
+      makeCandidate({ id: "c1", type: "easy_win", score: 70, category: "content" }),
+      makeCandidate({ id: "c2", type: "strategic", score: 60, category: "content" }),
+      makeCandidate({ id: "a1", type: "strategic", score: 50, category: "aeo_geo" }),
+    ];
+    const result = composePlan(candidates, [], config, new Set());
+    expect(result.stats.freeSlots).toBeGreaterThan(0);
+    expect(result.stats.missingByType.urgent).toBeGreaterThan(0); // no urgents at all
+    expect(typeof result.stats.missingByType.easyWin).toBe("number");
   });
 });
 

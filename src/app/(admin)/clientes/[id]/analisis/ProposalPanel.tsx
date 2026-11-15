@@ -97,7 +97,11 @@ export function ProposalPanel({
     <div className="space-y-4">
       {/* Stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Seleccionadas" value={`${activeSelected.length}/${proposal.stats.totalCandidates} (${proposal.excluded.length} excluidas)`} />
+        <StatCard label="Seleccionadas" value={`${activeSelected.length}/${proposal.stats.totalCandidates}`} />
+        {proposal.stats.freeSlots > 0 && (
+          <StatCard label="Lugares libres" value={`${proposal.stats.freeSlots}`}
+            warn={true} />
+        )}
         <StatCard label="Minutos humanos" value={`${activeMinutes}/${proposal.stats.humanMinutesCap}`}
           warn={activeMinutes > proposal.stats.humanMinutesCap} />
         <StatCard label="Urgentes" value={String(proposal.stats.urgentCount)} />
@@ -110,6 +114,16 @@ export function ProposalPanel({
         <MixBar label="Easy Wins" current={proposal.stats.easyWinCount} total={activeSelected.length} target={0.50} color="bg-emerald-500" />
         <MixBar label="Estratégicas" current={proposal.stats.strategicCount} total={activeSelected.length} target={0.25} color="bg-blue-500" />
       </div>
+
+      {/* Free slots message */}
+      {proposal.stats.freeSlots > 0 && (
+        <p className="font-mono text-[0.6rem] text-amber-500">
+          {proposal.stats.freeSlots} lugar(es) libre(s)
+          {proposal.stats.missingByType.easyWin > 0 && ` — faltan ${proposal.stats.missingByType.easyWin} easy win(s)`}
+          {proposal.stats.missingByType.urgent > 0 && ` — faltan ${proposal.stats.missingByType.urgent} urgente(s)`}
+          {proposal.stats.missingByType.strategic > 0 && ` — faltan ${proposal.stats.missingByType.strategic} estratégica(s)`}
+        </p>
+      )}
 
       {/* Selected candidates */}
       <div>
