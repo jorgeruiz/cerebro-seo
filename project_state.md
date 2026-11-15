@@ -2,9 +2,29 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-14 (F2 — blog_bootstrap + SitePackage)
-**Fase actual:** F2 (paquetes de infraestructura) — blog_bootstrap implementado.
-**Próximo hito:** E2E: instalar blog_bootstrap en un sitio Next.js real. Correr migrate-action-types en producción.
+**Última actualización:** 2026-11-14 (F2b — plan composer + blog contract)
+**Fase actual:** F2b (composición del plan) — algoritmo de selección implementado.
+**Próximo hito:** UI de propuesta de plan + integración del compositor con el análisis. E2E con plan compuesto real.
+
+### ✅ F2b — Composición del plan mensual (2026-11-14)
+
+**Core (implementado):**
+- humanMinutes por actionType en catálogo (0-30 min por pasos HM)
+- impactBasis por actionType (10 métricas: ctr_impressions, traffic_loss, keyword_gap, etc.)
+- ClientPlanConfig en Client.planConfig (Json?) con defaults
+- plan-composer.ts: clasificación urgente/easy_win/strategic (determinística)
+- Scoring: impact × confidence ÷ effort × categoryWeight
+- Selección en 5 fases: urgentes → mínimos categoría → easy wins → estratégicas
+- Tope de capacidad humana (240 min default) — excluye las que se pasan
+- Exclusión de duplicados (mismo target en últimos 3 meses)
+- selectionReason y exclusionReason en cada candidata
+- 18 tests: clasificación, scoring, topes, mínimos, duplicados, determinismo
+
+**Pendiente (siguiente sesión):**
+- UI de propuesta de plan (barras de mezcla, lista de excluidas, config editable)
+- Integración del compositor con el análisis (candidatas → scored → composePlan)
+- Ajuste del prompt del análisis para generar en todas las categorías
+- Config editable desde la vista del cliente
 
 ### ✅ F2 — Paquetes de infraestructura: blog_bootstrap (2026-11-14)
 
