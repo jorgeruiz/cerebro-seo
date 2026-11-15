@@ -91,13 +91,18 @@ export interface ScoredCandidate {
   type: CandidateType;
   score: number;
   impactBasis: ImpactBasis;
-  impactValue: number | null;  // the actual metric value (impressions, position, etc.)
+  impactValue: number | null;
   humanMinutes: number;
   complexity: string;
   risk: string;
 
   /** Evidence that backs the score */
   evidenceSummary: string;
+
+  /** For install_package: IDs of blocked candidates this would unblock */
+  unblocks?: string[];
+  /** True if this is a prerequisite (install_package that unblocks others) — enters before quotas */
+  isPrerequisite?: boolean;
 }
 
 export interface ComposedPlan {
@@ -112,6 +117,7 @@ export interface ComposedPlan {
     urgentCount: number;
     easyWinCount: number;
     strategicCount: number;
+    prerequisiteCount: number;
     humanMinutesTotal: number;
     humanMinutesCap: number;
     byCategory: Record<string, number>;
@@ -120,26 +126,49 @@ export interface ComposedPlan {
 
 // ─── Type classification (deterministic, no LLM) ────────────────────────────
 
-export interface UrgencySignals {
-  has404WithTraffic: boolean;
-  hasDesindexedUrls: boolean;
-  hasRobotsBlocking: boolean;
-  hasTrafficDrop: boolean;       // >20% drop in GSC impressions 28d
-  hasSecurityCritical: boolean;
-  hasLostBacklinksHighDA: boolean;
+/**
+ * Per-candidate urgency signals (spec §9.6).
+ *
+ * Urgency must be SPECIFIC to the candidate's target, not global.
+ * Example: fix_broken_links is urgent only if the broken destination
+ * had traffic or backlinks — not just because any 404 exists on the site.
+ */
+export interface CandidateUrgencySignals {
+  /** This candidate's target URL had a 404 with traffic or backlinks */
+  targetHas404WithTraffic: boolean;
+  /** This candidate's target URL is desindexed */
+  targetIsDesindexed: boolean;
+  /** robots.txt or noindex is blocking this candidate's target */
+  targetBlockedByRobots: boolean;
+  /** This candidate's target URL had a traffic drop > threshold */
+  targetHasTrafficDrop: boolean;
+  /** This candidate is about a security finding with severity CRITICAL */
+  isSecurityCritical: boolean;
+  /** This candidate's target lost high-DA backlinks recently */
+  targetLostHighDABacklinks: boolean;
 }
+
+export const NO_URGENCY: CandidateUrgencySignals = {
+  targetHas404WithTraffic: false,
+  targetIsDesindexed: false,
+  targetBlockedByRobots: false,
+  targetHasTrafficDrop: false,
+  isSecurityCritical: false,
+  targetLostHighDABacklinks: false,
+};
 
 export function classifyCandidateType(
   actionType: string,
   risk: string,
   complexity: string,
   mode: string,
-  urgency: UrgencySignals,
+  urgency: CandidateUrgencySignals,
   impactValue: number | null,
 ): CandidateType {
-  // Urgent: active loss of traffic or trust
-  if (urgency.has404WithTraffic || urgency.hasDesindexedUrls || urgency.hasRobotsBlocking
-    || urgency.hasTrafficDrop || urgency.hasSecurityCritical || urgency.hasLostBacklinksHighDA) {
+  // Urgent: active loss specific to THIS candidate's target (spec §9.6)
+  if (urgency.targetHas404WithTraffic || urgency.targetIsDesindexed
+    || urgency.targetBlockedByRobots || urgency.targetHasTrafficDrop
+    || urgency.isSecurityCritical || urgency.targetLostHighDABacklinks) {
     return "urgent";
   }
 
@@ -184,10 +213,9 @@ export function composePlan(
   candidates: ScoredCandidate[],
   blocked: Array<{ id: string; title: string; reason: string; remedy: string }>,
   config: ClientPlanConfig,
-  recentTargets: Set<string>, // targets done in last 3 months
+  recentTargets: Set<string>,
 ): ComposedPlan {
   const maxTasks = config.maxTasks;
-  const urgentCap = Math.ceil(maxTasks * config.mix.urgentCap);
 
   // Step 1: Score all candidates
   const scored = candidates.map((c) => {
@@ -195,22 +223,26 @@ export function composePlan(
     return { ...c, score: scoreCandidate(c, catWeight) };
   });
 
-  // Step 2: Exclude duplicates (same target in last 3 months)
+  // Step 2: Exclude duplicates
   const eligible: typeof scored = [];
-  const duplicateExcluded: Array<(typeof scored)[0] & { exclusionReason: string }> = [];
+  const excluded: Array<(typeof scored)[0] & { exclusionReason: string }> = [];
 
   for (const c of scored) {
     const targetKey = c.targetUrl ?? c.targetKeyword ?? c.title;
     if (recentTargets.has(targetKey)) {
-      duplicateExcluded.push({ ...c, exclusionReason: `Duplicada: "${targetKey}" ejecutada en los últimos 3 meses` });
+      excluded.push({ ...c, exclusionReason: `Duplicada: "${targetKey}" ejecutada en los últimos 3 meses` });
     } else {
       eligible.push(c);
     }
   }
 
-  // Step 3: Sort by type priority then score
+  // Step 3: Separate prerequisites (install_package that unblocks others)
+  const prerequisites = eligible.filter((c) => c.isPrerequisite);
+  const regular = eligible.filter((c) => !c.isPrerequisite);
+
+  // Sort regular by type then score
   const typeOrder: Record<CandidateType, number> = { urgent: 0, easy_win: 1, strategic: 2 };
-  eligible.sort((a, b) => {
+  regular.sort((a, b) => {
     const typeDiff = typeOrder[a.type] - typeOrder[b.type];
     if (typeDiff !== 0) return typeDiff;
     return b.score - a.score;
@@ -218,80 +250,85 @@ export function composePlan(
 
   // Step 4: Select
   const selected: Array<(typeof scored)[0] & { selectionReason: string }> = [];
-  const excluded: Array<(typeof scored)[0] & { exclusionReason: string }> = [];
   const categoryCounts: Record<string, number> = {};
   let humanMinutesTotal = 0;
-  let urgentCount = 0;
 
   function trySelect(c: (typeof scored)[0], reason: string): boolean {
     if (selected.length >= maxTasks) return false;
-
-    // Check human minutes cap
     if (humanMinutesTotal + c.humanMinutes > config.humanMinutesCap) {
       excluded.push({ ...c, exclusionReason: `Supera tope humano: ${humanMinutesTotal}+${c.humanMinutes} > ${config.humanMinutesCap} min` });
       return false;
     }
-
     selected.push({ ...c, selectionReason: reason });
     humanMinutesTotal += c.humanMinutes;
     categoryCounts[c.category] = (categoryCounts[c.category] ?? 0) + 1;
-    if (c.type === "urgent") urgentCount++;
     return true;
   }
 
-  // 4a: Urgents first (up to cap)
-  const urgents = eligible.filter((c) => c.type === "urgent");
-  for (const c of urgents) {
-    if (urgentCount >= urgentCap) {
+  const isSelected = (id: string) => selected.some((s) => s.id === id);
+
+  // 4.0: Prerequisites first (before quotas, don't consume strategic slot)
+  for (const c of prerequisites) {
+    const unblocksStr = c.unblocks?.length ? ` — desbloquea ${c.unblocks.length} tareas` : "";
+    trySelect(c, `Prerrequisito: ${c.evidenceSummary}${unblocksStr}`);
+  }
+
+  // Compute quotas based on remaining slots (after prerequisites)
+  const remainingSlots = maxTasks - selected.length;
+  const urgentCap = Math.ceil(remainingSlots * config.mix.urgentCap);
+
+  // 4a: Urgents (up to cap)
+  let urgentsTaken = 0;
+  for (const c of regular) {
+    if (c.type !== "urgent") continue;
+    if (urgentsTaken >= urgentCap) {
       excluded.push({ ...c, exclusionReason: `Cuota urgentes llena (${urgentCap})` });
       continue;
     }
-    trySelect(c, `Urgente (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`);
+    if (trySelect(c, `Urgente (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`)) {
+      urgentsTaken++;
+    }
   }
 
-  // 4b: Category minimums with best-scoring candidates
-  const nonUrgentSelected = new Set(selected.map((s) => s.id));
-  const remaining = eligible.filter((c) => c.type !== "urgent" && !nonUrgentSelected.has(c.id));
-
+  // 4b: Category minimums (candidates keep their type — it counts toward quotas)
   for (const [cat, min] of Object.entries(config.categoryMinimums)) {
     const current = categoryCounts[cat] ?? 0;
     if (current >= (min ?? 0)) continue;
 
-    const catCandidates = remaining.filter((c) => c.category === cat);
+    const catCandidates = regular.filter((c) => c.category === cat && !isSelected(c.id));
     catCandidates.sort((a, b) => b.score - a.score);
 
     for (const c of catCandidates) {
       if ((categoryCounts[cat] ?? 0) >= (min ?? 0)) break;
-      if (selected.find((s) => s.id === c.id)) continue;
-      trySelect(c, `Mínimo categoría ${cat} (score=${c.score.toFixed(1)})`);
+      // Type-aware reason
+      const typeLabel = c.type === "urgent" ? "urgente" : c.type === "easy_win" ? "easy win" : "estratégica";
+      trySelect(c, `Mínimo categoría ${cat}, ${typeLabel} (score=${c.score.toFixed(1)})`);
     }
   }
 
   // 4c: Fill easy wins
-  const easyWins = remaining.filter((c) => c.type === "easy_win" && !selected.find((s) => s.id === c.id));
-  easyWins.sort((a, b) => b.score - a.score);
-  for (const c of easyWins) {
+  for (const c of regular) {
+    if (c.type !== "easy_win" || isSelected(c.id)) continue;
     if (selected.length >= maxTasks) break;
     trySelect(c, `Easy win (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`);
   }
 
-  // 4d: Fill strategic
-  const strategic = remaining.filter((c) => c.type === "strategic" && !selected.find((s) => s.id === c.id));
-  strategic.sort((a, b) => b.score - a.score);
-  for (const c of strategic) {
+  // 4d: Fill strategic (excluding prerequisites already taken)
+  for (const c of regular) {
+    if (c.type !== "strategic" || isSelected(c.id)) continue;
     if (selected.length >= maxTasks) break;
     trySelect(c, `Estratégica (score=${c.score.toFixed(1)}, ${c.evidenceSummary})`);
   }
 
-  // 4e: Everything not selected goes to excluded
+  // 4e: Remaining → excluded
   for (const c of eligible) {
-    if (!selected.find((s) => s.id === c.id) && !excluded.find((e) => e.id === c.id)) {
+    if (!isSelected(c.id) && !excluded.some((e) => e.id === c.id)) {
       excluded.push({ ...c, exclusionReason: `Cuota llena (${selected.length}/${maxTasks})` });
     }
   }
 
-  // Merge duplicate-excluded
-  excluded.push(...duplicateExcluded);
+  // Stats: computed from ALL selected (including those entered via category minimums)
+  const prerequisiteCount = selected.filter((s) => s.isPrerequisite).length;
 
   return {
     selected,
@@ -302,9 +339,10 @@ export function composePlan(
       selected: selected.length,
       excluded: excluded.length,
       blocked: blocked.length,
-      urgentCount,
+      urgentCount: selected.filter((s) => s.type === "urgent").length,
       easyWinCount: selected.filter((s) => s.type === "easy_win").length,
-      strategicCount: selected.filter((s) => s.type === "strategic").length,
+      strategicCount: selected.filter((s) => s.type === "strategic" && !s.isPrerequisite).length,
+      prerequisiteCount,
       humanMinutesTotal,
       humanMinutesCap: config.humanMinutesCap,
       byCategory: categoryCounts,

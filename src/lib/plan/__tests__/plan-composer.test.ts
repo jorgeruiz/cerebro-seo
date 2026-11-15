@@ -5,18 +5,11 @@ import {
   scoreCandidate,
   resolveConfig,
   DEFAULT_PLAN_CONFIG,
+  NO_URGENCY,
   type ScoredCandidate,
-  type UrgencySignals,
 } from "../plan-composer";
 
-const noUrgency: UrgencySignals = {
-  has404WithTraffic: false,
-  hasDesindexedUrls: false,
-  hasRobotsBlocking: false,
-  hasTrafficDrop: false,
-  hasSecurityCritical: false,
-  hasLostBacklinksHighDA: false,
-};
+const noUrgency = NO_URGENCY;
 
 function makeCandidate(overrides: Partial<ScoredCandidate>): ScoredCandidate {
   return {
@@ -41,12 +34,21 @@ function makeCandidate(overrides: Partial<ScoredCandidate>): ScoredCandidate {
 // ─── classifyCandidateType ──────────────────────────────────────────────────
 
 describe("classifyCandidateType", () => {
-  it("404 with traffic → urgent", () => {
-    expect(classifyCandidateType("fix_redirect", "medium", "low", "AI", { ...noUrgency, has404WithTraffic: true }, 100)).toBe("urgent");
+  it("404 with traffic on THIS target → urgent", () => {
+    expect(classifyCandidateType("fix_redirect", "medium", "low", "AI", { ...noUrgency, targetHas404WithTraffic: true }, 100)).toBe("urgent");
   });
 
   it("security critical → urgent", () => {
-    expect(classifyCandidateType("security_fix", "high", "medium", "HYBRID", { ...noUrgency, hasSecurityCritical: true }, null)).toBe("urgent");
+    expect(classifyCandidateType("security_fix", "high", "medium", "HYBRID", { ...noUrgency, isSecurityCritical: true }, null)).toBe("urgent");
+  });
+
+  it("fix_broken_links WITHOUT traffic on target → NOT urgent (strategic)", () => {
+    // Per spec §9.6: only urgent if the broken destination had traffic or backlinks
+    expect(classifyCandidateType("fix_broken_links", "low", "low", "AI", noUrgency, 50)).toBe("easy_win");
+  });
+
+  it("fix_broken_links WITH traffic drop on target → urgent", () => {
+    expect(classifyCandidateType("fix_broken_links", "low", "low", "AI", { ...noUrgency, targetHasTrafficDrop: true }, 50)).toBe("urgent");
   });
 
   it("low risk + AI + low complexity + data → easy_win", () => {
@@ -151,6 +153,65 @@ describe("composePlan", () => {
     for (const e of result.excluded) {
       expect(e.exclusionReason).toBeTruthy();
     }
+  });
+
+  // ── F2b adjustments ──────────────────────────────────────────────────
+
+  it("category minimums count toward type quotas in stats", () => {
+    // 2 content candidates: 1 easy_win + 1 strategic
+    const candidates = [
+      makeCandidate({ id: "tech1", category: "technical", type: "easy_win", score: 90 }),
+      makeCandidate({ id: "cont1", category: "content", type: "easy_win", score: 50 }),
+      makeCandidate({ id: "cont2", category: "content", type: "strategic", score: 40 }),
+      makeCandidate({ id: "aeo1", category: "aeo_geo", type: "strategic", score: 30 }),
+    ];
+    const result = composePlan(candidates, [], DEFAULT_PLAN_CONFIG, new Set());
+    // content min=2, aeo_geo min=1 → all 4 selected
+    // Stats should reflect: 2 easy_win (tech1 + cont1), 2 strategic (cont2 + aeo1)
+    expect(result.stats.easyWinCount).toBe(2);
+    expect(result.stats.strategicCount).toBe(2);
+    expect(result.selected.length).toBe(4);
+  });
+
+  it("install_package prerequisite enters before quotas and doesn't consume strategic", () => {
+    const config = { ...DEFAULT_PLAN_CONFIG, maxTasks: 3 };
+    const candidates = [
+      makeCandidate({
+        id: "pkg1", actionType: "install_package", category: "infrastructure",
+        type: "strategic", isPrerequisite: true, unblocks: ["blog1"],
+        score: 100, evidenceSummary: "Desbloquea: create_blog",
+      }),
+      makeCandidate({ id: "blog1", category: "content", type: "strategic", score: 60 }),
+      makeCandidate({ id: "meta1", category: "technical", type: "easy_win", score: 80 }),
+      makeCandidate({ id: "meta2", category: "technical", type: "easy_win", score: 70 }),
+    ];
+    const result = composePlan(candidates, [], config, new Set());
+    // pkg1 enters as prerequisite (doesn't count toward strategic quota)
+    expect(result.selected[0].id).toBe("pkg1");
+    expect(result.selected[0].selectionReason).toContain("Prerrequisito");
+    // strategicCount should NOT include the prerequisite
+    expect(result.stats.prerequisiteCount).toBe(1);
+    expect(result.stats.strategicCount).toBe(1); // blog1 only
+    // Total: 3 (pkg1 + meta1 + blog1 or meta2)
+    expect(result.selected.length).toBe(3);
+  });
+
+  it("install_package shows what it unblocks", () => {
+    const candidates = [
+      makeCandidate({
+        id: "pkg1", actionType: "install_package", category: "infrastructure",
+        type: "strategic", isPrerequisite: true, unblocks: ["b1", "b2"],
+        score: 100, evidenceSummary: "Desbloquea: create_blog, refresh_content",
+      }),
+      makeCandidate({ id: "b1", category: "content", type: "easy_win", score: 50 }),
+      makeCandidate({ id: "b2", category: "content", type: "strategic", score: 40 }),
+    ];
+    const result = composePlan(candidates, [], DEFAULT_PLAN_CONFIG, new Set());
+    const pkg = result.selected.find((s) => s.id === "pkg1");
+    expect(pkg).toBeDefined();
+    expect(pkg!.unblocks).toContain("b1");
+    expect(pkg!.unblocks).toContain("b2");
+    expect(pkg!.selectionReason).toContain("desbloquea");
   });
 });
 

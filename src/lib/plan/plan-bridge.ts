@@ -17,7 +17,7 @@ import {
   resolveConfig,
   type ScoredCandidate,
   type ComposedPlan,
-  type UrgencySignals,
+  type CandidateUrgencySignals,
 } from "./plan-composer";
 import { getCatalogEntry, type ActionType, type TaskCategory } from "./task-catalog";
 
@@ -146,7 +146,7 @@ async function getPackageCandidates(siteId: string): Promise<ScoredCandidate[]> 
 
 function candidateToScored(
   c: AnalysisCandidate,
-  urgency: UrgencySignals,
+  siteUrgencyData: SiteUrgencyData,
   deltaMap: Map<string, TrafficDelta>,
 ): ScoredCandidate {
   const entry = getCatalogEntry(c.actionType as ActionType);
@@ -167,10 +167,13 @@ function candidateToScored(
   // Determine mode from catalog (not from LLM)
   const mode = entry?.modes?.WORDPRESS?.mode ?? entry?.modes?.NEXTJS?.mode ?? "HYBRID";
 
+  // Per-candidate urgency (not global)
+  const candidateUrgency = buildCandidateUrgency(c, siteUrgencyData);
+
   const type = classifyCandidateType(
     c.actionType ?? "other",
     risk, complexity, mode,
-    urgency, impactValue,
+    candidateUrgency, impactValue,
   );
 
   return {
@@ -188,6 +191,30 @@ function candidateToScored(
     complexity,
     risk,
     evidenceSummary: c.justificacion.slice(0, 120),
+  };
+}
+
+/** Site-level urgency data used to build per-candidate signals. */
+interface SiteUrgencyData {
+  urlsWith404Traffic: Set<string>;
+  urlsWithTrafficDrop: Set<string>;
+  securityCriticalTypes: Set<string>;
+}
+
+function buildCandidateUrgency(
+  c: AnalysisCandidate,
+  data: SiteUrgencyData,
+): CandidateUrgencySignals {
+  const url = c.urlObjetivo ?? "";
+
+  return {
+    // Only urgent if THIS candidate's target has the problem
+    targetHas404WithTraffic: data.urlsWith404Traffic.has(url),
+    targetIsDesindexed: false, // would need GSC per-URL data
+    targetBlockedByRobots: false,
+    targetHasTrafficDrop: data.urlsWithTrafficDrop.has(url),
+    isSecurityCritical: c.actionType === "security_fix" && data.securityCriticalTypes.size > 0,
+    targetLostHighDABacklinks: false,
   };
 }
 
@@ -211,29 +238,58 @@ export async function composeProposal(
   const { drops, deltas } = await computeTrafficDeltas(siteId, dropThresholdPct);
   const deltaMap = new Map(deltas.map((d) => [d.url, d]));
 
-  // 2. Build urgency signals
+  // 2. Build site-level urgency data (used per-candidate, not globally)
   const auditIssues = await prisma.auditIssue.findMany({
     where: { audit: { siteId }, severity: { in: ["critical", "high"] } },
-    select: { type: true, severity: true },
-    take: 20,
+    select: { type: true, severity: true, affectedUrl: true },
+    take: 50,
   });
 
-  const urgency: UrgencySignals = {
-    has404WithTraffic: auditIssues.some((i) => i.type.includes("404")),
-    hasDesindexedUrls: false, // would need GSC coverage data
-    hasRobotsBlocking: false, // would need robots.txt check
-    hasTrafficDrop: drops.length > 0,
-    hasSecurityCritical: auditIssues.some((i) => i.severity === "critical" && (i.type.includes("security") || i.type.includes("xss"))),
-    hasLostBacklinksHighDA: false, // would need backlink check
+  // URLs with 404 that had traffic (cross with PageMetric)
+  const urls404 = auditIssues.filter((i) => i.type.includes("404")).map((i) => i.affectedUrl).filter(Boolean) as string[];
+  const urlsWith404Traffic = new Set<string>();
+  if (urls404.length > 0) {
+    const metricsFor404 = await prisma.pageMetric.groupBy({
+      by: ["url"],
+      where: { url: { in: urls404 }, clicks: { gt: 0 } },
+      _sum: { clicks: true },
+    });
+    for (const m of metricsFor404) urlsWith404Traffic.add(m.url);
+  }
+
+  const siteUrgencyData: SiteUrgencyData = {
+    urlsWith404Traffic,
+    urlsWithTrafficDrop: new Set(drops.map((d) => d.url)),
+    securityCriticalTypes: new Set(
+      auditIssues.filter((i) => i.severity === "critical").map((i) => i.type)
+    ),
   };
 
-  // 3. Convert analysis candidates to scored
+  // 3. Convert analysis candidates to scored (per-candidate urgency)
   const scored = candidates
-    .filter((c) => c.actionType !== "install_package") // don't duplicate package candidates
-    .map((c) => candidateToScored(c, urgency, deltaMap));
+    .filter((c) => c.actionType !== "install_package")
+    .map((c) => candidateToScored(c, siteUrgencyData, deltaMap));
 
-  // 4. Add deterministic package candidates
+  // 4. Add deterministic package candidates as prerequisites
   const packageCandidates = await getPackageCandidates(siteId);
+  // Mark as prerequisites if they unblock any blocked candidates
+  for (const pkg of packageCandidates) {
+    // Find blocked candidates that this package would unblock
+    const entry = getCatalogEntry(pkg.actionType as ActionType);
+    if (entry) {
+      const enables = (await import("./packages/index")).getPackageDefinition(
+        pkg.id.replace("pkg-", "")
+      )?.enables ?? [];
+      const unblockedIds = scored
+        .filter((s) => enables.includes(s.actionType))
+        .map((s) => s.id);
+      if (unblockedIds.length > 0) {
+        pkg.unblocks = unblockedIds;
+        pkg.isPrerequisite = true;
+        pkg.evidenceSummary = `Desbloquea: ${unblockedIds.length} tareas (${enables.join(", ")})`;
+      }
+    }
+  }
   scored.push(...packageCandidates);
 
   // 5. Find recent targets (done in last 3 months)
