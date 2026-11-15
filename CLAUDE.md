@@ -215,6 +215,14 @@ Errores comunes que solo el build atrapa:
 - Filtros JSON de Prisma (`{ not: null }` → `{ NOT: { field: { equals: Prisma.DbNull } } }`)
 - `select` con campos que no existen en el modelo
 - Imports de funciones inexistentes (`getAiQueue` vs `decomposeQueue`)
+- Componentes creados pero no importados en ninguna página (huérfanos)
+
+### Verificación en producción — regla permanente
+**Un punto no está "hecho" hasta verificarlo en la UI de producción.** Al reportar cada feature o fix:
+- Confirmar que el deploy pasó (Easypanel muestra el build exitoso).
+- Verificar que la página renderiza sin errores del servidor.
+- Si un componente nuevo (panel, editor, sección) se creó, confirmar que aparece en la ruta correcta.
+- Si es un cambio en el prompt del análisis, correr un análisis nuevo y verificar que el output refleja los cambios.
 
 ### Secretos — regla permanente e incondicional
 **NUNCA imprimir en chat, reportes, tablas, comandos de ejemplo ni ninguna salida de texto:**
@@ -284,8 +292,8 @@ Si necesitas mostrar una URL de webhook de ejemplo, usa `<EASYPANEL_DEPLOY_WEB>`
 - **Conexión a Easypanel:** Claude Code conecta vía HTTP API con curl, no SSH.
 - **GitHub repo:** `jorgeruiz/cerebro-seo` (privado, bajo cuenta personal `jorgeruiz`). Click Society no usa GitHub Organizations — todos los repos del agency van bajo `jorgeruiz`.
 - **Remote URL:** `https://github.com/jorgeruiz/cerebro-seo.git`
-- **Subdominio:** `seo.clicksociety.mx`.
-- **Cerebro:** `cerebro.clicksociety.mx` (cuando esté en producción).
+- **Subdominio:** `seo.clicksociety.com.mx`.
+- **Cerebro:** `cerebro.clicksociety.com.mx` (cuando esté en producción).
 
 ---
 

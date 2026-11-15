@@ -98,6 +98,21 @@ async function getSystemData() {
     syncQueueCounts = s as unknown as QueueCounts;
   } catch { /* queue stats unavailable */ }
 
+  // Worker heartbeat: check if workers are connected to each queue
+  let workerStatus: Array<{ queue: string; workers: number; idle: boolean }> = [];
+  try {
+    const [dw, aw, sw] = await Promise.all([
+      dataCollectionQueue.getWorkers(),
+      aiAnalysisQueue.getWorkers(),
+      syncQueue.getWorkers(),
+    ]);
+    workerStatus = [
+      { queue: "data-collection", workers: dw.length, idle: (dataQueueCounts?.active ?? 0) === 0 },
+      { queue: "ai-analysis", workers: aw.length, idle: (aiQueueCounts?.active ?? 0) === 0 },
+      { queue: "sync", workers: sw.length, idle: (syncQueueCounts?.active ?? 0) === 0 },
+    ];
+  } catch { /* workers check unavailable */ }
+
   // Últimas ejecuciones por job type (últimas 300 entradas, agrupar client-side)
   const recentLogs = await prisma.jobLog.findMany({
     orderBy: { createdAt: "desc" },
@@ -138,6 +153,7 @@ async function getSystemData() {
   return {
     dbOk, redisOk,
     dataQueueCounts, aiQueueCounts, syncQueueCounts,
+    workerStatus,
     latestByJob,
     costsByProvider, totalCostMonth,
     totalClients, seoClients,
@@ -200,6 +216,7 @@ export default async function SettingsPage() {
   const {
     dbOk, redisOk,
     dataQueueCounts, aiQueueCounts, syncQueueCounts,
+    workerStatus,
     latestByJob,
     costsByProvider, totalCostMonth,
     totalClients, seoClients,
@@ -271,6 +288,30 @@ export default async function SettingsPage() {
             <QueueCard label="Sync"            counts={syncQueueCounts} />
           </div>
         </section>
+
+        {/* ── Workers conectados ─────────────────────────────── */}
+        {workerStatus.length > 0 && (
+          <section>
+            <SectionHeader>Workers conectados</SectionHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {workerStatus.map((w) => (
+                <div key={w.queue} className="bg-card rounded-xl border border-border p-3 space-y-1">
+                  <p className="font-mono text-xs font-semibold">{w.queue}</p>
+                  <div className="flex items-center gap-2">
+                    {w.workers > 0 ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5 text-red-500" />
+                    )}
+                    <span className="font-mono text-[0.65rem] text-muted-foreground">
+                      {w.workers} worker(s) {w.idle ? "(idle)" : "(procesando)"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Últimas ejecuciones ───────────────────────────── */}
         <section>

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { AnalysisPanel } from "./AnalysisPanel";
+import { ProposalPanel } from "./ProposalPanel";
 import { getAnalysisHistory } from "./actions";
 import type { AnalysisResult } from "@/lib/claude-analysis";
 
@@ -73,6 +74,14 @@ export default async function AnalisisPage({
           initialRecord={initialRecord}
           history={history}
         />
+
+        {/* Propuesta de plan (F2b) — visible si hay análisis */}
+        {latest && (
+          <div className="space-y-2">
+            <h2 className="font-mono text-sm font-semibold text-muted-foreground">Propuesta de plan</h2>
+            <ProposalPanel clientId={client.id} analysisId={latest.id} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,25 +10,46 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
   const session = await getSession();
   if (!session) redirect("/api/auth/signin");
 
-  const client = await prisma.client.findUnique({
-    where: { id: params.id },
-    select: {
-      id: true,
-      name: true,
-      sites: {
-        select: {
-          id: true,
-          url: true,
-          platform: true,
-          githubRepo: true,
-          defaultBranch: true,
-          packages: {
-            select: { id: true, packageId: true, status: true, version: true, installedAt: true, verifiedAt: true },
+  let client;
+  try {
+    client = await prisma.client.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        name: true,
+        sites: {
+          select: {
+            id: true,
+            url: true,
+            platform: true,
+            githubRepo: true,
+            defaultBranch: true,
+            packages: {
+              select: { id: true, packageId: true, status: true, version: true, installedAt: true, verifiedAt: true },
+            },
           },
         },
       },
-    },
-  });
+    });
+  } catch {
+    // Migration may not have been applied yet (SitePackage table missing)
+    client = await prisma.client.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        name: true,
+        sites: {
+          select: { id: true, url: true, platform: true, githubRepo: true, defaultBranch: true },
+        },
+      },
+    });
+    if (client) {
+      // Patch: add empty packages array to each site
+      for (const site of client.sites) {
+        (site as unknown as { packages: unknown[] }).packages = [];
+      }
+    }
+  }
 
   if (!client) redirect("/clientes");
 
@@ -47,9 +68,10 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
     ? PACKAGE_REGISTRY.filter((p) => p.platforms.includes(site.platform!))
     : [];
 
-  // Map installed packages
+  // Map installed packages (may be empty if migration not applied yet)
+  const sitePackages = (site as unknown as { packages?: Array<{ id: string; packageId: string; status: string; version: string; installedAt: Date | null; verifiedAt: Date | null }> }).packages ?? [];
   const installedMap = new Map(
-    site.packages.map((p) => [p.packageId, p])
+    sitePackages.map((p) => [p.packageId, p])
   );
 
   // Run detect for uninstalled packages (async)
@@ -68,7 +90,7 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
       // Run detect
       if (site.githubRepo && pkg.version !== "0") {
         try {
-          const ctx = { siteId: site.id, githubRepo: site.githubRepo, defaultBranch: site.defaultBranch };
+          const ctx = { siteId: site.id, githubRepo: site.githubRepo, defaultBranch: site.defaultBranch ?? "main" };
           const detection = await pkg.detect(ctx);
           if (detection.installed) {
             // Auto-register: package is installed but not tracked

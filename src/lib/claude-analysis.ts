@@ -674,6 +674,16 @@ export async function generateClientAnalysis(
       actionType: c.actionType ? (resolveAlias(c.actionType) ?? c.actionType) : c.actionType,
     }));
 
+    // Filter out system tasks (regla 6b) — Cerebro SEO internal tasks don't belong in the plan
+    const SYSTEM_TASK_FILTER = /plugin\s*cerebro|rank\s*tracker|configurar\s*gsc|configurar\s*propiedad|depurar|probar\s*endpoint|correr\s*audit/i;
+    analysis.candidatas = analysis.candidatas.filter((c) => {
+      if (SYSTEM_TASK_FILTER.test(c.titulo)) {
+        console.log(`[analysis] Filtrada tarea del sistema (6b): "${c.titulo}"`);
+        return false;
+      }
+      return true;
+    });
+
     // Filter out audit/lighthouse candidates — these are redundant with Site Audit data
     const AUDIT_FILTER = /lighthouse|auditor[ií]a de (velocidad|rendimiento)|correr pagespeed|medir velocidad|auditar rendimiento/i;
     const before = analysis.candidatas.length;
@@ -703,13 +713,18 @@ export async function generateClientAnalysis(
     analysis.candidatas = [...setupCandidates, ...(analysis.candidatas ?? [])];
   }
 
-  // Log candidate stats by block
+  // Log candidate stats by category (F2b: 6 categories instead of 3 blocks)
   const allCandidates = analysis.candidatas ?? [];
+  const byCategory: Record<string, number> = {};
+  for (const c of allCandidates) {
+    const cat = c.categoria ?? c.bloque ?? "sin_categoria";
+    byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+  }
   const byBloque = {
-    tecnico: allCandidates.filter((c) => c.bloque === "tecnico").length,
-    contenido: allCandidates.filter((c) => c.bloque === "contenido").length,
-    aeo_geo: allCandidates.filter((c) => c.bloque === "aeo_geo").length,
-    sin_bloque: allCandidates.filter((c) => !c.bloque).length,
+    tecnico: byCategory["technical"] ?? byCategory["tecnico"] ?? 0,
+    contenido: byCategory["content"] ?? byCategory["contenido"] ?? 0,
+    aeo_geo: byCategory["aeo_geo"] ?? 0,
+    sin_bloque: byCategory["sin_categoria"] ?? 0,
   };
   console.log(
     `[analysis] Candidatas: ${allCandidates.length} total — ` +

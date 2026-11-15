@@ -9,6 +9,8 @@ import { KeywordsManager } from "./KeywordsManager";
 import { CompetitorsManager } from "./CompetitorsManager";
 import { GscConnectSection } from "../GscConnectSection";
 import { Ga4ConnectSection } from "../Ga4ConnectSection";
+import { PlanConfigEditor } from "./PlanConfigEditor";
+import { resolveConfig } from "@/lib/plan/plan-composer";
 
 export default async function ConfiguracionPage({ params }: { params: { id: string } }) {
   const client = await prisma.client.findUnique({
@@ -137,6 +139,15 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
               domain: c.domain,
               createdAt: c.createdAt,
             }))}
+          />
+        </section>
+
+        {/* Configuración del plan mensual (F2b) */}
+        <section>
+          <SectionHeader>Plan mensual</SectionHeader>
+          <PlanConfigEditor
+            clientId={client.id}
+            current={resolveConfig(client.planConfig)}
           />
         </section>
 
