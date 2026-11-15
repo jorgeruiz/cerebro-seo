@@ -97,7 +97,7 @@ export function ProposalPanel({
     <div className="space-y-4">
       {/* Stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Seleccionadas" value={`${activeSelected.length}/${proposal.stats.totalCandidates}`} />
+        <StatCard label="Seleccionadas" value={`${activeSelected.length}/${proposal.stats.totalCandidates} (${proposal.excluded.length} excluidas)`} />
         <StatCard label="Minutos humanos" value={`${activeMinutes}/${proposal.stats.humanMinutesCap}`}
           warn={activeMinutes > proposal.stats.humanMinutesCap} />
         <StatCard label="Urgentes" value={String(proposal.stats.urgentCount)} />

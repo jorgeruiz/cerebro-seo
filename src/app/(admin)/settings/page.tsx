@@ -21,6 +21,7 @@ interface QueueCounts {
   delayed: number;
   failed: number;
   completed: number;
+  paused: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,16 +90,20 @@ async function getSystemData() {
   let syncQueueCounts: QueueCounts | null = null;
   let decomposeQueueCounts: QueueCounts | null = null;
   try {
-    const [d, a, s, dc] = await Promise.all([
+    const [d, a, s, dc, dp, ap, sp, dcp] = await Promise.all([
       dataCollectionQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       aiAnalysisQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       syncQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       decomposeQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
+      dataCollectionQueue.isPaused(),
+      aiAnalysisQueue.isPaused(),
+      syncQueue.isPaused(),
+      decomposeQueue.isPaused(),
     ]);
-    dataQueueCounts = d as unknown as QueueCounts;
-    aiQueueCounts = a as unknown as QueueCounts;
-    syncQueueCounts = s as unknown as QueueCounts;
-    decomposeQueueCounts = dc as unknown as QueueCounts;
+    dataQueueCounts = { ...(d as unknown as Omit<QueueCounts, "paused">), paused: dp };
+    aiQueueCounts = { ...(a as unknown as Omit<QueueCounts, "paused">), paused: ap };
+    syncQueueCounts = { ...(s as unknown as Omit<QueueCounts, "paused">), paused: sp };
+    decomposeQueueCounts = { ...(dc as unknown as Omit<QueueCounts, "paused">), paused: dcp };
   } catch { /* queue stats unavailable */ }
 
   // Worker heartbeat: check if workers are connected to each queue
@@ -185,22 +190,31 @@ function QueueCard({ label, counts }: { label: string; counts: QueueCounts | nul
   const hasFailures = counts.failed > 0;
   const hasActive = counts.active > 0;
   return (
-    <div className={`bg-card rounded-xl border p-4 ${hasFailures ? "border-destructive/30" : "border-border"}`}>
+    <div className={`bg-card rounded-xl border p-4 ${hasFailures ? "border-destructive/30" : counts.paused ? "border-amber-500/30" : "border-border"}`}>
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{label}</p>
-        {hasActive && (
-          <span className="flex items-center gap-1 text-[10px] font-mono text-ds-blue">
-            <Activity className="h-2.5 w-2.5" />
-            activo
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {counts.paused && (
+            <span className="flex items-center gap-1 text-[10px] font-mono text-amber-500">
+              <AlertCircle className="h-2.5 w-2.5" />
+              PAUSED
+            </span>
+          )}
+          {hasActive && (
+            <span className="flex items-center gap-1 text-[10px] font-mono text-ds-blue">
+              <Activity className="h-2.5 w-2.5" />
+              activo
+            </span>
+          )}
+        </div>
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-2">
         {[
-          { label: "En cola", value: counts.waiting + counts.delayed, color: "text-muted-foreground" },
-          { label: "Activos",  value: counts.active,   color: "text-ds-blue" },
-          { label: "Fallidos", value: counts.failed,   color: counts.failed > 0 ? "text-destructive" : "text-muted-foreground" },
-          { label: "Done",     value: counts.completed, color: "text-ds-green" },
+          { label: "Espera",      value: counts.waiting,   color: "text-muted-foreground" },
+          { label: "Programados", value: counts.delayed,   color: "text-muted-foreground/60" },
+          { label: "Activos",     value: counts.active,    color: "text-ds-blue" },
+          { label: "Fallidos",    value: counts.failed,    color: counts.failed > 0 ? "text-destructive" : "text-muted-foreground" },
+          { label: "Done",        value: counts.completed, color: "text-ds-green" },
         ].map(({ label: l, value, color }) => (
           <div key={l} className="text-center">
             <p className={`text-lg font-bold font-mono ${color}`}>{value.toLocaleString()}</p>

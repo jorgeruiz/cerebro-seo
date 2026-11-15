@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect } from "react";
 import {
-  Send, Loader2, CheckCircle2, Bot, User, Info,
-  FileText, Code, Settings2, AlertTriangle, ChevronDown, ChevronRight,
+  Send, Loader2, CheckCircle2, Clock, XCircle,
+  AlertTriangle, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,24 +18,17 @@ import { canSendCandidate, type EligibilityResult } from "@/lib/plan-eligibility
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const MODE_BADGE: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  AI:     { label: "IA",      icon: Bot,     color: "text-ds-blue bg-ds-blue/10 border-ds-blue/30" },
-  HYBRID: { label: "Híbrido", icon: User,    color: "text-purple-500 bg-purple-500/10 border-purple-500/30" },
-  HUMAN:  { label: "Manual",  icon: User,    color: "text-orange-500 bg-orange-500/10 border-orange-500/30" },
-};
-
-const KIND_ICON: Record<string, React.ElementType> = {
-  CONTENT: FileText,
-  CODE: Code,
-  SETUP: Settings2,
-};
-
-const EFFORT_LABEL: Record<string, string> = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto" };
-
 const TASK_STATUS_ICON: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  PLANNING: { icon: Loader2, color: "text-yellow-500", label: "Generando pasos..." },
-  READY:    { icon: CheckCircle2, color: "text-green-500", label: "Listo" },
-  FAILED:   { icon: AlertTriangle, color: "text-destructive", label: "Error" },
+  PLANNING:         { icon: Loader2, color: "text-yellow-500", label: "Generando pasos..." },
+  READY:            { icon: CheckCircle2, color: "text-green-500", label: "Listo" },
+  RUNNING:          { icon: Loader2, color: "text-blue-500", label: "Ejecutando..." },
+  DONE:             { icon: CheckCircle2, color: "text-emerald-500", label: "Completada" },
+  FAILED:           { icon: AlertTriangle, color: "text-destructive", label: "Error" },
+  WAITING_HUMAN:    { icon: Clock, color: "text-orange-500", label: "Esperando humano" },
+  NEEDS_DEFINITION: { icon: AlertTriangle, color: "text-amber-500", label: "Sin clasificar" },
+  NEEDS_INPUT:      { icon: AlertTriangle, color: "text-amber-500", label: "Faltan datos" },
+  BLOCKED:          { icon: XCircle, color: "text-red-400", label: "Bloqueada" },
+  VOIDED:           { icon: XCircle, color: "text-zinc-400", label: "Anulada" },
 };
 
 // ─── Candidate Card ──────────────────────────────────────────────────────────
@@ -55,10 +48,6 @@ function CandidateCard({
   disabledReason?: string;
   alreadySent: boolean;
 }) {
-  const badge = MODE_BADGE[candidate.mode] ?? MODE_BADGE.HUMAN;
-  const BadgeIcon = badge.icon;
-  const KindIcon = KIND_ICON[candidate.kind] ?? Code;
-
   return (
     <div
       className={cn(
@@ -90,24 +79,18 @@ function CandidateCard({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="font-mono text-[0.65rem] text-muted-foreground border border-border rounded px-1.5 py-0.5 flex items-center gap-1">
-            <KindIcon className="h-2.5 w-2.5" />
-            {candidate.kind}
-          </span>
-          <span className={cn("font-mono text-[0.65rem] uppercase px-1.5 py-0.5 rounded border flex items-center gap-1", badge.color)}>
-            <BadgeIcon className="h-2.5 w-2.5" />
-            {badge.label}
-            {candidate.modeReason && (
-              <span title={candidate.modeReason} className="cursor-help leading-none">
-                <Info className="h-2.5 w-2.5 opacity-60" />
-              </span>
-            )}
-          </span>
-          <span className="font-mono text-[0.65rem] text-muted-foreground border border-border rounded px-1.5 py-0.5">
-            P{candidate.priority}
-          </span>
-          <span className="font-mono text-[0.65rem] text-muted-foreground border border-border rounded px-1.5 py-0.5">
-            {EFFORT_LABEL[candidate.effort] ?? candidate.effort}
+          {candidate.categoria && (
+            <span className="font-mono text-[0.6rem] text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5">
+              {candidate.categoria}
+            </span>
+          )}
+          {candidate.actionType && (
+            <span className="font-mono text-[0.6rem] text-primary border border-primary/30 rounded px-1.5 py-0.5">
+              {candidate.actionType}
+            </span>
+          )}
+          <span className="font-mono text-[0.6rem] text-muted-foreground border border-border rounded px-1.5 py-0.5">
+            {candidate.fuente}
           </span>
         </div>
       </div>
