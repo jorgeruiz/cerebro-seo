@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { getSession } from "@/lib/auth";
-import { dataCollectionQueue, aiAnalysisQueue, syncQueue } from "@/server/jobs/queues";
+import { dataCollectionQueue, aiAnalysisQueue, syncQueue, decomposeQueue } from "@/server/jobs/queues";
 import { UserRole } from "@prisma/client";
 import { SectionHeader } from "@/components/ui-darkui";
 import {
@@ -87,29 +87,34 @@ async function getSystemData() {
   let dataQueueCounts: QueueCounts | null = null;
   let aiQueueCounts: QueueCounts | null = null;
   let syncQueueCounts: QueueCounts | null = null;
+  let decomposeQueueCounts: QueueCounts | null = null;
   try {
-    const [d, a, s] = await Promise.all([
+    const [d, a, s, dc] = await Promise.all([
       dataCollectionQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       aiAnalysisQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
       syncQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
+      decomposeQueue.getJobCounts("active", "waiting", "delayed", "failed", "completed"),
     ]);
     dataQueueCounts = d as unknown as QueueCounts;
     aiQueueCounts = a as unknown as QueueCounts;
     syncQueueCounts = s as unknown as QueueCounts;
+    decomposeQueueCounts = dc as unknown as QueueCounts;
   } catch { /* queue stats unavailable */ }
 
   // Worker heartbeat: check if workers are connected to each queue
   let workerStatus: Array<{ queue: string; workers: number; idle: boolean }> = [];
   try {
-    const [dw, aw, sw] = await Promise.all([
+    const [dw, aw, sw, dcw] = await Promise.all([
       dataCollectionQueue.getWorkers(),
       aiAnalysisQueue.getWorkers(),
       syncQueue.getWorkers(),
+      decomposeQueue.getWorkers(),
     ]);
     workerStatus = [
       { queue: "data-collection", workers: dw.length, idle: (dataQueueCounts?.active ?? 0) === 0 },
       { queue: "ai-analysis", workers: aw.length, idle: (aiQueueCounts?.active ?? 0) === 0 },
       { queue: "sync", workers: sw.length, idle: (syncQueueCounts?.active ?? 0) === 0 },
+      { queue: "task-decompose", workers: dcw.length, idle: (decomposeQueueCounts?.active ?? 0) === 0 },
     ];
   } catch { /* workers check unavailable */ }
 
@@ -152,7 +157,7 @@ async function getSystemData() {
 
   return {
     dbOk, redisOk,
-    dataQueueCounts, aiQueueCounts, syncQueueCounts,
+    dataQueueCounts, aiQueueCounts, syncQueueCounts, decomposeQueueCounts,
     workerStatus,
     latestByJob,
     costsByProvider, totalCostMonth,
@@ -215,7 +220,7 @@ export default async function SettingsPage() {
 
   const {
     dbOk, redisOk,
-    dataQueueCounts, aiQueueCounts, syncQueueCounts,
+    dataQueueCounts, aiQueueCounts, syncQueueCounts, decomposeQueueCounts,
     workerStatus,
     latestByJob,
     costsByProvider, totalCostMonth,
@@ -286,6 +291,7 @@ export default async function SettingsPage() {
             <QueueCard label="Data Collection" counts={dataQueueCounts} />
             <QueueCard label="AI Analysis"     counts={aiQueueCounts} />
             <QueueCard label="Sync"            counts={syncQueueCounts} />
+            <QueueCard label="Task Decompose"  counts={decomposeQueueCounts} />
           </div>
         </section>
 

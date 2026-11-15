@@ -148,15 +148,36 @@ function candidateToScored(
   c: AnalysisCandidate,
   siteUrgencyData: SiteUrgencyData,
   deltaMap: Map<string, TrafficDelta>,
+  gscMetrics: Map<string, { impressions: number; position: number; ctr: number }>,
+  sitePlatform: string | null,
 ): ScoredCandidate {
   const entry = getCatalogEntry(c.actionType as ActionType);
-  const category = (c.categoria ?? mapBloqueToCategory(c.bloque) ?? entry?.category ?? "technical") as TaskCategory;
 
-  // Get impact value from traffic delta if available
+  // Category: catalog first, LLM as fallback
+  const category = (entry?.category ?? c.categoria ?? mapBloqueToCategory(c.bloque) ?? "technical") as TaskCategory;
+
+  // Normalize URL for lookup
+  const normalizedUrl = c.urlObjetivo ? normalizeUrl(c.urlObjetivo) : null;
+
+  // Get impact value: traffic delta first, then GSC metrics
   let impactValue: number | null = null;
-  if (c.urlObjetivo && deltaMap.has(c.urlObjetivo)) {
-    const delta = deltaMap.get(c.urlObjetivo)!;
-    impactValue = delta.impressionsCurr; // raw impressions as impact proxy
+  if (normalizedUrl) {
+    // Try delta map with normalized URL
+    for (const [key, delta] of Array.from(deltaMap.entries())) {
+      if (normalizeUrl(key) === normalizedUrl) {
+        impactValue = delta.impressionsCurr;
+        break;
+      }
+    }
+    // Fallback: GSC metrics
+    if (impactValue === null) {
+      for (const [key, metrics] of Array.from(gscMetrics.entries())) {
+        if (normalizeUrl(key) === normalizedUrl) {
+          impactValue = metrics.impressions;
+          break;
+        }
+      }
+    }
   }
 
   const complexity = entry?.complexity ?? "medium";
@@ -164,8 +185,11 @@ function candidateToScored(
   const humanMinutes = entry?.humanMinutes ?? 15;
   const impactBasis = entry?.impactBasis ?? "impressions_position";
 
-  // Determine mode from catalog (not from LLM)
-  const mode = entry?.modes?.WORDPRESS?.mode ?? entry?.modes?.NEXTJS?.mode ?? "HYBRID";
+  // Mode from catalog using the REAL site platform (not hardcoded WORDPRESS)
+  const platformKey = sitePlatform === "NEXTJS" ? "NEXTJS" : sitePlatform === "WORDPRESS" ? "WORDPRESS" : null;
+  const mode = platformKey && entry?.modes?.[platformKey]
+    ? entry.modes[platformKey].mode
+    : entry?.modes?.WORDPRESS?.mode ?? "HYBRID";
 
   // Per-candidate urgency (not global)
   const candidateUrgency = buildCandidateUrgency(c, siteUrgencyData);
@@ -218,6 +242,15 @@ function buildCandidateUrgency(
   };
 }
 
+/** Normalize URL for comparison: strip protocol, www, trailing slash. */
+export function normalizeUrl(url: string): string {
+  return url
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
 function mapBloqueToCategory(bloque?: string | null): TaskCategory | null {
   if (!bloque) return null;
   if (bloque === "tecnico") return "technical";
@@ -265,10 +298,33 @@ export async function composeProposal(
     ),
   };
 
-  // 3. Convert analysis candidates to scored (per-candidate urgency)
+  // 2b. Fetch GSC metrics per URL (fallback when no traffic delta)
+  const gscMetrics = new Map<string, { impressions: number; position: number; ctr: number }>();
+  const recentMetrics = await prisma.pageMetric.groupBy({
+    by: ["url"],
+    where: { siteId: { in: [siteId] }, date: { gte: new Date(Date.now() - 28 * 86400000) } },
+    _sum: { impressions: true, clicks: true },
+    _avg: { position: true, ctr: true },
+  });
+  for (const m of recentMetrics) {
+    gscMetrics.set(m.url, {
+      impressions: m._sum.impressions ?? 0,
+      position: m._avg.position ?? 0,
+      ctr: m._avg.ctr ?? 0,
+    });
+  }
+
+  // 2c. Get site platform
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { platform: true },
+  });
+  const sitePlatform = site?.platform ?? null;
+
+  // 3. Convert analysis candidates to scored (per-candidate urgency, real platform)
   const scored = candidates
     .filter((c) => c.actionType !== "install_package")
-    .map((c) => candidateToScored(c, siteUrgencyData, deltaMap));
+    .map((c) => candidateToScored(c, siteUrgencyData, deltaMap, gscMetrics, sitePlatform));
 
   // 4. Add deterministic package candidates as prerequisites
   const packageCandidates = await getPackageCandidates(siteId);

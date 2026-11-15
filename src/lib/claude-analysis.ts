@@ -185,12 +185,8 @@ RESPONDE ÚNICAMENTE con un JSON válido:
     {
       "titulo": "máx 120 chars, específico y accionable",
       "descripcion": "qué hacer exactamente, máx 500 chars",
-      "bloque": "tecnico|contenido|aeo_geo",
+      "categoria": "technical|content|aeo_geo|authority_local|measurement_conversion",
       "kind": "CONTENT|CODE|SETUP",
-      "mode": "AI|HYBRID|HUMAN",
-      "modeReason": "por qué este modo, máx 200 chars",
-      "priority": 1,
-      "effort": "LOW|MEDIUM|HIGH",
       "impactoEsperado": "qué se espera lograr, máx 200 chars",
       "justificacion": "qué dato la respalda, máx 300 chars",
       "keywordObjetivo": "keyword principal o null",
@@ -237,7 +233,7 @@ REGLA actionType (OBLIGATORIA para TODAS las candidatas):
 NUNCA uses: upload_media, generate_image, update_post, edit_page_widgets, create_landing_from_template (deprecados).
 
 Máximo: 3-5 oportunidades, 2-3 riesgos, 3-5 recomendaciones.
-Candidatas: 6-12 (2-4 por bloque: técnico, contenido, AEO/GEO).
+Candidatas: 8-16 por las 6 categorías del catálogo. NO uses campo "bloque".
 Sin texto fuera del JSON.`;
 
 // ─── Recopilación de contexto ampliado ───────────────────────────────────────
@@ -504,7 +500,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     for (const idea of contentPlanIdeas.slice(0, 10)) {
       lines.push(`  - [${idea.tipo}/${idea.prioridad}] "${idea.titulo}" → keywords: ${idea.keywords?.join(", ") ?? "N/D"}`);
     }
-    lines.push("INSTRUCCIÓN: las candidatas CONTENT deben salir de estas ideas. Usa fuente 'contentplan'. Si no hay suficientes, complementa con fuente 'analisis'.");
+    lines.push("INSTRUCCIÓN: usa estas ideas como fuente para candidatas de categoría 'content' (fuente='contentplan'). No fuerces todas las candidatas a ser de contenido — distribuye por las 6 categorías según los datos.");
     lines.push("");
   }
 
