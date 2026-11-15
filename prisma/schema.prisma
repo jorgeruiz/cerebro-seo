@@ -405,6 +405,7 @@ model PageMetric {
   bounceRate  Float?
   conversions Int?
 
+  @@unique([siteId, url, date, source], name: "siteId_url_date_source")
   @@index([siteId, url, date])
 }
 

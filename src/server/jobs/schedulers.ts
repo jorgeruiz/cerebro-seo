@@ -91,6 +91,13 @@ export async function registerClientJobs(clientId: string, services: string[] = 
       { clientId },
       { repeat: { pattern: "0 6 * * 5" }, jobId: `ai-search:${clientId}` }
     );
+
+    // GSC Page Metrics — diario 5 AM (popula PageMetric)
+    await dataCollectionQueue.add(
+      "gsc:page-metrics",
+      { clientId },
+      { repeat: { pattern: "0 5 * * *" }, jobId: `page-metrics:${clientId}` }
+    );
   }
 
   // ── Jobs disponibles para todos los clientes activos (sin costo DataForSEO/Claude) ──

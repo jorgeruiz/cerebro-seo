@@ -39,6 +39,8 @@ const JOB_LABEL: Record<string, { label: string; schedule: string }> = {
   "report:monthly":             { label: "Reporte Mensual",     schedule: "Día 2 · 6 AM" },
   "sync:cerebro":               { label: "Sync Cerebro",        schedule: "Cada 6 horas" },
   "sync:cerebro-tasks":         { label: "Sync Tareas",         schedule: "Cada 15 min" },
+  "gsc:page-metrics":           { label: "Page Metrics (GSC)",   schedule: "Diario · 5 AM" },
+  "gsc:page-metrics-backfill":  { label: "Page Metrics Backfill", schedule: "Manual" },
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
