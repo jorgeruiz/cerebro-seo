@@ -228,11 +228,23 @@ Tres carriles de ejecución:
 
 **Paquetes de infraestructura** (`src/lib/plan/packages/`):
 - PackageDefinition interface: id, preflight, detect, installSteps, verify.
+- blog-contract.ts: single source of truth para rutas (content/blog/{slug}.mdx, public/blog/{slug}/portada.webp), frontmatter, heading ## Blog, write prefixes.
 - SitePackage model: tracks installed packages per site (status, version, installedBy).
-- blog_bootstrap (v1): detect ## Blog in catalog-schemas.md + /blog route; install via agent.
+- blog_bootstrap (v1): detect uses blog-contract regexes + /blog route; install via agent with contract paths.
 - landing_bootstrap, microsite_bootstrap: v0 (defined, not active).
 - install_package actionType: creates PlanTask from PackageDefinition.installSteps.
 - Análisis recibe "PAQUETES:" en contexto; G4 remedy enlaza al paquete faltante.
+
+**Composición del plan** (`src/lib/plan/plan-composer.ts`, `plan-bridge.ts`):
+- ClientPlanConfig: maxTasks, mix (urgentCap/easyWinTarget/strategicTarget), categoryMinimums, humanMinutesCap, apiCostCapUsd. Stored in Client.planConfig (Json?).
+- classifyCandidateType: urgent/easy_win/strategic. Urgencia per-candidate (no global): fix_broken_links solo urgent si el destino tenía tráfico.
+- scoreCandidate: impact × confidence ÷ effort × categoryWeight.
+- composePlan: 5 fases — prerrequisitos (install_package que desbloquea, antes de cuotas) → urgentes (tope 30%) → mínimos categoría → easy wins → estratégicas.
+- install_package como prerrequisito: no consume cuota strategic, muestra unblocks[].
+- selectionReason/exclusionReason en cada candidata. Determinístico.
+- plan-bridge: computeTrafficDeltas (PageMetric 28d vs 28d), per-candidate urgency signals (cruza AuditIssue con PageMetric), package candidates determinísticas, dedup 3 meses.
+- Análisis genera candidatas en 6 categorías (no 3 bloques). priority/effort/mode del LLM ignorados — salen del catálogo.
+- Flow: Análisis → actionComposeProposal → composeProposal (bridge) → composePlan → ProposalPanel (UI) → actionConfirmProposal → actionSendToPlan.
 
 **Templates legacy** (`src/lib/task-templates.ts`):
 - `resolveTaskMode(steps)` = fuente de verdad para task.mode (still used).

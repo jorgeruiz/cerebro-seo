@@ -2,9 +2,9 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-14 (F2b — plan composer + blog contract)
-**Fase actual:** F2b (composición del plan) — algoritmo de selección implementado.
-**Próximo hito:** UI de propuesta de plan + integración del compositor con el análisis. E2E con plan compuesto real.
+**Última actualización:** 2026-11-14 (F2b completo — composición del plan)
+**Fase actual:** F2b COMPLETO. Criterio de salida: plan propuesto cumple cuotas, mínimos, tope humano, explica selección.
+**Próximo hito:** E2E en producción: análisis → propuesta compuesta → confirmar plan. Luego F3 (herramientas Oficina).
 
 ### ✅ F2b — Composición del plan mensual (2026-11-14)
 
@@ -20,17 +20,47 @@
 - selectionReason y exclusionReason en cada candidata
 - 18 tests: clasificación, scoring, topes, mínimos, duplicados, determinismo
 
-**Integración (completada):**
-- Análisis Claude: 6 categorías (no 3 bloques), sin priority/effort/mode del LLM
-- Plan Bridge: tráfico delta 28d vs 28d, urgency signals, package candidates
-- composeProposal: candidates → scored → composePlan → proposal
-- ProposalPanel: stats + mix bars + seleccionadas/excluidas + quitar/restaurar + confirmar
-- PlanConfigEditor: config editable con guardar/restaurar defaults
+**Catálogo:**
+- humanMinutes por actionType (0-30 min según pasos HM)
+- impactBasis por actionType (10 métricas: ctr_impressions, traffic_loss, keyword_gap, etc.)
+- ImpactBasis type exportado
+
+**ClientPlanConfig (Client.planConfig Json?):**
+- maxTasks=10, urgentCap=30%, easyWinTarget=50%, strategicTarget=25%
+- categoryMinimums: technical 1, content 2, aeo_geo 1
+- humanMinutesCap=240, apiCostCapUsd=5.0
+- resolveConfig() merge parciales con defaults
+
+**Plan Composer (src/lib/plan/plan-composer.ts):**
+- classifyCandidateType: urgent/easy_win/strategic (determinístico, per-candidate)
+- Urgencia per-candidate (CandidateUrgencySignals): fix_broken_links solo urgent si el destino tenía tráfico
+- scoreCandidate: impact × confidence ÷ effort × categoryWeight
+- composePlan: prerrequisitos → urgentes → mínimos categoría → easy wins → estratégicas
+- install_package como prerrequisito: entra antes de cuotas, no consume strategic, muestra unblocks
+- Stats de mezcla sobre TODOS los seleccionados (mínimos cuentan para su tipo)
+- selectionReason y exclusionReason en cada candidata
+
+**Plan Bridge (src/lib/plan/plan-bridge.ts):**
+- computeTrafficDeltas: PageMetric 28d vs 28d, dropThresholdPct configurable (default 30%)
+- Per-candidate urgency: cruza AuditIssue (404) con PageMetric (clicks > 0) por URL
+- Package candidates determinísticas (detecta paquetes faltantes sin LLM, marca isPrerequisite)
+- Dedup: recent targets últimos 3 meses
+- composeProposal: integra todo y llama composePlan
+
+**Análisis Claude:**
+- Prompt cambiado de 3 bloques a 6 categorías del catálogo
+- priority/effort/mode ya no los genera el LLM — salen del catálogo
+- Min 6 candidatas (antes 8)
+
+**UI:**
+- ProposalPanel: stats, mix bars (real vs objetivo), seleccionadas/excluidas/bloqueadas, quitar/restaurar, confirmar
+- PlanConfigEditor: maxTasks, humanMinutesCap, apiCostCap, mix, categoryMinimums, guardar/restaurar defaults
 - actionComposeProposal + actionConfirmProposal (server actions)
 
+**Tests:** 23 del composer (clasificación, scoring, selección, determinismo, topes, mínimos, duplicados, urgentes, prerrequisitos, unblocks)
+
 **Pendiente para E2E:**
-- Probar con análisis real en producción
-- Verificar que las 6 categorías se generan correctamente
+- Probar con análisis real en producción: análisis → "Componer propuesta" → revisar → confirmar
 
 ### ✅ F2 — Paquetes de infraestructura: blog_bootstrap (2026-11-14)
 
