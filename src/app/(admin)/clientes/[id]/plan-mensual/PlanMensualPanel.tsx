@@ -181,6 +181,54 @@ function CopyableBlock({ label, value, mono = true }: { label: string; value: st
   );
 }
 
+function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number } }) {
+  const hasCurrents = !!(seo.current_meta_title || seo.current_meta_description);
+  return (
+    <div className="mt-2 bg-zinc-950 rounded px-3 py-2 space-y-2 font-mono text-[0.6rem]">
+      <p className="text-zinc-400 text-[0.55rem]">SEO — page_id={seo.page_id}</p>
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-zinc-800">
+            <th className="pb-1 pr-3 text-zinc-500"></th>
+            {hasCurrents && <th className="pb-1 pr-3 text-zinc-500">Actual</th>}
+            <th className="pb-1 text-zinc-500">Propuesto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-zinc-800/50">
+            <td className="py-1.5 pr-3 text-zinc-500">Title</td>
+            {hasCurrents && (
+              <td className="py-1.5 pr-3 text-zinc-400">
+                {seo.current_meta_title || <span className="text-zinc-600">(vacío)</span>}
+                <span className="text-zinc-600 ml-1">({(seo.current_meta_title ?? "").length}c)</span>
+              </td>
+            )}
+            <td className="py-1.5 text-emerald-400">
+              {seo.meta_title || <span className="text-zinc-600">(sin generar)</span>}
+              <span className="text-zinc-600 ml-1">({seo.meta_title.length}c)</span>
+            </td>
+          </tr>
+          <tr>
+            <td className="py-1.5 pr-3 text-zinc-500">Desc</td>
+            {hasCurrents && (
+              <td className="py-1.5 pr-3 text-zinc-400">
+                {seo.current_meta_description?.slice(0, 80) || <span className="text-zinc-600">(vacío)</span>}
+                {(seo.current_meta_description ?? "").length > 80 && "..."}
+                <span className="text-zinc-600 ml-1">({(seo.current_meta_description ?? "").length}c)</span>
+              </td>
+            )}
+            <td className="py-1.5 text-emerald-400">
+              {seo.meta_description?.slice(0, 80) || <span className="text-zinc-600">(sin generar)</span>}
+              {seo.meta_description.length > 80 && "..."}
+              <span className="text-zinc-600 ml-1">({seo.meta_description.length}c)</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ContentPackageBlock({ pkg }: { pkg: ContentPackage }) {
   const structureText = [
     `H1: ${pkg.h1}`,
@@ -408,6 +456,11 @@ function StepRow({
         {step.status === "DONE" &&
           (step.stagedChange as { type?: string } | null)?.type === "content_package" && (
           <ContentPackageBlock pkg={step.stagedChange as ContentPackage} />
+        )}
+
+        {/* SEO comparison — shown when seo step has stagedChange */}
+        {(step.stagedChange as { type?: string } | null)?.type === "seo" && (
+          <SeoComparisonBlock seo={step.stagedChange as { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number }} />
         )}
 
         {/* Keyword research table — shown when keyword_research step is DONE */}

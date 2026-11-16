@@ -902,22 +902,66 @@ async function executeWpPublish(
  */
 async function executeWpSeo(
   cerebroClientId: string,
-  task: { title: string; objective: string },
+  task: { title: string; objective: string; actionType?: string | null },
   action: WpStepAction,
-  _taskId: string,
+  taskId: string,
 ): Promise<WpStepResult> {
-  const pageId = Number(action.payload?.page_id ?? 0);
+  let pageId = Number(action.payload?.page_id ?? 0);
   let metaTitle = action.payload?.meta_title as string | undefined;
   let metaDescription = action.payload?.meta_description as string | undefined;
   const focusKeyword = action.payload?.focus_keyword as string | undefined ?? null;
+  const targetUrl = action.payload?.targetUrl as string | undefined;
 
+  // ── Resolve page_id from URL if needed ──────────────────────────────
+  if (pageId === 0 && targetUrl) {
+    const { resolveWpPostId } = await import("@/lib/wp-proxy-client");
+    const resolved = await resolveWpPostId(cerebroClientId, targetUrl, taskId);
+    if (resolved) {
+      pageId = resolved;
+    } else {
+      return {
+        notes: `wp:seo BLOCKED — no se pudo resolver page_id para "${targetUrl}". Verificar que la URL existe en WordPress.`,
+        stagedChange: { type: "seo", page_id: 0, meta_title: "", meta_description: "", focus_keyword: null, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString() } as WpStagedSeoChange,
+      };
+    }
+  }
+
+  // ── Read current SEO meta from the plugin ───────────────────────────
+  let currentTitle = "";
+  let currentDescription = "";
+  if (pageId > 0) {
+    const { getWpSeo } = await import("@/lib/wp-proxy-client");
+    const current = await getWpSeo(cerebroClientId, pageId, taskId);
+    if (current) {
+      currentTitle = current.meta_title;
+      currentDescription = current.meta_description;
+    }
+  }
+
+  // ── Generate meta tags with Claude ──────────────────────────────────
   if (!metaTitle || !metaDescription) {
     const brief = action.content_brief ?? `${task.title}: ${task.objective}`;
+
+    // Get verified services from site profile
+    let verifiedServices = "";
+    try {
+      const { getWpSiteProfile } = await import("@/lib/wp-site-profile");
+      const profile = await getWpSiteProfile(cerebroClientId, "", "", taskId).catch(() => null);
+      if (profile?.contentSummary) {
+        verifiedServices = `\nSERVICIOS VERIFICADOS DEL CLIENTE (solo mencionar estos):\n${profile.contentSummary.slice(0, 800)}`;
+      }
+    } catch { /* profile unavailable */ }
+
+    const currentContext = currentTitle || currentDescription
+      ? `\nMETAS ACTUALES:\nmeta_title actual: "${currentTitle}" (${currentTitle.length} chars)\nmeta_description actual: "${currentDescription}" (${currentDescription.length} chars)`
+      : "";
+
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const metaResponse = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 500,
+      temperature: 0,
       messages: [{
         role: "user",
         content: [
@@ -925,10 +969,13 @@ async function executeWpSeo(
           "meta_title: 50-60 caracteres exactos, incluye keyword principal.",
           "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
           "PROHIBIDO inventar datos del cliente.",
+          "PROHIBIDO mencionar servicios que no esten en la lista de servicios verificados.",
           'Responde SOLO con JSON: {"meta_title": "...", "meta_description": "..."}',
           "",
           "CONTEXTO:",
           brief,
+          currentContext,
+          verifiedServices,
         ].join("\n"),
       }],
     });
@@ -958,17 +1005,20 @@ async function executeWpSeo(
     objective: task.objective.slice(0, 200),
     generated: !!(metaTitle && metaDescription),
     staged_at: new Date().toISOString(),
-  };
+    // Include current values for UI comparison
+    current_meta_title: currentTitle || undefined,
+    current_meta_description: currentDescription || undefined,
+  } as WpStagedSeoChange;
 
-  const pageNote = pageId === 0
-    ? " (page_id=0 — se resolvera con GET /pages al publicar)"
-    : ` para page_id=${pageId}`;
   const generatedNote = metaTitle && metaDescription
-    ? `meta_title="${metaTitle}" (${metaTitle.length} chars)${pageNote}`
-    : `generacion fallida — completar manualmente${pageNote}`;
+    ? `meta_title="${metaTitle}" (${metaTitle.length} chars) para page_id=${pageId}`
+    : `generacion fallida — completar manualmente para page_id=${pageId}`;
+  const currentNote = currentTitle
+    ? `\nActual: title="${currentTitle}" (${currentTitle.length}c) | desc="${currentDescription.slice(0, 50)}..." (${currentDescription.length}c)`
+    : "";
 
   return {
-    notes: `wp:seo staged — ${generatedNote}`,
+    notes: `wp:seo staged — ${generatedNote}${currentNote}`,
     stagedChange,
   };
 }

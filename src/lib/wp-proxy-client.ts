@@ -464,6 +464,73 @@ export async function updateWpSeo(
   return { ok: true, data: result.data as WpSeoResult };
 }
 
+// ─── Read current SEO meta ────────────────────────────────────────────────────
+
+export interface WpCurrentSeo {
+  meta_title: string;
+  meta_description: string;
+  focus_keyword: string | null;
+}
+
+/**
+ * Read current SEO meta for a page/post via GET /seo/{postId}.
+ * Returns null if the endpoint doesn't exist (plugin < 1.6.1) or fails.
+ */
+export async function getWpSeo(
+  clienteId: string,
+  postId: number,
+  taskId?: string
+): Promise<WpCurrentSeo | null> {
+  const result = await proxyCall(clienteId, `/seo/${postId}`, { taskId });
+  if (!result.ok) return null;
+  const data = result.data as Record<string, unknown>;
+  return {
+    meta_title: String(data.meta_title ?? data.title ?? ""),
+    meta_description: String(data.meta_description ?? data.description ?? ""),
+    focus_keyword: data.focus_keyword ? String(data.focus_keyword) : null,
+  };
+}
+
+// ─── Resolve URL to post ID ──────────────────────────────────────────────────
+
+/**
+ * Resolve a URL path to a WordPress post/page ID.
+ * Uses the plugin's /resolve-url endpoint (calls url_to_postid() server-side).
+ * Falls back to slug matching against /pages if the endpoint doesn't exist.
+ */
+export async function resolveWpPostId(
+  clienteId: string,
+  urlPath: string,
+  taskId?: string
+): Promise<number | null> {
+  // Try the resolve-url endpoint first (plugin 1.6.1+)
+  const resolveResult = await proxyCall(clienteId, "/resolve-url", {
+    method: "POST",
+    body: { url: urlPath },
+    taskId,
+  });
+  if (resolveResult.ok) {
+    const data = resolveResult.data as { post_id?: number };
+    if (data.post_id && data.post_id > 0) return data.post_id;
+  }
+
+  // Fallback: search /pages by slug
+  const slug = urlPath.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
+  if (!slug) return null; // home page — needs special handling
+
+  const pagesResult = await getWpPages(clienteId, taskId);
+  if (pagesResult.ok) {
+    const match = pagesResult.data.find(
+      (p: { slug: string; id?: number }) => p.slug?.toLowerCase() === slug.toLowerCase()
+    );
+    if (match && (match as { id?: number }).id) {
+      return (match as { id: number }).id;
+    }
+  }
+
+  return null;
+}
+
 // ─── Media Upload (image with alt text) ──────────────────────────────────────
 
 export interface WpMediaResult {

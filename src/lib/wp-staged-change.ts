@@ -34,18 +34,17 @@ export interface WpStagedBlogChange {
 
 export interface WpStagedSeoChange {
   type: "seo";
-  /**
-   * ID de la página/post en WordPress.
-   * 0 = desconocido — debe resolverse via GET /pages antes de publicar.
-   */
+  /** ID de la página/post en WordPress. 0 = no resuelto → tarea BLOCKED. */
   page_id: number;
   meta_title: string;
   meta_description: string;
   focus_keyword: string | null;
-  /** Texto del objetivo — usado para resolver page_id=0 por matching de título/slug */
   objective: string;
   generated: boolean;
   staged_at: string;
+  /** Current values from the plugin — for UI comparison (actual vs proposed) */
+  current_meta_title?: string;
+  current_meta_description?: string;
 }
 
 export interface WpStagedElementorChange {

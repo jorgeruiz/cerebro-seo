@@ -39,6 +39,8 @@ vi.mock("@/lib/wp-proxy-client", () => ({
   getWpElementorPage: vi.fn().mockResolvedValue({ ok: false, error: "not available" }),
   duplicateWpElementorPage: vi.fn(),
   updateWpElementorWidgets: vi.fn(),
+  getWpSeo: vi.fn().mockResolvedValue(null),
+  resolveWpPostId: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/server/jobs/workers/base-worker", () => ({
