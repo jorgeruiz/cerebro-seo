@@ -36,6 +36,7 @@ export async function initJobs(): Promise<void> {
   await import("./workers/competitor-worker");
   await import("./workers/ai-search-worker");
   await import("./workers/page-metrics-worker");
+  await import("./workers/package-detect-worker");
 
   await initSchedulers();
   await initWatchdogScheduler();

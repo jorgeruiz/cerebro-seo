@@ -942,15 +942,26 @@ async function executeWpSeo(
   if (!metaTitle || !metaDescription) {
     const brief = action.content_brief ?? `${task.title}: ${task.objective}`;
 
-    // Get verified services from site profile
+    // Get verified/excluded services from client record
     let verifiedServices = "";
     try {
-      const { getWpSiteProfile } = await import("@/lib/wp-site-profile");
-      const profile = await getWpSiteProfile(cerebroClientId, "", "", taskId).catch(() => null);
-      if (profile?.contentSummary) {
-        verifiedServices = `\nSERVICIOS VERIFICADOS DEL CLIENTE (solo mencionar estos):\n${profile.contentSummary.slice(0, 800)}`;
+      const { prisma: db } = await import("@/lib/db");
+      const clientRecord = await db.client.findFirst({
+        where: { sites: { some: { client: { cerebroClientId } } } },
+        select: { verifiedServices: true, excludedServices: true },
+      });
+      if (clientRecord) {
+        const offers = clientRecord.verifiedServices.length > 0
+          ? `OFRECE: ${clientRecord.verifiedServices.join(", ")}`
+          : "";
+        const notOffers = clientRecord.excludedServices.length > 0
+          ? `NO OFRECE (PROHIBIDO mencionar): ${clientRecord.excludedServices.join(", ")}`
+          : "";
+        if (offers || notOffers) {
+          verifiedServices = `\nSERVICIOS DEL CLIENTE:\n${offers}\n${notOffers}`.trim();
+        }
       }
-    } catch { /* profile unavailable */ }
+    } catch { /* DB unavailable */ }
 
     const currentContext = currentTitle || currentDescription
       ? `\nMETAS ACTUALES:\nmeta_title actual: "${currentTitle}" (${currentTitle.length} chars)\nmeta_description actual: "${currentDescription}" (${currentDescription.length} chars)`
@@ -996,6 +1007,30 @@ async function executeWpSeo(
     await logApiUsage({ provider: "anthropic", endpoint: "wp-seo-meta", cost: costUsd });
   }
 
+  // Fetch GSC data for the target URL
+  let gscData: { impressions: number; clicks: number; ctr: number; position: number } | undefined;
+  if (targetUrl) {
+    try {
+      const { prisma: db } = await import("@/lib/db");
+      const { normalizeUrl } = await import("@/lib/plan/plan-bridge");
+      const normalized = normalizeUrl(targetUrl);
+      const d28 = new Date(Date.now() - 28 * 86400000);
+      const metrics = await db.pageMetric.aggregate({
+        where: { url: normalized, source: "gsc", date: { gte: d28 } },
+        _sum: { clicks: true, impressions: true },
+        _avg: { ctr: true, position: true },
+      });
+      if (metrics._sum.impressions && metrics._sum.impressions > 0) {
+        gscData = {
+          impressions: metrics._sum.impressions,
+          clicks: metrics._sum.clicks ?? 0,
+          ctr: parseFloat((metrics._avg.ctr ?? 0).toFixed(2)),
+          position: parseFloat((metrics._avg.position ?? 0).toFixed(1)),
+        };
+      }
+    } catch { /* PageMetric not available */ }
+  }
+
   const stagedChange: WpStagedSeoChange = {
     type: "seo",
     page_id: pageId,
@@ -1005,9 +1040,9 @@ async function executeWpSeo(
     objective: task.objective.slice(0, 200),
     generated: !!(metaTitle && metaDescription),
     staged_at: new Date().toISOString(),
-    // Include current values for UI comparison
     current_meta_title: currentTitle || undefined,
     current_meta_description: currentDescription || undefined,
+    gsc_28d: gscData,
   } as WpStagedSeoChange;
 
   const generatedNote = metaTitle && metaDescription

@@ -45,6 +45,8 @@ export interface WpStagedSeoChange {
   /** Current values from the plugin — for UI comparison (actual vs proposed) */
   current_meta_title?: string;
   current_meta_description?: string;
+  /** GSC metrics for the target URL (28 days) */
+  gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number };
 }
 
 export interface WpStagedElementorChange {

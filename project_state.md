@@ -2,9 +2,38 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-14 (F2b completo — composición del plan)
-**Fase actual:** F2b COMPLETO. Criterio de salida: plan propuesto cumple cuotas, mínimos, tope humano, explica selección.
-**Próximo hito:** E2E en producción: análisis → propuesta compuesta → confirmar plan. Luego F3 (herramientas Oficina).
+**Última actualización:** 2026-11-16 (F2c — cierre pruebas producción)
+**Fase actual:** F2c COMPLETO. E2E probado con Ayrisa (WP).
+**Próximo hito:** Verificar en producción. Luego F3 (herramientas Oficina).
+
+### ✅ F2c — Cierre pruebas producción (2026-11-16)
+
+**§1 Seguridad del contenido:**
+- Client.verifiedServices / excludedServices (String[]): campos persistentes
+  editables en /configuracion. Prompt de executeWpSeo y Análisis los reciben.
+- SeoComparisonBlock: tabla actual vs propuesto + GSC 28d (impresiones, clics, CTR, posición)
+- resolveWpPostId: /resolve-url (url_to_postid) + fallback slug matching. Si page_id=0 → BLOCKED
+- getWpSeo: lee metas actuales del plugin para comparación
+
+**§2 UX del plan:**
+- Botón "Reintentar" en tareas BLOCKED (RetryBlockedButton)
+- Script migrate-categories.ts: migra categorías viejas a las 6 del catálogo
+
+**§3 Paquetes:**
+- Job packages:detect (domingos 3AM): detecta paquetes instalados en repos Next.js
+- package-detect-processor.ts + package-detect-worker.ts
+
+**§4 Rank tracking:**
+- Diagnóstico: DataForSEO SERP depth:30. "sin posición" = fuera del top 30.
+  GSC muestra posiciones porque mide impresiones a cualquier posición.
+  Los jobs pueden no haber corrido (mismo issue de colas delayed).
+
+**Pendiente de verificar en producción:**
+- /configuracion: sección "Servicios verificados" visible y funcional
+- Reintentar en tareas BLOCKED de Ayrisa
+- /paquetes sin excepción
+- Quicsa con blog_bootstrap detectado
+- migrate-categories.ts corrido en producción
 
 ### ✅ F2b — Composición del plan mensual (2026-11-14)
 

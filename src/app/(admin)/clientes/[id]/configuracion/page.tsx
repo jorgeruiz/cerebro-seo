@@ -10,6 +10,7 @@ import { CompetitorsManager } from "./CompetitorsManager";
 import { GscConnectSection } from "../GscConnectSection";
 import { Ga4ConnectSection } from "../Ga4ConnectSection";
 import { PlanConfigEditor } from "./PlanConfigEditor";
+import { VerifiedServicesEditor } from "./VerifiedServicesEditor";
 import { resolveConfig } from "@/lib/plan/plan-composer";
 
 export default async function ConfiguracionPage({ params }: { params: { id: string } }) {
@@ -139,6 +140,16 @@ export default async function ConfiguracionPage({ params }: { params: { id: stri
               domain: c.domain,
               createdAt: c.createdAt,
             }))}
+          />
+        </section>
+
+        {/* Servicios verificados */}
+        <section>
+          <SectionHeader>Servicios verificados</SectionHeader>
+          <VerifiedServicesEditor
+            clientId={client.id}
+            verified={client.verifiedServices}
+            excluded={client.excludedServices}
           />
         </section>
 

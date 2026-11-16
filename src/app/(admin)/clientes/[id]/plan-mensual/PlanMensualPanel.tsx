@@ -181,11 +181,36 @@ function CopyableBlock({ label, value, mono = true }: { label: string; value: st
   );
 }
 
-function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number } }) {
+function RetryBlockedButton({ taskId }: { taskId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const handleRetry = () => {
+    startTransition(async () => {
+      const { actionRetryTask } = await import("../analisis/plan-actions");
+      const res = await actionRetryTask(taskId);
+      if (res.ok) window.location.reload();
+    });
+  };
+  return (
+    <button onClick={handleRetry} disabled={isPending}
+      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-6 text-[0.6rem] gap-1")}>
+      {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+      Reintentar
+    </button>
+  );
+}
+
+function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number } } }) {
   const hasCurrents = !!(seo.current_meta_title || seo.current_meta_description);
   return (
     <div className="mt-2 bg-zinc-950 rounded px-3 py-2 space-y-2 font-mono text-[0.6rem]">
-      <p className="text-zinc-400 text-[0.55rem]">SEO — page_id={seo.page_id}</p>
+      <div className="flex items-center justify-between">
+        <p className="text-zinc-400 text-[0.55rem]">SEO — page_id={seo.page_id}</p>
+        {seo.gsc_28d && (
+          <p className="text-zinc-500 text-[0.55rem]">
+            GSC 28d: {seo.gsc_28d.impressions.toLocaleString()} impr · {seo.gsc_28d.clicks} clics · CTR {seo.gsc_28d.ctr}% · pos {seo.gsc_28d.position}
+          </p>
+        )}
+      </div>
       <table className="w-full text-left">
         <thead>
           <tr className="border-b border-zinc-800">
@@ -199,7 +224,7 @@ function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_descripti
             <td className="py-1.5 pr-3 text-zinc-500">Title</td>
             {hasCurrents && (
               <td className="py-1.5 pr-3 text-zinc-400">
-                {seo.current_meta_title || <span className="text-zinc-600">(vacío)</span>}
+                {seo.current_meta_title || <span className="text-zinc-600">(vacio)</span>}
                 <span className="text-zinc-600 ml-1">({(seo.current_meta_title ?? "").length}c)</span>
               </td>
             )}
@@ -212,7 +237,7 @@ function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_descripti
             <td className="py-1.5 pr-3 text-zinc-500">Desc</td>
             {hasCurrents && (
               <td className="py-1.5 pr-3 text-zinc-400">
-                {seo.current_meta_description?.slice(0, 80) || <span className="text-zinc-600">(vacío)</span>}
+                {seo.current_meta_description?.slice(0, 80) || <span className="text-zinc-600">(vacio)</span>}
                 {(seo.current_meta_description ?? "").length > 80 && "..."}
                 <span className="text-zinc-600 ml-1">({(seo.current_meta_description ?? "").length}c)</span>
               </td>
@@ -1434,9 +1459,10 @@ function TaskCard({
 
           {/* BLOCKED card */}
           {task.status === "BLOCKED" && task.blockedReason && (
-            <div className="px-4 py-3 bg-orange-500/10 border-b border-orange-500/20">
+            <div className="px-4 py-3 bg-orange-500/10 border-b border-orange-500/20 space-y-2">
               <p className="font-mono text-[0.65rem] text-orange-600 font-semibold">Bloqueado: {task.blockedReason}</p>
-              {task.remedy && <p className="font-mono text-[0.6rem] text-muted-foreground mt-0.5">Remedio: {task.remedy}</p>}
+              {task.remedy && <p className="font-mono text-[0.6rem] text-muted-foreground">Remedio: {task.remedy}</p>}
+              <RetryBlockedButton taskId={task.id} />
             </div>
           )}
 

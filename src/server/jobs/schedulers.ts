@@ -155,6 +155,13 @@ async function registerGlobalJobs(
     }
   );
 
+  // Package detection — domingos 3 AM (detecta paquetes instalados en repos Next.js)
+  await dataCollectionQueue.add(
+    "packages:detect",
+    {},
+    { repeat: { pattern: "0 3 * * 0" }, jobId: "packages:detect:global" }
+  );
+
   // Sync de tareas y estrategia — cada 15min, solo clientes SEO
   for (const client of seoClients) {
     await syncQueue.add(

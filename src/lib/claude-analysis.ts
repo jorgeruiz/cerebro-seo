@@ -399,6 +399,21 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       lines.push("PAQUETES: ninguno instalado. Si el sitio necesita blog o landings, proponer install_package primero.");
     }
   }
+
+  // Verified/excluded services
+  const clientFull = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { verifiedServices: true, excludedServices: true },
+  });
+  if (clientFull?.verifiedServices.length || clientFull?.excludedServices.length) {
+    lines.push("");
+    if (clientFull.verifiedServices.length > 0) {
+      lines.push(`SERVICIOS QUE OFRECE: ${clientFull.verifiedServices.join(", ")}`);
+    }
+    if (clientFull.excludedServices.length > 0) {
+      lines.push(`SERVICIOS QUE NO OFRECE (PROHIBIDO proponer): ${clientFull.excludedServices.join(", ")}`);
+    }
+  }
   lines.push("");
 
   // Ciclo
