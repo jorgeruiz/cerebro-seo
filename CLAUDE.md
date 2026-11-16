@@ -288,7 +288,7 @@ Si necesitas mostrar una URL de webhook de ejemplo, usa `<EASYPANEL_DEPLOY_WEB>`
 
 ## Información operativa
 
-- **Easypanel VPS:** http://76.13.121.6:3000 — credenciales en el password manager del equipo.
+- **Easypanel VPS:** http://76.13.121.6:3000 — credenciales en el password manager.
 - **Conexión a Easypanel:** Claude Code conecta vía HTTP API con curl, no SSH.
 - **GitHub repo:** `jorgeruiz/cerebro-seo` (privado, bajo cuenta personal `jorgeruiz`). Click Society no usa GitHub Organizations — todos los repos del agency van bajo `jorgeruiz`.
 - **Remote URL:** `https://github.com/jorgeruiz/cerebro-seo.git`
