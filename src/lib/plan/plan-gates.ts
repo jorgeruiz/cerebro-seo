@@ -45,6 +45,8 @@ export async function evaluateGates(
     actionType: string;
     wpCapabilities?: string[] | null;
     taskCategory?: string | null;
+    /** The task being decomposed — excluded from G7 self-conflict check */
+    taskId?: string;
   }
 ): Promise<GateCheckResult> {
   const results: GateResult[] = [];
@@ -78,6 +80,7 @@ async function evaluateGate(
     actionType: string;
     wpCapabilities?: string[] | null;
     taskCategory?: string | null;
+    taskId?: string;
   }
 ): Promise<GateResult> {
   switch (gate) {
@@ -216,6 +219,8 @@ async function evaluateGate(
           siteId: ctx.siteId,
           targetKeyword: ctx.targetKeyword,
           status: { notIn: ["DONE", "VOIDED", "FAILED"] },
+          // Exclude the task being decomposed (can't conflict with itself)
+          ...(ctx.taskId ? { id: { not: ctx.taskId } } : {}),
         },
         select: { id: true, title: true },
       });
@@ -234,8 +239,13 @@ async function evaluateGate(
       // Target resolved — URL/page must exist for tasks on existing pages
       if (!ctx.targetUrl) return { gate, passed: true }; // No target = new content, OK
 
+      const { normalizeUrl } = await import("@/lib/plan/plan-bridge");
+      const targetPath = normalizeUrl(ctx.targetUrl);
+
+      // Home page is always valid
+      if (targetPath === "/") return { gate, passed: true };
+
       if (ctx.platform === "WORDPRESS") {
-        // Verify the page exists in WP via proxy
         const site = await prisma.site.findUnique({
           where: { id: ctx.siteId },
           select: { client: { select: { cerebroClientId: true } } },
@@ -244,29 +254,28 @@ async function evaluateGate(
         if (cerebroId) {
           try {
             const { getWpPages } = await import("@/lib/wp-proxy-client");
+            // Fetch pages (the /pages endpoint returns pages, not posts)
             const pagesResult = await getWpPages(cerebroId);
-            if (pagesResult.ok && pagesResult.data.length > 0) {
-              const targetSlug = extractSlug(ctx.targetUrl);
-              const match = pagesResult.data.find((p: { slug: string }) =>
-                p.slug && targetSlug && p.slug.toLowerCase() === targetSlug.toLowerCase()
-              );
-              if (!match) {
-                return {
-                  gate, passed: false,
-                  reason: `Página "${ctx.targetUrl}" no encontrada en WordPress (${pagesResult.data.length} páginas revisadas)`,
-                  remedy: "Verificar que la URL existe en WordPress o crear la página primero",
-                };
-              }
+            if (pagesResult.ok) {
+              const allItems = pagesResult.data;
+              const match = allItems.find((p: { slug: string }) => {
+                if (!p.slug) return false;
+                return normalizeUrl(`/${p.slug}`) === targetPath
+                  || targetPath.endsWith(`/${p.slug.toLowerCase()}`);
+              });
+              if (match) return { gate, passed: true };
             }
+            // If not found in pages, the target might be a post or CPT
+            // Don't block — the execution step resolves page_id with tryResolvePageId
+            // which searches by title/slug across all content
+            return { gate, passed: true };
           } catch {
-            // Plugin unreachable — don't block, let execution handle it
+            // Plugin unreachable — don't block
+            return { gate, passed: true };
           }
         }
       } else if (ctx.platform === "NEXTJS") {
-        // For Next.js: check if the route exists in the repo
-        // This is a best-effort check — the route might be dynamic
-        if (ctx.targetUrl.includes("[")) return { gate, passed: true }; // Dynamic route
-        // We can't easily verify without cloning — trust the URL
+        if (ctx.targetUrl.includes("[")) return { gate, passed: true };
       }
 
       return { gate, passed: true };
@@ -301,12 +310,3 @@ async function fetchGitHubFile(
   }
 }
 
-function extractSlug(url: string): string | null {
-  try {
-    const path = url.startsWith("http") ? new URL(url).pathname : url;
-    const slug = path.replace(/^\/+|\/+$/g, "");
-    return slug || null;
-  } catch {
-    return url.replace(/^\/+|\/+$/g, "") || null;
-  }
-}

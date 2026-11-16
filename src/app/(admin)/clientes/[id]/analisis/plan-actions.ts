@@ -117,23 +117,44 @@ export async function actionSendToPlan(
 
   const site = await resolveSite(clientId).catch(() => null);
 
-  const plan = await prisma.monthlyPlan.upsert({
+  // Find existing plan for this month
+  const existingPlan = await prisma.monthlyPlan.findUnique({
     where: { clientId_month: { clientId, month } },
-    create: {
-      clientId,
-      month,
-      status: "PLANNING",
-      analysisId,
-      cycleId: cycle?.id ?? null,
-      branchName: `plan/${clientSlug(client.name)}-${month}`,
-      createdById: session.user.email ?? null,
-    },
-    update: {
-      // Don't overwrite existing plan fields, just update analysisId if newer
-      analysisId,
-      branchName: `plan/${clientSlug(client.name)}-${month}`,
-    },
+    select: { id: true, status: true },
   });
+
+  let plan;
+  if (existingPlan && ["PUBLISHED", "IN_REVIEW", "ARCHIVED"].includes(existingPlan.status)) {
+    // Plan is closed — create a supplementary plan for next month
+    const nextMonth = getNextMonth(month);
+    plan = await prisma.monthlyPlan.upsert({
+      where: { clientId_month: { clientId, month: nextMonth } },
+      create: {
+        clientId,
+        month: nextMonth,
+        status: "PLANNING",
+        analysisId,
+        cycleId: cycle?.id ?? null,
+        branchName: `plan/${clientSlug(client.name)}-${nextMonth}`,
+        createdById: session.user.email ?? null,
+      },
+      update: { analysisId },
+    });
+  } else {
+    plan = await prisma.monthlyPlan.upsert({
+      where: { clientId_month: { clientId, month } },
+      create: {
+        clientId,
+        month,
+        status: "PLANNING",
+        analysisId,
+        cycleId: cycle?.id ?? null,
+        branchName: `plan/${clientSlug(client.name)}-${month}`,
+        createdById: session.user.email ?? null,
+      },
+      update: { analysisId },
+    });
+  }
 
   // Create PlanTasks — skip duplicates by sourceCandidateId
   const existingCandidateIds = await prisma.planTask.findMany({
@@ -330,6 +351,13 @@ function inferCategory(candidate: { actionType?: string | null; titulo: string; 
 
   // Fallback to kind-based
   return candidate.kind === "CONTENT" ? "contenido" : candidate.kind === "CODE" ? "tecnico" : "setup";
+}
+
+/** Get next month in YYYY-MM format. */
+function getNextMonth(yearMonth: string): string {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const next = m === 12 ? new Date(y + 1, 0, 1) : new Date(y, m, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
 }
 
 // ─── Compose Proposal (F2b) ─────────────────────────────────────────────────

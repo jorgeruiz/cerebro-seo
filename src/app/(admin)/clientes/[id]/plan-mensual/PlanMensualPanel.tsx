@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import {
-  Bot, User, Settings2, FileText, Code, Info,
+  Bot, User, FileText, Info,
   ChevronDown, ChevronRight, Loader2,
   Play, CheckCircle2, XCircle,
   Clock, Ban, RotateCcw, RefreshCw, Terminal,
@@ -51,24 +51,6 @@ const MODE_BADGE: Record<string, { label: string; icon: React.ElementType; color
   HUMAN:  { label: "Manual",  icon: User,     color: "text-orange-500 bg-orange-500/10 border-orange-500/30" },
 };
 
-const KIND_ICON: Record<string, React.ElementType> = {
-  CONTENT: FileText,
-  CODE: Code,
-  SETUP: Settings2,
-};
-
-const KIND_LABELS: Record<string, Record<string, string>> = {
-  NEXTJS: { CONTENT: "Contenido", CODE: "Código", SETUP: "Setup" },
-  WORDPRESS: { CONTENT: "Contenido", CODE: "Plugin", SETUP: "Manual" },
-  MIGRACION: { CONTENT: "Contenido", CODE: "Plugin", SETUP: "Manual" },
-  DEFAULT: { CONTENT: "Contenido", CODE: "Código", SETUP: "Setup" },
-};
-
-function getKindLabel(platform: string | null, kind: string): string {
-  const labels = KIND_LABELS[platform ?? "DEFAULT"] ?? KIND_LABELS.DEFAULT;
-  return labels[kind] ?? kind;
-}
-
 const TASK_STATUS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   PLANNING:      { label: "Generando pasos...", icon: Loader2,        color: "text-yellow-500" },
   READY:         { label: "Listo",              icon: CheckCircle2,   color: "text-green-500" },
@@ -90,8 +72,6 @@ const STEP_STATUS: Record<string, { label: string; color: string }> = {
   WAITING_HUMAN: { label: "Pendiente",     color: "text-orange-500" },
   SKIPPED:       { label: "Omitido",       color: "text-muted-foreground" },
 };
-
-const EFFORT_LABEL: Record<string, string> = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto" };
 
 // ─── Progress helpers ───────────────────────────────────────────────────────
 
@@ -1319,7 +1299,6 @@ function TaskCard({
   const StatusIcon = statusCfg.icon;
   const badge = MODE_BADGE[task.mode] ?? MODE_BADGE.HUMAN;
   const BadgeIcon = badge.icon;
-  const KindIcon = KIND_ICON[task.kind] ?? Code;
   const progress = taskProgress(task);
   const isVoided = task.status === "VOIDED";
   const isOutdatedVersion = task.generatorVersion !== null
@@ -1364,13 +1343,14 @@ function TaskCard({
                 </span>
               )}
             </span>
-            <span className="font-mono text-[0.6rem] text-muted-foreground border border-border rounded px-1.5 py-0.5 flex items-center gap-0.5">
-              <KindIcon className="h-2.5 w-2.5" />
-              {getKindLabel(isWordPress ? "WORDPRESS" : "NEXTJS", task.kind)}
+            <span className="font-mono text-[0.6rem] text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5">
+              {task.category}
             </span>
-            <span className="font-mono text-[0.6rem] text-muted-foreground">
-              P{task.priority} · {EFFORT_LABEL[task.effort] ?? task.effort}
-            </span>
+            {task.actionType && (
+              <span className="font-mono text-[0.6rem] text-primary border border-primary/30 rounded px-1.5 py-0.5">
+                {task.actionType}
+              </span>
+            )}
           </div>
           {task.steps.length > 0 && (
             <div className="mt-2 flex items-center gap-2">

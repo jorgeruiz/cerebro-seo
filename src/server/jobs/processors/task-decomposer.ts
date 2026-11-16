@@ -308,7 +308,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
   if (classification.status === "NEEDS_DEFINITION") {
     await prisma.planTask.update({
       where: { id: taskId },
-      data: { status: "NEEDS_DEFINITION", mode: "HUMAN", modeReason: "No clasificable automáticamente" },
+      data: { status: "NEEDS_DEFINITION", mode: "HUMAN", modeReason: "No clasificable automáticamente", generatorVersion: DECOMPOSER_VERSION },
     });
     console.log(`[task-decomposer] "${task.title}" → NEEDS_DEFINITION (${classification.reasoning})`);
     return;
@@ -321,6 +321,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
         status: "NEEDS_INPUT",
         blockedReason: `Faltan datos: ${classification.missingInputs.join(", ")}`,
         remedy: "Completar los datos faltantes y reintentar",
+        generatorVersion: DECOMPOSER_VERSION,
       },
     });
     console.log(`[task-decomposer] "${task.title}" → NEEDS_INPUT (${classification.missingInputs.join(", ")})`);
@@ -340,6 +341,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
       actionType: classification.actionType,
       wpCapabilities: wpCaps,
       taskCategory: classification.category,
+      taskId,
     });
 
     if (!gateResult.allPassed) {
@@ -349,6 +351,7 @@ export async function decomposeTask(data: DecompositionJobData): Promise<void> {
           status: "BLOCKED",
           blockedReason: gateResult.blockedReason,
           remedy: gateResult.remedy,
+          generatorVersion: DECOMPOSER_VERSION,
         },
       });
       console.log(`[task-decomposer] "${task.title}" → BLOCKED: ${gateResult.blockedReason}`);
