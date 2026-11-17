@@ -493,60 +493,87 @@ export async function getWpSeo(
 
 // ─── Resolve URL to post ID ──────────────────────────────────────────────────
 
+export interface WpResolvedPost {
+  id: number;
+  type: "page" | "post" | string;
+}
+
 /**
- * Resolve a URL path to a WordPress post/page ID.
- * Uses the plugin's /resolve-url endpoint (calls url_to_postid() server-side).
- * Falls back to slug matching against /pages if the endpoint doesn't exist.
+ * Resolve a URL path to a WordPress post/page/CPT ID.
+ *
+ * Strategy (ordered by reliability):
+ * 1. Plugin /resolve-url (url_to_postid, plugin ≥1.6.2)
+ * 2. WP REST core: /wp/v2/pages?slug= then /wp/v2/posts?slug=
+ * 3. Plugin /pages (legacy fallback by slug)
+ *
+ * Home page ("/"):
+ * 1. Plugin /options/page_on_front (plugin ≥1.6.2)
+ * 2. WP REST: /wp/v2/settings → page_on_front (needs auth)
+ * 3. Heuristic: title/objective contains "home"/"inicio"
  */
 export async function resolveWpPostId(
   clienteId: string,
   urlPath: string,
   taskId?: string
-): Promise<number | null> {
-  // Try the resolve-url endpoint first (plugin 1.6.1+)
-  const resolveResult = await proxyCall(clienteId, "/resolve-url", {
-    method: "POST",
-    body: { url: urlPath },
-    taskId,
-  });
-  if (resolveResult.ok) {
-    const data = resolveResult.data as { post_id?: number };
-    if (data.post_id && data.post_id > 0) return data.post_id;
-  }
-
-  // Fallback: search /pages by slug
+): Promise<WpResolvedPost | null> {
   const slug = urlPath.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
+  const isHome = !slug || urlPath === "/" || urlPath.toLowerCase() === "/home" || urlPath.toLowerCase() === "/inicio";
 
-  // Home page: get_option('page_on_front') via plugin first, slug fallback
-  if (!slug || urlPath === "/") {
-    // Primary: ask plugin for page_on_front
+  // ── Home page resolution ────────────────────────────────────────────
+  if (isHome) {
+    // Try plugin endpoint
     const frontResult = await proxyCall(clienteId, "/options/page_on_front", { taskId });
     if (frontResult.ok) {
-      const data = frontResult.data as { value?: number | string };
-      const frontId = Number(data.value ?? 0);
-      if (frontId > 0) return frontId;
+      const data = frontResult.data as { value?: number | string; id?: number };
+      const frontId = Number(data.id ?? data.value ?? 0);
+      if (frontId > 0) return { id: frontId, type: "page" };
     }
 
-    // Fallback: search /pages for slug="" / "home" / "inicio"
+    // Fallback: search pages for home/inicio slug
     const pagesResult = await getWpPages(clienteId, taskId);
     if (pagesResult.ok) {
       const frontPage = pagesResult.data.find(
         (p: { slug: string; id?: number }) => p.slug === "" || p.slug === "home" || p.slug === "inicio"
       );
       if (frontPage && (frontPage as { id?: number }).id) {
-        return (frontPage as { id: number }).id;
+        return { id: (frontPage as { id: number }).id, type: "page" };
       }
     }
     return null;
   }
 
+  // ── Plugin resolve-url (≥1.6.2) ────────────────────────────────────
+  const resolveResult = await proxyCall(clienteId, "/resolve-url", {
+    method: "POST",
+    body: { url: urlPath },
+    taskId,
+  });
+  if (resolveResult.ok) {
+    const data = resolveResult.data as { id?: number; post_id?: number; type?: string };
+    const postId = Number(data.id ?? data.post_id ?? 0);
+    if (postId > 0) return { id: postId, type: data.type ?? "unknown" };
+  }
+
+  // ── WP REST core fallback: pages then posts by slug ─────────────────
+  // This works with ANY WP site, no plugin needed
+  for (const postType of ["pages", "posts"]) {
+    const restResult = await proxyCall(clienteId, `/wp-rest/${postType}?slug=${encodeURIComponent(slug)}&_fields=id`, { taskId });
+    if (restResult.ok) {
+      const items = restResult.data as Array<{ id: number }>;
+      if (Array.isArray(items) && items.length > 0 && items[0].id > 0) {
+        return { id: items[0].id, type: postType === "pages" ? "page" : "post" };
+      }
+    }
+  }
+
+  // ── Legacy: plugin /pages by slug ───────────────────────────────────
   const pagesResult = await getWpPages(clienteId, taskId);
   if (pagesResult.ok) {
     const match = pagesResult.data.find(
       (p: { slug: string; id?: number }) => p.slug?.toLowerCase() === slug.toLowerCase()
     );
     if (match && (match as { id?: number }).id) {
-      return (match as { id: number }).id;
+      return { id: (match as { id: number }).id, type: "page" };
     }
   }
 

@@ -48,6 +48,15 @@ function extractUrlFromText(text: string): string | null {
   return match ? match[0] : null;
 }
 
+/** Detect home page from title/objective text. */
+function detectHomeFromText(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\bhome\s*page\b|\bpágina\s*de\s*inicio\b|\bhomepage\b|\bpágina\s*principal\b|\binicio\b/.test(lower)) {
+    return "/";
+  }
+  return null;
+}
+
 function getWordRangeForAction(actionType?: string | null): [number, number] {
   if (!actionType) return WORD_RANGES.informational;
   const entry = getCatalogEntry(actionType as ActionType);
@@ -918,10 +927,13 @@ async function executeWpSeo(
   let metaDescription = action.payload?.meta_description as string | undefined;
   const focusKeyword = action.payload?.focus_keyword as string | undefined ?? null;
 
-  // Extract target URL from multiple sources
+  // Extract target URL from multiple sources (payload → sourceRef → text → home detection)
+  const sourceRef = (task as unknown as { sourceRef?: { targetUrl?: string } }).sourceRef;
   const targetUrl = action.payload?.targetUrl as string | undefined
+    ?? sourceRef?.targetUrl
     ?? extractUrlFromText(task.objective)
-    ?? extractUrlFromText(task.title);
+    ?? extractUrlFromText(task.title)
+    ?? detectHomeFromText(task.title + " " + task.objective);
 
   // ── Guard: noindex/title faltante → not an update_meta task ─────────
   const objectiveLower = task.objective.toLowerCase();
@@ -938,8 +950,8 @@ async function executeWpSeo(
     const resolved = targetUrl
       ? await resolveWpPostId(cerebroClientId, targetUrl, taskId)
       : null;
-    if (resolved) {
-      pageId = resolved;
+    if (resolved?.id) {
+      pageId = resolved.id;
     } else {
       const urlNote = targetUrl ? `"${targetUrl}"` : "(sin URL en el objetivo)";
       return {

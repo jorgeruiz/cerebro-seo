@@ -25,7 +25,7 @@ const CATEGORY_MAP: Record<string, string> = {
   blog: "content",
   landing: "content",
   contenido: "content",
-  keyword: "technical",
+  keyword: "content",
   setup: "infrastructure",
   imagen: "content",
   media: "content",
