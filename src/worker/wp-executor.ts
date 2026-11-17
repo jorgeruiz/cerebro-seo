@@ -923,6 +923,15 @@ async function executeWpSeo(
     ?? extractUrlFromText(task.objective)
     ?? extractUrlFromText(task.title);
 
+  // ── Guard: noindex/title faltante → not an update_meta task ─────────
+  const objectiveLower = task.objective.toLowerCase();
+  if (/noindex|no.?index|desindexad|no indexad/.test(objectiveLower)) {
+    return {
+      notes: `wp:seo BLOCKED — La tarea menciona "noindex". Esto no es update_meta, es configure_robots o verify_indexation. Reclasificar la tarea.`,
+      stagedChange: { type: "seo", page_id: 0, meta_title: "", meta_description: "", focus_keyword: null, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString() } as WpStagedSeoChange,
+    };
+  }
+
   // ── Resolve page_id from URL if needed ──────────────────────────────
   if (pageId === 0) {
     const { resolveWpPostId } = await import("@/lib/wp-proxy-client");

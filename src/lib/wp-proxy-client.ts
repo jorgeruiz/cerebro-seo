@@ -517,12 +517,19 @@ export async function resolveWpPostId(
   // Fallback: search /pages by slug
   const slug = urlPath.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
 
-  // Home page: try page_on_front from /capabilities or find by slug=""
+  // Home page: get_option('page_on_front') via plugin first, slug fallback
   if (!slug || urlPath === "/") {
-    // Try to get the front page ID from /pages (it's the page with slug="" or the first one)
+    // Primary: ask plugin for page_on_front
+    const frontResult = await proxyCall(clienteId, "/options/page_on_front", { taskId });
+    if (frontResult.ok) {
+      const data = frontResult.data as { value?: number | string };
+      const frontId = Number(data.value ?? 0);
+      if (frontId > 0) return frontId;
+    }
+
+    // Fallback: search /pages for slug="" / "home" / "inicio"
     const pagesResult = await getWpPages(clienteId, taskId);
     if (pagesResult.ok) {
-      // Look for pages marked as front_page or with empty slug
       const frontPage = pagesResult.data.find(
         (p: { slug: string; id?: number }) => p.slug === "" || p.slug === "home" || p.slug === "inicio"
       );

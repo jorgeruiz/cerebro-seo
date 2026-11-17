@@ -32,6 +32,15 @@ vi.mock("@/lib/wp-proxy-client", () => ({
   updateWpSeo: mockUpdateWpSeo,
   getWpPages: mockGetWpPages,
   applyWpElementorDraft: mockApplyWpElementorDraft,
+  getWpSeo: vi.fn().mockImplementation((_cid: string, _pid: number) => {
+    // Return the values that were just written by updateWpSeo
+    const lastCall = mockUpdateWpSeo.mock.calls.at(-1);
+    if (lastCall) {
+      const meta = lastCall[2] as { meta_title?: string; meta_description?: string };
+      return Promise.resolve({ meta_title: meta.meta_title ?? "", meta_description: meta.meta_description ?? "" });
+    }
+    return Promise.resolve(null);
+  }),
 }));
 
 const {

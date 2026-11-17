@@ -130,6 +130,7 @@ export async function publishWpPlanAction(planId: string): Promise<PublishWpPlan
   let skipped = 0;
   let failed = 0;
   const details: string[] = [];
+  const taskIdsWithFailures = new Set<string>();
 
   for (const { step, task, change } of stepsWithChanges) {
     // --- Blog: SKIP — los blogs se publican manualmente desde WP Admin ---
@@ -217,10 +218,29 @@ export async function publishWpPlanAction(planId: string): Promise<PublishWpPlan
         continue;
       }
 
-      metaApplied++;
-      details.push(`Meta aplicado "${step.title}" — page_id=${page_id} title="${meta_title}"`);
+      // Post-publish verification: read back and compare
+      const { getWpSeo } = await import("@/lib/wp-proxy-client");
+      const verify = await getWpSeo(cerebroClientId, page_id);
+      const titleMatch = verify?.meta_title?.trim() === meta_title.trim();
+      const descMatch = verify?.meta_description?.trim() === meta_description.trim();
 
-      const appliedChange = { ...effectiveChange, applied_at: new Date().toISOString() };
+      if (verify && !titleMatch && !descMatch) {
+        failed++;
+        taskIdsWithFailures.add(task.id);
+        details.push(
+          `FAILED verificacion "${step.title}": title en vivo="${verify.meta_title?.slice(0, 50)}" ≠ propuesto="${meta_title.slice(0, 50)}"`,
+        );
+        continue;
+      }
+
+      metaApplied++;
+      details.push(`Meta aplicado y verificado "${step.title}" — page_id=${page_id} title="${meta_title}"`);
+
+      const appliedChange = {
+        ...effectiveChange,
+        applied_at: new Date().toISOString(),
+        verified: !!(titleMatch || descMatch),
+      };
       await prisma.planStep.update({
         where: { id: step.id },
         data: { stagedChange: appliedChange as unknown as Parameters<typeof prisma.planStep.update>[0]["data"]["stagedChange"] },
@@ -234,7 +254,6 @@ export async function publishWpPlanAction(planId: string): Promise<PublishWpPlan
   }
 
   // Mark tasks with unresolved or failed SEO steps as FAILED (not DONE)
-  const taskIdsWithFailures = new Set<string>();
   for (const { step, task } of seoStepsNeedingResolution) {
     const resolved = resolvedSeoChanges.get(step.id);
     if (!resolved || resolved.page_id === 0) {

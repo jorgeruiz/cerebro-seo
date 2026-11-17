@@ -10,47 +10,16 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
   const session = await getSession();
   if (!session) redirect("/api/auth/signin");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let client: any;
-  try {
-    client = await prisma.client.findUnique({
-      where: { id: params.id },
-      select: {
-        id: true,
-        name: true,
-        sites: {
-          select: {
-            id: true,
-            url: true,
-            platform: true,
-            githubRepo: true,
-            defaultBranch: true,
-            packages: {
-              select: { id: true, packageId: true, status: true, version: true, installedAt: true, verifiedAt: true },
-            },
-          },
-        },
+  const client = await prisma.client.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      name: true,
+      sites: {
+        select: { id: true, url: true, platform: true, githubRepo: true, defaultBranch: true },
       },
-    });
-  } catch {
-    // Migration may not have been applied yet (SitePackage table missing)
-    client = await prisma.client.findUnique({
-      where: { id: params.id },
-      select: {
-        id: true,
-        name: true,
-        sites: {
-          select: { id: true, url: true, platform: true, githubRepo: true, defaultBranch: true },
-        },
-      },
-    });
-    if (client) {
-      // Patch: add empty packages array to each site
-      for (const site of client.sites) {
-        (site as unknown as { packages: unknown[] }).packages = [];
-      }
-    }
-  }
+    },
+  });
 
   if (!client) redirect("/clientes");
 
@@ -64,18 +33,23 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
     );
   }
 
-  // Determine which packages apply to this platform
+  // Query packages separately — avoids crash if SitePackage table doesn't exist
+  let sitePackages: Array<{ id: string; packageId: string; status: string; version: string; installedAt: Date | null; verifiedAt: Date | null }> = [];
+  try {
+    sitePackages = await prisma.sitePackage.findMany({
+      where: { siteId: site.id },
+      select: { id: true, packageId: true, status: true, version: true, installedAt: true, verifiedAt: true },
+    });
+  } catch {
+    // SitePackage table may not exist yet
+  }
+
   const applicablePackages = site.platform
     ? PACKAGE_REGISTRY.filter((p) => p.platforms.includes(site.platform!))
     : [];
 
-  // Map installed packages (may be empty if migration not applied yet)
-  const sitePackages = (site as unknown as { packages?: Array<{ id: string; packageId: string; status: string; version: string; installedAt: Date | null; verifiedAt: Date | null }> }).packages ?? [];
-  const installedMap = new Map(
-    sitePackages.map((p) => [p.packageId, p])
-  );
+  const installedMap = new Map(sitePackages.map((p) => [p.packageId, p]));
 
-  // Run detect for uninstalled packages (async)
   const packageStatuses = await Promise.all(
     applicablePackages.map(async (pkg) => {
       const installed = installedMap.get(pkg.id);
@@ -88,26 +62,32 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
           detectDetails: null,
         };
       }
-      // Run detect
       if (site.githubRepo && pkg.version !== "0") {
         try {
           const ctx = { siteId: site.id, githubRepo: site.githubRepo, defaultBranch: site.defaultBranch ?? "main" };
           const detection = await pkg.detect(ctx);
           if (detection.installed) {
-            // Auto-register: package is installed but not tracked
-            await prisma.sitePackage.upsert({
-              where: { siteId_packageId: { siteId: site.id, packageId: pkg.id } },
-              update: { status: "INSTALLED", version: detection.version ?? pkg.version },
-              create: { siteId: site.id, packageId: pkg.id, status: "INSTALLED", version: detection.version ?? pkg.version },
-            });
+            try {
+              await prisma.sitePackage.upsert({
+                where: { siteId_packageId: { siteId: site.id, packageId: pkg.id } },
+                update: { status: "INSTALLED", version: detection.version ?? pkg.version },
+                create: { siteId: site.id, packageId: pkg.id, status: "INSTALLED", version: detection.version ?? pkg.version },
+              });
+            } catch { /* table may not exist */ }
             return { pkg, status: "INSTALLED" as const, installedAt: null, verifiedAt: null, detectDetails: "Auto-detectado" };
           }
           return { pkg, status: "PENDING" as const, installedAt: null, verifiedAt: null, detectDetails: detection.details ?? null };
         } catch {
-          return { pkg, status: "PENDING" as const, installedAt: null, verifiedAt: null, detectDetails: "Error en detección" };
+          return { pkg, status: "PENDING" as const, installedAt: null, verifiedAt: null, detectDetails: "Error en deteccion" };
         }
       }
-      return { pkg, status: pkg.version === "0" ? ("NOT_ACTIVE" as const) : ("PENDING" as const), installedAt: null, verifiedAt: null, detectDetails: pkg.version === "0" ? "Paquete no activo (v0)" : null };
+      return {
+        pkg,
+        status: pkg.version === "0" ? ("NOT_ACTIVE" as const) : ("PENDING" as const),
+        installedAt: null,
+        verifiedAt: null,
+        detectDetails: pkg.version === "0" ? "Paquete no activo (v0)" : null,
+      };
     })
   );
 
