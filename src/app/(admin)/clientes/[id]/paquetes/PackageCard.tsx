@@ -24,8 +24,8 @@ export function PackageCard({
 }: {
   packageDef: { id: string; name: string; description: string; version: string; enables: string[] };
   status: string;
-  installedAt: Date | null;
-  verifiedAt: Date | null;
+  installedAt: Date | string | null;
+  verifiedAt: Date | string | null;
   detectDetails: string | null;
   clientId: string;
   siteId: string;
@@ -86,8 +86,8 @@ export function PackageCard({
 
       {installedAt && (
         <p className="font-mono text-[0.55rem] text-muted-foreground">
-          Instalado: {installedAt.toISOString().slice(0, 10)}
-          {verifiedAt && ` | Verificado: ${verifiedAt.toISOString().slice(0, 10)}`}
+          Instalado: {String(installedAt).slice(0, 10)}
+          {verifiedAt && ` | Verificado: ${String(verifiedAt).slice(0, 10)}`}
         </p>
       )}
 
