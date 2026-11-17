@@ -10,7 +10,8 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
   const session = await getSession();
   if (!session) redirect("/api/auth/signin");
 
-  let client;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let client: any;
   try {
     client = await prisma.client.findUnique({
       where: { id: params.id },

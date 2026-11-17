@@ -42,6 +42,12 @@ import { executeImage, type ImageStepAction } from "./image-executor";
 import { getCatalogEntry, WORD_RANGES, type ActionType } from "@/lib/plan/task-catalog";
 
 /** Get word range from catalog, with fallback to informational default. */
+/** Extract first URL path (like /ruta/ or /montacargas-hombre-parado/) from text. */
+function extractUrlFromText(text: string): string | null {
+  const match = text.match(/\/[a-z0-9][a-z0-9\-_/]*/i);
+  return match ? match[0] : null;
+}
+
 function getWordRangeForAction(actionType?: string | null): [number, number] {
   if (!actionType) return WORD_RANGES.informational;
   const entry = getCatalogEntry(actionType as ActionType);
@@ -92,8 +98,9 @@ export async function executeWpAiStep(
   }
 
   if (!action?.action) {
-    const isContent = task.kind === "CONTENT" || task.category === "blog";
-    const isMeta = task.category === "meta" || task.category === "seo";
+    const isContent = task.kind === "CONTENT" || task.category === "blog" || task.category === "content";
+    const isMeta = task.category === "meta" || task.category === "seo" || task.category === "technical"
+      || task.actionType === "update_meta";
     if (isContent) {
       action = {
         action: "publish",
@@ -910,17 +917,24 @@ async function executeWpSeo(
   let metaTitle = action.payload?.meta_title as string | undefined;
   let metaDescription = action.payload?.meta_description as string | undefined;
   const focusKeyword = action.payload?.focus_keyword as string | undefined ?? null;
-  const targetUrl = action.payload?.targetUrl as string | undefined;
+
+  // Extract target URL from multiple sources
+  const targetUrl = action.payload?.targetUrl as string | undefined
+    ?? extractUrlFromText(task.objective)
+    ?? extractUrlFromText(task.title);
 
   // ── Resolve page_id from URL if needed ──────────────────────────────
-  if (pageId === 0 && targetUrl) {
+  if (pageId === 0) {
     const { resolveWpPostId } = await import("@/lib/wp-proxy-client");
-    const resolved = await resolveWpPostId(cerebroClientId, targetUrl, taskId);
+    const resolved = targetUrl
+      ? await resolveWpPostId(cerebroClientId, targetUrl, taskId)
+      : null;
     if (resolved) {
       pageId = resolved;
     } else {
+      const urlNote = targetUrl ? `"${targetUrl}"` : "(sin URL en el objetivo)";
       return {
-        notes: `wp:seo BLOCKED — no se pudo resolver page_id para "${targetUrl}". Verificar que la URL existe en WordPress.`,
+        notes: `wp:seo BLOCKED — page_id=0, no se pudo resolver ${urlNote}. Verificar URL en WordPress.`,
         stagedChange: { type: "seo", page_id: 0, meta_title: "", meta_description: "", focus_keyword: null, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString() } as WpStagedSeoChange,
       };
     }

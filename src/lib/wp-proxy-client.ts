@@ -516,7 +516,22 @@ export async function resolveWpPostId(
 
   // Fallback: search /pages by slug
   const slug = urlPath.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
-  if (!slug) return null; // home page — needs special handling
+
+  // Home page: try page_on_front from /capabilities or find by slug=""
+  if (!slug || urlPath === "/") {
+    // Try to get the front page ID from /pages (it's the page with slug="" or the first one)
+    const pagesResult = await getWpPages(clienteId, taskId);
+    if (pagesResult.ok) {
+      // Look for pages marked as front_page or with empty slug
+      const frontPage = pagesResult.data.find(
+        (p: { slug: string; id?: number }) => p.slug === "" || p.slug === "home" || p.slug === "inicio"
+      );
+      if (frontPage && (frontPage as { id?: number }).id) {
+        return (frontPage as { id: number }).id;
+      }
+    }
+    return null;
+  }
 
   const pagesResult = await getWpPages(clienteId, taskId);
   if (pagesResult.ok) {

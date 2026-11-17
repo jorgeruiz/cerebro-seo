@@ -229,7 +229,27 @@ export async function publishWpPlanAction(planId: string): Promise<PublishWpPlan
   }
 
   for (const title of unresolvedStepTitles) {
-    details.push(`Omitido ${title}: page_id=0 sin coincidencia en /pages`);
+    details.push(`FAILED ${title}: page_id=0 sin coincidencia`);
+    failed++;
+  }
+
+  // Mark tasks with unresolved or failed SEO steps as FAILED (not DONE)
+  const taskIdsWithFailures = new Set<string>();
+  for (const { step, task } of seoStepsNeedingResolution) {
+    const resolved = resolvedSeoChanges.get(step.id);
+    if (!resolved || resolved.page_id === 0) {
+      taskIdsWithFailures.add(task.id);
+    }
+  }
+
+  for (const taskId of Array.from(taskIdsWithFailures)) {
+    await prisma.planTask.update({
+      where: { id: taskId },
+      data: {
+        status: "FAILED",
+        failureReason: "page_id=0: no se pudo resolver la URL en WordPress",
+      },
+    }).catch(() => {});
   }
 
   console.log(

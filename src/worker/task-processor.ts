@@ -1058,6 +1058,17 @@ async function processWpTask(
         // Track image count for per-task limit
         if (stepResult.imageUrl) imageCount++;
 
+        // SEO BLOCKED → task BLOCKED (not DONE or WAITING_HUMAN)
+        if (notes.startsWith("wp:seo BLOCKED")) {
+          await prisma.planStep.update({ where: { id: step.id }, data: { status: "FAILED", notes } });
+          await prisma.planTask.update({
+            where: { id: taskId },
+            data: { status: "BLOCKED", blockedReason: notes, remedy: "Verificar que la URL existe en WordPress" },
+          });
+          console.log(`[wp-task] Step ${step.order} → BLOCKED: ${notes.slice(0, 80)}`);
+          return;
+        }
+
         // Steps that need human intervention → WAITING_HUMAN
         const isImageHuman = notes.startsWith("image:human-required")
           || notes.startsWith("image:limit")

@@ -485,7 +485,7 @@ function StepRow({
 
         {/* SEO comparison — shown when seo step has stagedChange */}
         {(step.stagedChange as { type?: string } | null)?.type === "seo" && (
-          <SeoComparisonBlock seo={step.stagedChange as { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number }} />
+          <SeoComparisonBlock seo={step.stagedChange as { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number } }} />
         )}
 
         {/* Keyword research table — shown when keyword_research step is DONE */}
