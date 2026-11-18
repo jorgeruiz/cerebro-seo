@@ -104,10 +104,16 @@ export default async function PaquetesPage({ params }: { params: { id: string } 
         {packageStatuses.map((ps) => (
           <PackageCard
             key={ps.pkg.id}
-            packageDef={ps.pkg}
+            packageDef={{
+              id: ps.pkg.id,
+              name: ps.pkg.name,
+              description: ps.pkg.description,
+              version: ps.pkg.version,
+              enables: ps.pkg.enables,
+            }}
             status={ps.status}
-            installedAt={ps.installedAt}
-            verifiedAt={ps.verifiedAt}
+            installedAt={ps.installedAt ? String(ps.installedAt) : null}
+            verifiedAt={ps.verifiedAt ? String(ps.verifiedAt) : null}
             detectDetails={ps.detectDetails}
             clientId={params.id}
             siteId={site.id}
