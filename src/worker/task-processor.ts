@@ -1203,13 +1203,15 @@ async function processWpTask(
     for (const sc of stagedChanges) {
       const change = sc as unknown as Record<string, unknown>;
 
-      // SEO: generated must be true, metas non-empty
+      // SEO: generated=true, metas within tolerance (45-65 title, 120-165 desc)
       if (change.type === "seo") {
         if (change.generated === false) acceptanceIssues.push("SEO: metas no generadas");
         const mt = String(change.meta_title ?? "");
         const md = String(change.meta_description ?? "");
-        if (mt.length < 10) acceptanceIssues.push(`SEO: meta_title vacío (${mt.length}c)`);
-        if (md.length < 30) acceptanceIssues.push(`SEO: meta_description vacío (${md.length}c)`);
+        if (mt.length < 45) acceptanceIssues.push(`SEO: meta_title ${mt.length}c < 45`);
+        if (mt.length > 65) acceptanceIssues.push(`SEO: meta_title ${mt.length}c > 65`);
+        if (md.length < 120) acceptanceIssues.push(`SEO: meta_description ${md.length}c < 120`);
+        if (md.length > 165) acceptanceIssues.push(`SEO: meta_description ${md.length}c > 165`);
       }
 
       // Content: H1 present, no [COMPLETAR]

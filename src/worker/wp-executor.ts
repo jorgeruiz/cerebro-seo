@@ -1090,18 +1090,23 @@ async function executeWpSeo(
           const titleOk = tLen >= 50 && tLen <= 60;
           const descOk = dLen >= 140 && dLen <= 155;
 
-          if (titleOk && descOk) break; // success
+          if (titleOk && descOk) break; // perfect
+
+          // Tolerance range for 3rd attempt: title 45-65, desc 120-165
+          const titleTolerant = tLen >= 45 && tLen <= 65;
+          const descTolerant = dLen >= 120 && dLen <= 165;
+
+          if (attempt === 2 && titleTolerant && descTolerant) break; // accept with tolerance
 
           if (attempt < 2) {
             lastLengthError = "";
             if (!titleOk) lastLengthError += `meta_title=${tLen}c (necesita 50-60). `;
             if (!descOk) lastLengthError += `meta_description=${dLen}c (necesita 140-155). `;
-            // Add feedback to prompt for next attempt
             seoPrompt += `\n\nERROR EN INTENTO ANTERIOR: ${lastLengthError}Ajusta las longitudes exactas.`;
             console.log(`[wp-executor] SEO attempt ${attempt + 1}: length error — ${lastLengthError.trim()}`);
             continue;
           }
-          // 3rd attempt: accept even if slightly off
+          // 3rd attempt outside tolerance → will be caught by guard below
           break;
         }
         console.warn(`[wp-executor] SEO tool attempt ${attempt + 1}: no tool_use in response`);
@@ -1113,13 +1118,24 @@ async function executeWpSeo(
     await logApiUsage({ provider: "anthropic", endpoint: "wp-seo-meta", cost: totalCostUsd });
   }
 
-  // Guard: empty metas → FAILED (never DONE with "(sin generar)")
-  if (!metaTitle || !metaDescription || metaTitle.length < 10 || metaDescription.length < 30) {
+  // Guard: metas must be within tolerance (45-65 title, 120-165 desc)
+  const tLen = (metaTitle ?? "").length;
+  const dLen = (metaDescription ?? "").length;
+  const titleInTolerance = tLen >= 45 && tLen <= 65;
+  const descInTolerance = dLen >= 120 && dLen <= 165;
+
+  if (!metaTitle || !metaDescription || !titleInTolerance || !descInTolerance) {
+    const reasons: string[] = [];
+    if (!metaTitle || tLen < 45) reasons.push(`title ${tLen}c < 45`);
+    if (tLen > 65) reasons.push(`title ${tLen}c > 65`);
+    if (!metaDescription || dLen < 120) reasons.push(`desc ${dLen}c < 120`);
+    if (dLen > 165) reasons.push(`desc ${dLen}c > 165`);
     return {
-      notes: `wp:seo BLOCKED — generacion de metas falló después de 3 intentos. title="${metaTitle ?? ""}" (${(metaTitle ?? "").length}c) desc="${(metaDescription ?? "").slice(0, 50)}" (${(metaDescription ?? "").length}c)`,
+      notes: `waiting_human:seo_length|Metas generadas fuera de tolerancia (${reasons.join(", ")}). Mejor candidato: title="${(metaTitle ?? "").slice(0, 50)}" desc="${(metaDescription ?? "").slice(0, 50)}..."`,
       stagedChange: {
         type: "seo", page_id: pageId, meta_title: metaTitle ?? "", meta_description: metaDescription ?? "",
-        focus_keyword: focusKeyword, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString(),
+        focus_keyword: focusKeyword, objective: task.objective.slice(0, 200),
+        generated: !!(metaTitle && metaDescription), staged_at: new Date().toISOString(),
         current_meta_title: currentTitle || undefined, current_meta_description: currentDescription || undefined,
       } as WpStagedSeoChange,
     };

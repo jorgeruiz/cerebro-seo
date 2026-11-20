@@ -20,7 +20,7 @@ vi.mock("@anthropic-ai/sdk", () => {
         if (opts.tool_choice) {
           return Promise.resolve({
             content: [{ type: "tool_use", id: "test", name: "seo_meta", input: {
-              meta_title: "Titulo de prueba para SEO optimizado keyword",
+              meta_title: "Titulo de prueba para SEO con keyword bien optimizado",
               meta_description: "Descripcion de prueba para SEO con exactamente el largo correcto para meta description con beneficio claro y CTA suave incluida aqui ahora",
               claims: [{ text: "servicio de prueba", source: "context" }],
             } }],
