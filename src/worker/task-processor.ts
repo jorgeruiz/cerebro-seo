@@ -1192,42 +1192,54 @@ async function processWpTask(
       }
     }
 
-    // ── CENTRAL ACCEPTANCE GUARD: task only DONE if results pass checks ──
+    // ── CENTRAL ACCEPTANCE GUARD by actionType (catalog) ──────────────
     const doneSteps = await prisma.planStep.findMany({
       where: { taskId, status: "DONE", NOT: { stagedChange: { equals: Prisma.DbNull } } },
       select: { stagedChange: true },
     });
     const stagedChanges = doneSteps.map((s) => s.stagedChange).filter(Boolean);
+    const acceptanceIssues: string[] = [];
 
-    // Check 1: SEO steps must have non-empty generated metas
     for (const sc of stagedChanges) {
       const change = sc as unknown as Record<string, unknown>;
-      if (change.type === "seo" && change.generated === false) {
-        await prisma.planTask.update({
-          where: { id: taskId },
-          data: { status: "FAILED", failureReason: "SEO: metas no fueron generadas (vacías o parseo fallido)", resultUrls },
-        });
-        console.log(`[wp-task] ✗ Task "${task.title}" → FAILED (metas vacías)`);
-        return;
+
+      // SEO: generated must be true, metas non-empty
+      if (change.type === "seo") {
+        if (change.generated === false) acceptanceIssues.push("SEO: metas no generadas");
+        const mt = String(change.meta_title ?? "");
+        const md = String(change.meta_description ?? "");
+        if (mt.length < 10) acceptanceIssues.push(`SEO: meta_title vacío (${mt.length}c)`);
+        if (md.length < 30) acceptanceIssues.push(`SEO: meta_description vacío (${md.length}c)`);
+      }
+
+      // Content: H1 present, no [COMPLETAR]
+      if (change.type === "content_package" || change.type === "blog") {
+        if (!change.h1) acceptanceIssues.push("Content: falta H1");
+        const body = String(change.body ?? "");
+        const completar = (body.match(/\[COMPLETAR[^\]]*\]/gi) ?? []).length;
+        if (completar > 0) acceptanceIssues.push(`Content: ${completar} [COMPLETAR] pendiente(s)`);
       }
     }
 
-    // Check 2: Content checks (H1, meta lengths, [COMPLETAR])
+    // Also run checkPreDone (meta lengths, etc.)
     if (stagedChanges.length > 0) {
       const { checkPreDone } = await import("@/lib/plan/check-pre-done");
       const preDone = checkPreDone(stagedChanges);
-      if (!preDone.passed) {
-        await prisma.planTask.update({
-          where: { id: taskId },
-          data: {
-            status: "FAILED",
-            resultUrls,
-            failureReason: `Acceptance: ${preDone.issues.join(" | ")}`,
-          },
-        });
-        console.log(`[wp-task] ✗ Task "${task.title}" → FAILED (acceptance: ${preDone.issues.length} issues)`);
-        return;
+      if (!preDone.passed) acceptanceIssues.push(...preDone.issues);
+    }
+
+    if (acceptanceIssues.length > 0) {
+      await prisma.planTask.update({
+        where: { id: taskId },
+        data: { status: "FAILED", resultUrls, failureReason: `Acceptance: ${acceptanceIssues.join(" | ")}` },
+      });
+      // Close the run
+      const lastRun = await prisma.taskRun.findFirst({ where: { taskId, status: "RUNNING" }, orderBy: { startedAt: "desc" } });
+      if (lastRun) {
+        await prisma.taskRun.update({ where: { id: lastRun.id }, data: { status: "FAILED", logTail: acceptanceIssues.join("; "), finishedAt: new Date() } }).catch(() => {});
       }
+      console.log(`[wp-task] ✗ Task "${task.title}" → FAILED (acceptance: ${acceptanceIssues.length} issues)`);
+      return;
     }
 
     // Todos los pasos completados

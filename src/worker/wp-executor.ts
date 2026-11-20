@@ -1018,7 +1018,7 @@ async function executeWpSeo(
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const seoPrompt = [
+    let seoPrompt = [
       "Genera meta title y meta description para SEO segun este contexto.",
       "meta_title: 50-60 caracteres exactos, incluye keyword principal.",
       "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
@@ -1069,9 +1069,10 @@ async function executeWpSeo(
       tool_choice: { type: "tool", name: "seo_meta" },
     });
 
-    // Try once, retry on failure
+    // Up to 3 attempts: 1 initial + 2 autocorrections for length violations
     let totalCostUsd = 0;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let lastLengthError = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const response = await callSeoTool();
         totalCostUsd += (response.usage.input_tokens * 3 + response.usage.output_tokens * 15) / 1_000_000;
@@ -1079,12 +1080,30 @@ async function executeWpSeo(
         const toolUse = response.content.find((b) => b.type === "tool_use");
         if (toolUse && "input" in toolUse) {
           const input = toolUse.input as { meta_title?: string; meta_description?: string; claims?: Array<{ text: string; source: string }> };
-          metaTitle = metaTitle || input.meta_title;
-          metaDescription = metaDescription || input.meta_description;
+          metaTitle = input.meta_title || metaTitle;
+          metaDescription = input.meta_description || metaDescription;
           agentClaims = input.claims ?? [];
-          break; // success
+
+          // Check lengths — if wrong, retry with feedback
+          const tLen = (metaTitle ?? "").length;
+          const dLen = (metaDescription ?? "").length;
+          const titleOk = tLen >= 50 && tLen <= 60;
+          const descOk = dLen >= 140 && dLen <= 155;
+
+          if (titleOk && descOk) break; // success
+
+          if (attempt < 2) {
+            lastLengthError = "";
+            if (!titleOk) lastLengthError += `meta_title=${tLen}c (necesita 50-60). `;
+            if (!descOk) lastLengthError += `meta_description=${dLen}c (necesita 140-155). `;
+            // Add feedback to prompt for next attempt
+            seoPrompt += `\n\nERROR EN INTENTO ANTERIOR: ${lastLengthError}Ajusta las longitudes exactas.`;
+            console.log(`[wp-executor] SEO attempt ${attempt + 1}: length error — ${lastLengthError.trim()}`);
+            continue;
+          }
+          // 3rd attempt: accept even if slightly off
+          break;
         }
-        // No tool_use block → retry
         console.warn(`[wp-executor] SEO tool attempt ${attempt + 1}: no tool_use in response`);
       } catch (err) {
         console.warn(`[wp-executor] SEO tool attempt ${attempt + 1} error: ${(err as Error).message}`);
@@ -1097,7 +1116,7 @@ async function executeWpSeo(
   // Guard: empty metas → FAILED (never DONE with "(sin generar)")
   if (!metaTitle || !metaDescription || metaTitle.length < 10 || metaDescription.length < 30) {
     return {
-      notes: `wp:seo BLOCKED — generacion de metas falló después de 2 intentos. title="${metaTitle ?? ""}" (${(metaTitle ?? "").length}c) desc="${(metaDescription ?? "").slice(0, 50)}" (${(metaDescription ?? "").length}c)`,
+      notes: `wp:seo BLOCKED — generacion de metas falló después de 3 intentos. title="${metaTitle ?? ""}" (${(metaTitle ?? "").length}c) desc="${(metaDescription ?? "").slice(0, 50)}" (${(metaDescription ?? "").length}c)`,
       stagedChange: {
         type: "seo", page_id: pageId, meta_title: metaTitle ?? "", meta_description: metaDescription ?? "",
         focus_keyword: focusKeyword, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString(),

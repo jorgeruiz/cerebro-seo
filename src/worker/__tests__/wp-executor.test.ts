@@ -185,6 +185,34 @@ describe("executeWpAiStep — SEO steps", () => {
   });
 });
 
+describe("executeWpAiStep — SEO generation edge cases", () => {
+  it("empty string meta via || gets replaced by tool response", async () => {
+    const result = await executeWpAiStep(
+      CEREBRO_CLIENT_ID, null, SEO_TASK,
+      { ...SEO_STEP_WITH_JSON, prompt: JSON.stringify({ action: "seo", endpoint: "POST /seo/42", payload: { page_id: 42, meta_title: "", meta_description: "" } }) },
+      "task-replace-001",
+    );
+    // The || operator replaces empty string with the tool response
+    const staged = result.stagedChange;
+    if (staged && staged.type === "seo") {
+      expect(staged.meta_title.length).toBeGreaterThan(10);
+      expect(staged.meta_description.length).toBeGreaterThan(30);
+      expect(staged.generated).toBe(true);
+    }
+  });
+
+  it("seo_title/meta_desc mapping from plugin response", async () => {
+    // The getWpSeo mock returns {meta_title: "Old Title"} which maps from seo_title
+    const result = await executeWpAiStep(
+      CEREBRO_CLIENT_ID, null, SEO_TASK, SEO_STEP_WITH_JSON, "task-mapping-001",
+    );
+    const staged = result.stagedChange;
+    if (staged && staged.type === "seo") {
+      expect(staged.current_meta_title).toBe("Old Title");
+    }
+  });
+});
+
 describe("executeWpAiStep — publish steps", () => {
   beforeEach(() => {
     vi.clearAllMocks();

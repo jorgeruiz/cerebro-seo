@@ -18,9 +18,11 @@ const prisma = new PrismaClient();
 async function main() {
   const taskArg = process.argv.find((a) => a.startsWith("--task="));
   const clientArg = process.argv.find((a) => a.startsWith("--client="));
+  const matchArg = process.argv.find((a) => a.startsWith("--match="));
 
   if (!taskArg && !clientArg) {
-    console.log("Usage: npx tsx scripts/smoke-plan-task.ts --task=<id> [--client=<name>]");
+    console.log("Usage: npx tsx scripts/smoke-plan-task.ts --task=<id>");
+    console.log("       npx tsx scripts/smoke-plan-task.ts --client=<name> [--match=<title>]");
     process.exit(1);
   }
 
@@ -29,10 +31,11 @@ async function main() {
     taskId = taskArg.replace("--task=", "");
   } else {
     const clientSlug = clientArg!.replace("--client=", "");
+    const titleMatch = matchArg?.replace("--match=", "");
     const task = await prisma.planTask.findFirst({
       where: {
         site: { client: { name: { contains: clientSlug, mode: "insensitive" } } },
-        actionType: "update_meta",
+        ...(titleMatch ? { title: { contains: titleMatch, mode: "insensitive" } } : { actionType: "update_meta" }),
         status: { in: ["BLOCKED", "FAILED", "READY"] },
       },
       orderBy: { createdAt: "desc" },
