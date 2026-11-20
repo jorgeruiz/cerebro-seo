@@ -143,6 +143,75 @@ const worker = new Worker(
       });
     }
 
+    // ── Resolve pending ClaimChecks from Notion task status ──────────────
+    try {
+      const pendingClaims = await prisma.claimCheck.findMany({
+        where: { clientId, status: "PENDING", notionTaskId: { not: null } },
+        select: { id: true, notionTaskId: true, claim: true },
+      });
+
+      if (pendingClaims.length > 0) {
+        // Check each Notion task's status
+        for (const claim of pendingClaims) {
+          const notionTask = tasks.find((t) => t.id === claim.notionTaskId);
+          if (!notionTask) continue;
+
+          if (notionTask.status === "done") {
+            // Confirmed → update claim + write learning to Cerebro
+            await prisma.claimCheck.update({
+              where: { id: claim.id },
+              data: { status: "CONFIRMED", resolvedAt: new Date(), resolvedBy: "confirmed_by_client" },
+            });
+            // Write learning to Notion via bridge
+            try {
+              const { invalidateClientContext } = await import("@/lib/client-context");
+              const slug = client.cerebroClientId
+                ? (await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } }))?.name
+                    ?.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") ?? ""
+                : "";
+              if (slug) {
+                const baseUrl = process.env.CEREBRO_API_URL;
+                const secret = process.env.SEO_INTERNAL_SECRET ?? process.env.CEREBRO_INTERNAL_SECRET;
+                if (baseUrl && secret) {
+                  const currentCtx = await fetch(`${baseUrl}/api/internal/client-context/${slug}`, {
+                    headers: { Authorization: `Bearer ${secret}` },
+                  }).then((r) => r.json()).catch(() => ({ ok: false })) as { ok: boolean; ctx?: { aprendizajes?: string } };
+
+                  const existing = currentCtx.ok ? (currentCtx.ctx?.aprendizajes ?? "") : "";
+                  const newLearning = `\n- [${new Date().toISOString().slice(0, 10)}] CONFIRMADO: ${claim.claim}`;
+
+                  await fetch(`${baseUrl}/api/internal/client-context/${slug}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+                    body: JSON.stringify({ patch: { aprendizajes: existing + newLearning } }),
+                  }).catch(() => {});
+                }
+              }
+              await invalidateClientContext(clientId);
+            } catch { /* learning write non-critical */ }
+          } else if (notionTask.status === "blocked") {
+            // Denied → update claim + add to excludedServices + create correction task
+            await prisma.claimCheck.update({
+              where: { id: claim.id },
+              data: { status: "DENIED", resolvedAt: new Date(), resolvedBy: "denied_by_client" },
+            });
+            // Add to excludedServices
+            const cl = await prisma.client.findUnique({ where: { id: clientId }, select: { excludedServices: true } });
+            if (cl && !cl.excludedServices.includes(claim.claim)) {
+              await prisma.client.update({
+                where: { id: clientId },
+                data: { excludedServices: [...cl.excludedServices, claim.claim] },
+              });
+            }
+            const { invalidateClientContext } = await import("@/lib/client-context");
+            await invalidateClientContext(clientId);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[cerebro-tasks-sync] ${clientId}: claim sync error: ${(err as Error).message}`);
+    }
+
     console.log(`[cerebro-tasks-sync] ${clientId}: synced ${tasks.length} tasks, strategy: ${strategy ? "✓" : "—"}`);
   },
   { connection: redisBullMQ, concurrency: 3 }
