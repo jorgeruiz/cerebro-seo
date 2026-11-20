@@ -183,19 +183,28 @@ function CopyableBlock({ label, value, mono = true }: { label: string; value: st
 
 function RetryBlockedButton({ taskId }: { taskId: string }) {
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const handleRetry = () => {
+    setError(null);
     startTransition(async () => {
-      const { actionRetryTask } = await import("../analisis/plan-actions");
-      const res = await actionRetryTask(taskId);
-      if (res.ok) window.location.reload();
+      const { actionResumeBlockedTask } = await import("./actions");
+      const res = await actionResumeBlockedTask(taskId);
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        setError(res.error);
+      }
     });
   };
   return (
-    <button onClick={handleRetry} disabled={isPending}
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-6 text-[0.6rem] gap-1")}>
-      {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-      Reintentar
-    </button>
+    <div className="flex items-center gap-2">
+      <button onClick={handleRetry} disabled={isPending}
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-6 text-[0.6rem] gap-1")}>
+        {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+        Reintentar
+      </button>
+      {error && <span className="font-mono text-[0.55rem] text-destructive">{error}</span>}
+    </div>
   );
 }
 
@@ -642,41 +651,43 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
   const [splitObjectives, setSplitObjectives] = useState(["", ""]);
   const [voidReason, setVoidReason] = useState("");
   const [mode, setMode] = useState<"select" | "manual" | "split" | "void">("select");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const meta = task.classificationMeta as { candidates?: Array<{ actionType: string; reason: string }> } | null;
 
+  const handleResult = (res: { ok: boolean; error?: string }) => {
+    if (res.ok) window.location.reload();
+    else setActionError(("error" in res ? res.error : "Error desconocido") ?? "Error");
+  };
+
   const handleReclassify = () => {
     if (!selectedType) return;
-    startTransition(async () => {
-      const res = await actionReclassifyTask(task.id, selectedType);
-      if (res.ok) window.location.reload();
-    });
+    setActionError(null);
+    startTransition(async () => handleResult(await actionReclassifyTask(task.id, selectedType)));
   };
 
   const handleManual = () => {
     if (!manualInstructions.trim()) return;
-    startTransition(async () => {
-      const res = await actionSetManualTask(task.id, manualInstructions);
-      if (res.ok) window.location.reload();
-    });
+    setActionError(null);
+    startTransition(async () => handleResult(await actionSetManualTask(task.id, manualInstructions)));
   };
 
   const handleSplit = () => {
     const valid = splitObjectives.filter((o) => o.trim().length > 0);
     if (valid.length < 2) return;
+    setActionError(null);
     startTransition(async () => {
       const { actionSplitTask } = await import("./actions");
-      const res = await actionSplitTask(task.id, valid);
-      if (res.ok) window.location.reload();
+      handleResult(await actionSplitTask(task.id, valid));
     });
   };
 
   const handleVoid = () => {
     if (!confirm("¿Anular esta tarea? No se puede deshacer.")) return;
+    setActionError(null);
     startTransition(async () => {
       const { actionVoidNeedsDefinition } = await import("./actions");
-      const res = await actionVoidNeedsDefinition(task.id, voidReason);
-      if (res.ok) window.location.reload();
+      handleResult(await actionVoidNeedsDefinition(task.id, voidReason));
     });
   };
 
@@ -685,6 +696,7 @@ function NeedsDefinitionCard({ task }: { task: PlanTaskFullView }) {
       <p className="font-mono text-[0.65rem] text-muted-foreground">
         Esta tarea no se pudo clasificar automáticamente. Elige una opción:
       </p>
+      {actionError && <p className="font-mono text-[0.6rem] text-destructive">{actionError}</p>}
 
       {meta?.candidates && meta.candidates.length > 0 && (
         <div className="space-y-1">

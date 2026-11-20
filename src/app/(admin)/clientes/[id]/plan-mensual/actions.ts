@@ -272,6 +272,65 @@ export async function actionExecuteTask(
   return { ok: true };
 }
 
+// ─── Resume blocked task (keep steps, re-execute) ───────────────────────────
+
+/**
+ * Resume a BLOCKED task: close stale runs, reset the failed step to PENDING,
+ * set task to READY, and re-enqueue for execution.
+ * Does NOT re-decompose — keeps the existing catalog steps.
+ */
+export async function actionResumeBlockedTask(
+  taskId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  "use server";
+  const session = await getSession();
+  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    include: {
+      steps: { orderBy: { order: "asc" } },
+      site: { select: { platform: true } },
+    },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+  if (task.status !== "BLOCKED" && task.status !== "FAILED") {
+    return { ok: false, error: `Solo BLOCKED o FAILED. Status actual: ${task.status}` };
+  }
+
+  // Close any stale RUNNING TaskRuns
+  await prisma.taskRun.updateMany({
+    where: { taskId, status: "RUNNING" },
+    data: { status: "FAILED", logTail: "Cerrado por actionResumeBlockedTask", finishedAt: new Date() },
+  });
+
+  // Reset FAILED steps to PENDING (so the executor retries them)
+  await prisma.planStep.updateMany({
+    where: { taskId, status: "FAILED" },
+    data: { status: "PENDING", notes: null },
+  });
+
+  // Clear blockedReason and set to READY for execution
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: { status: "READY", failureReason: null, blockedReason: null, remedy: null },
+  });
+
+  // Check if task has AI steps pending → auto-enqueue
+  const aiPending = await prisma.planStep.count({
+    where: { taskId, type: "AI", status: "PENDING" },
+  });
+  if (aiPending > 0) {
+    await prisma.planTask.update({ where: { id: taskId }, data: { status: "RUNNING" } });
+    await planTaskQueue.add("execute", {
+      taskId,
+      triggeredById: session.user.email ?? undefined,
+    });
+  }
+
+  return { ok: true };
+}
+
 // ─── Complete human step ────────────────────────────────────────────────────
 
 export async function actionCompleteHumanStep(
