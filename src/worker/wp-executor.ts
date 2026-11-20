@@ -977,29 +977,24 @@ async function executeWpSeo(
   }
 
   // ── Generate meta tags with Claude ──────────────────────────────────
+  let agentClaims: Array<{ text: string; source: string }> = [];
   if (!metaTitle || !metaDescription) {
     const brief = action.content_brief ?? `${task.title}: ${task.objective}`;
 
-    // Get verified/excluded services from client record
-    let verifiedServices = "";
+    // Get full client context (bridge + verifiedServices + confirmed claims)
+    let clientContextBlock = "";
     try {
+      const { getClientContext, formatContextForPrompt } = await import("@/lib/client-context");
       const { prisma: db } = await import("@/lib/db");
       const clientRecord = await db.client.findFirst({
         where: { sites: { some: { client: { cerebroClientId } } } },
-        select: { verifiedServices: true, excludedServices: true },
+        select: { id: true },
       });
       if (clientRecord) {
-        const offers = clientRecord.verifiedServices.length > 0
-          ? `OFRECE: ${clientRecord.verifiedServices.join(", ")}`
-          : "";
-        const notOffers = clientRecord.excludedServices.length > 0
-          ? `NO OFRECE (PROHIBIDO mencionar): ${clientRecord.excludedServices.join(", ")}`
-          : "";
-        if (offers || notOffers) {
-          verifiedServices = `\nSERVICIOS DEL CLIENTE:\n${offers}\n${notOffers}`.trim();
-        }
+        const ctx = await getClientContext(clientRecord.id);
+        clientContextBlock = `\n${formatContextForPrompt(ctx)}`;
       }
-    } catch { /* DB unavailable */ }
+    } catch { /* context unavailable */ }
 
     const currentContext = currentTitle || currentDescription
       ? `\nMETAS ACTUALES:\nmeta_title actual: "${currentTitle}" (${currentTitle.length} chars)\nmeta_description actual: "${currentDescription}" (${currentDescription.length} chars)`
@@ -1017,14 +1012,17 @@ async function executeWpSeo(
           "Genera meta title y meta description para SEO segun este contexto.",
           "meta_title: 50-60 caracteres exactos, incluye keyword principal.",
           "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
-          "PROHIBIDO inventar datos del cliente.",
-          "PROHIBIDO mencionar servicios que no esten en la lista de servicios verificados.",
-          'Responde SOLO con JSON: {"meta_title": "...", "meta_description": "..."}',
+          "REGLAS:",
+          "1. Usa primero hechos del contexto del cliente.",
+          "2. Prefiere redaccion neutra antes que inventar detalles (servicios, zonas, tiempos, precios).",
+          "3. PROHIBIDO inventar datos del cliente.",
+          "4. PROHIBIDO mencionar servicios que no esten en la lista.",
+          '5. Responde SOLO con JSON: {"meta_title": "...", "meta_description": "...", "claims": [{"text": "afirmacion concreta", "source": "context|page|none"}]}',
           "",
           "CONTEXTO:",
           brief,
           currentContext,
-          verifiedServices,
+          clientContextBlock,
         ].join("\n"),
       }],
     });
@@ -1032,9 +1030,10 @@ async function executeWpSeo(
     const rawMeta = metaResponse.content[0]?.type === "text" ? metaResponse.content[0].text : "{}";
     try {
       const cleaned = rawMeta.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(cleaned) as { meta_title?: string; meta_description?: string };
+      const parsed = JSON.parse(cleaned) as { meta_title?: string; meta_description?: string; claims?: Array<{ text: string; source: string }> };
       metaTitle = metaTitle ?? parsed.meta_title;
       metaDescription = metaDescription ?? parsed.meta_description;
+      agentClaims = parsed.claims ?? [];
     } catch {
       // usar lo que tengamos
     }
@@ -1069,6 +1068,34 @@ async function executeWpSeo(
     } catch { /* PageMetric not available */ }
   }
 
+  // Validate claims against client context
+  let claimsResult: { claims: Array<{ text: string; source: string }>; unsourced: Array<{ text: string; source: string }> } | undefined;
+  if (metaTitle || metaDescription) {
+    try {
+      const { extractAndValidateClaims, persistUnsourcedClaims } = await import("@/lib/claim-checker");
+      const { getClientContext } = await import("@/lib/client-context");
+      const { prisma: db } = await import("@/lib/db");
+      const clientRecord = await db.client.findFirst({
+        where: { sites: { some: { client: { cerebroClientId } } } },
+        select: { id: true },
+      });
+      if (clientRecord) {
+        const ctx = await getClientContext(clientRecord.id);
+        const fullText = `${metaTitle ?? ""} ${metaDescription ?? ""}`;
+        const mapped = agentClaims.map((c) => ({ text: c.text, source: c.source as "context" | "page" | "none", field: undefined }));
+        const result = extractAndValidateClaims(fullText, mapped, ctx);
+        claimsResult = { claims: result.claims, unsourced: result.unsourced };
+
+        // Persist unsourced claims → Notion task for Félix
+        if (result.hasUnsourced) {
+          await persistUnsourcedClaims(clientRecord.id, taskId, targetUrl ?? null, task.title, result.unsourced);
+        }
+      }
+    } catch (err) {
+      console.warn(`[wp-executor] claim check error: ${(err as Error).message}`);
+    }
+  }
+
   const stagedChange: WpStagedSeoChange = {
     type: "seo",
     page_id: pageId,
@@ -1081,6 +1108,8 @@ async function executeWpSeo(
     current_meta_title: currentTitle || undefined,
     current_meta_description: currentDescription || undefined,
     gsc_28d: gscData,
+    claims: claimsResult?.claims,
+    unsourced_claims: claimsResult?.unsourced,
   } as WpStagedSeoChange;
 
   const generatedNote = metaTitle && metaDescription
@@ -1089,9 +1118,12 @@ async function executeWpSeo(
   const currentNote = currentTitle
     ? `\nActual: title="${currentTitle}" (${currentTitle.length}c) | desc="${currentDescription.slice(0, 50)}..." (${currentDescription.length}c)`
     : "";
+  const claimsNote = claimsResult?.unsourced.length
+    ? `\n⚠ ${claimsResult.unsourced.length} afirmacion(es) sin fuente → tarea para Felix`
+    : "";
 
   return {
-    notes: `wp:seo staged — ${generatedNote}${currentNote}`,
+    notes: `wp:seo staged — ${generatedNote}${currentNote}${claimsNote}`,
     stagedChange,
   };
 }

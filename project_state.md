@@ -2,9 +2,29 @@
 
 > Documento vivo. Se actualiza al inicio y cierre de cada sesión de trabajo.
 
-**Última actualización:** 2026-11-16 (F2c — cierre pruebas producción)
-**Fase actual:** F2c COMPLETO. E2E probado con Ayrisa (WP).
-**Próximo hito:** Verificar en producción. Luego F3 (herramientas Oficina).
+**Última actualización:** 2026-11-19 (F2e — contexto del cliente + claims)
+**Fase actual:** F2e implementado. Pendiente: verificar en producción con Ayrisa.
+**Próximo hito:** Verificar claims en prod. Luego F2d (reporte + terminal) → F3 (Oficina).
+
+### ✅ F2e — Contexto del cliente + verificación de afirmaciones (2026-11-19)
+
+**Decisión (Jorge):** el agente no se bloquea por falta de contexto. Genera y publica.
+Afirmaciones sin fuente → tarea para Félix en Notion. Confirmadas → aprendizaje en Notion.
+
+**Implementado:**
+- ClaimCheck model (PENDING/CONFIRMED/DENIED) con relación a Client + PlanTask
+- getClientContext(clientId): bridge context + verifiedServices + confirmed claims. Cache Redis 1h.
+- formatContextForPrompt: inyecta identidad, servicios, claims confirmados, aprendizajes
+- extractAndValidateClaims: risk patterns regex + cruce con contexto
+- persistUnsourcedClaims: crea ClaimChecks + tarea agrupada en Notion via POST /api/internal/tareas
+- executeWpSeo: recibe clientContext completo; prompt exige claims[] en la respuesta JSON
+- SeoComparisonBlock: muestra claims con fuente (context=verde, page=gris, none=amber)
+- Tarea de Notion: responsable Félix, 3 días hábiles, lista de afirmaciones
+
+**Pendiente:**
+- Sync worker: leer estado de tareas de Notion, resolver CONFIRMED→aprendizaje + DENIED→corrección
+- Texto en vivo de la URL target (§4 del prompt): fetch directo al publicar
+- Verificar en producción: hombre parado de Ayrisa
 
 ### ✅ F2c — Cierre pruebas producción (2026-11-16)
 

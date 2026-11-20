@@ -47,6 +47,10 @@ export interface WpStagedSeoChange {
   current_meta_description?: string;
   /** GSC metrics for the target URL (28 days) */
   gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number };
+  /** Claims declared by the agent */
+  claims?: Array<{ text: string; source: string }>;
+  /** Claims without source (pending confirmation) */
+  unsourced_claims?: Array<{ text: string; source: string }>;
 }
 
 export interface WpStagedElementorChange {

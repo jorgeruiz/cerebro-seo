@@ -102,6 +102,7 @@ model Client {
   planConfig             Json?   // ClientPlanConfig — see src/lib/plan/plan-composer.ts
   verifiedServices       String[] @default([])  // servicios que ofrece (ej: "renta de montacargas")
   excludedServices       String[] @default([])  // servicios que NO ofrece (ej: "venta de montacargas")
+  claimChecks            ClaimCheck[]
 }
 
 model Site {
@@ -409,6 +410,33 @@ model PageMetric {
 
   @@unique([siteId, url, date, source], name: "siteId_url_date_source")
   @@index([siteId, url, date])
+}
+
+// ─── Claim Checks (F2e: afirmaciones por confirmar) ──────────────────────────
+
+enum ClaimStatus {
+  PENDING
+  CONFIRMED
+  DENIED
+}
+
+model ClaimCheck {
+  id              String      @id @default(cuid())
+  clientId        String
+  client          Client      @relation(fields: [clientId], references: [id])
+  taskId          String?     // PlanTask que generó la afirmación
+  url             String?     // URL donde se publicó
+  claim           String      @db.Text  // la afirmación textual
+  source          String      // "context:<campo>" | "page:<url>" | "none"
+  status          ClaimStatus @default(PENDING)
+  notionTaskId    String?     // ID de la tarea en Notion para Félix
+  notionTaskUrl   String?     // URL de la tarea en Notion
+  resolvedAt      DateTime?
+  resolvedBy      String?     // "confirmed_by_client" | "denied_by_client"
+  createdAt       DateTime    @default(now())
+
+  @@index([clientId, status])
+  @@index([taskId])
 }
 
 model Insight {

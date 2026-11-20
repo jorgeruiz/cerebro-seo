@@ -208,7 +208,7 @@ function RetryBlockedButton({ taskId }: { taskId: string }) {
   );
 }
 
-function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number } } }) {
+function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number }; claims?: Array<{ text: string; source: string }>; unsourced_claims?: Array<{ text: string; source: string }> } }) {
   const hasCurrents = !!(seo.current_meta_title || seo.current_meta_description);
   return (
     <div className="mt-2 bg-zinc-950 rounded px-3 py-2 space-y-2 font-mono text-[0.6rem]">
@@ -259,6 +259,27 @@ function SeoComparisonBlock({ seo }: { seo: { meta_title: string; meta_descripti
           </tr>
         </tbody>
       </table>
+      {/* Claims */}
+      {(seo.claims?.length ?? 0) > 0 && (
+        <div className="mt-2 space-y-1">
+          <p className="text-zinc-500 text-[0.55rem]">Afirmaciones ({seo.claims!.length})</p>
+          {seo.claims!.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full shrink-0",
+                c.source === "none" ? "bg-amber-500" : c.source === "context" ? "bg-emerald-500" : "bg-zinc-500"
+              )} />
+              <span className="text-zinc-300">{c.text}</span>
+              <span className="text-zinc-600 text-[0.5rem]">{c.source}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(seo.unsourced_claims?.length ?? 0) > 0 && (
+        <p className="mt-1 text-amber-500 text-[0.55rem]">
+          ⚠ {seo.unsourced_claims!.length} afirmacion(es) sin fuente — tarea para Felix creada en Notion
+        </p>
+      )}
     </div>
   );
 }
@@ -494,7 +515,7 @@ function StepRow({
 
         {/* SEO comparison — shown when seo step has stagedChange */}
         {(step.stagedChange as { type?: string } | null)?.type === "seo" && (
-          <SeoComparisonBlock seo={step.stagedChange as { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number } }} />
+          <SeoComparisonBlock seo={step.stagedChange as { meta_title: string; meta_description: string; current_meta_title?: string; current_meta_description?: string; page_id: number; gsc_28d?: { impressions: number; clicks: number; ctr: number; position: number }; claims?: Array<{ text: string; source: string }>; unsourced_claims?: Array<{ text: string; source: string }> }} />
         )}
 
         {/* Keyword research table — shown when keyword_research step is DONE */}
