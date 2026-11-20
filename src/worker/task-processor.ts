@@ -1065,6 +1065,11 @@ async function processWpTask(
             where: { id: taskId },
             data: { status: "BLOCKED", blockedReason: notes, remedy: "Verificar que la URL existe en WordPress" },
           });
+          // Close the TaskRun so "Reintentar" can create a new one
+          await prisma.taskRun.update({
+            where: { id: run.id },
+            data: { status: "FAILED", logTail: notes.slice(0, 2000), finishedAt: new Date() },
+          });
           console.log(`[wp-task] Step ${step.order} → BLOCKED: ${notes.slice(0, 80)}`);
           return;
         }

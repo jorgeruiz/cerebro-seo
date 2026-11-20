@@ -51,7 +51,7 @@ function extractUrlFromText(text: string): string | null {
 /** Detect home page from title/objective text. */
 function detectHomeFromText(text: string): string | null {
   const lower = text.toLowerCase();
-  if (/\bhome\s*page\b|\bpágina\s*de\s*inicio\b|\bhomepage\b|\bpágina\s*principal\b|\binicio\b/.test(lower)) {
+  if (/\bhome\s*page\b|\bpágina\s*de\s*inicio\b|\bhomepage\b|\bpágina\s*principal\b|\bde\s*la\s*home\b|\bla\s*home\b|:\s*home\s*\(pos/.test(lower)) {
     return "/";
   }
   return null;
@@ -950,12 +950,15 @@ async function executeWpSeo(
     const resolved = targetUrl
       ? await resolveWpPostId(cerebroClientId, targetUrl, taskId)
       : null;
-    if (resolved?.id) {
+    if (resolved && resolved.id > 0) {
       pageId = resolved.id;
     } else {
       const urlNote = targetUrl ? `"${targetUrl}"` : "(sin URL en el objetivo)";
+      const attemptsLog = resolved?.attempts?.length
+        ? `\nIntentos: ${resolved.attempts.join(" → ")}`
+        : "";
       return {
-        notes: `wp:seo BLOCKED — page_id=0, no se pudo resolver ${urlNote}. Verificar URL en WordPress.`,
+        notes: `wp:seo BLOCKED — page_id=0, no se pudo resolver ${urlNote}.${attemptsLog}`,
         stagedChange: { type: "seo", page_id: 0, meta_title: "", meta_description: "", focus_keyword: null, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString() } as WpStagedSeoChange,
       };
     }

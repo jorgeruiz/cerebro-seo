@@ -495,7 +495,9 @@ export async function getWpSeo(
 
 export interface WpResolvedPost {
   id: number;
-  type: "page" | "post" | string;
+  type: "page" | "post" | "not_found" | string;
+  /** Log of each resolution attempt for diagnostics */
+  attempts?: string[];
 }
 
 /**
@@ -516,33 +518,43 @@ export async function resolveWpPostId(
   urlPath: string,
   taskId?: string
 ): Promise<WpResolvedPost | null> {
+  const attempts: string[] = [];
   const slug = urlPath.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
   const isHome = !slug || urlPath === "/" || urlPath.toLowerCase() === "/home" || urlPath.toLowerCase() === "/inicio";
 
   // ── Home page resolution ────────────────────────────────────────────
   if (isHome) {
-    // Try plugin endpoint
+    // 1. Plugin /options/page_on_front
     const frontResult = await proxyCall(clienteId, "/options/page_on_front", { taskId });
     if (frontResult.ok) {
-      const data = frontResult.data as { value?: number | string; id?: number };
+      const data = frontResult.data as { id?: number; value?: number | string; show_on_front?: string };
       const frontId = Number(data.id ?? data.value ?? 0);
-      if (frontId > 0) return { id: frontId, type: "page" };
+      if (frontId > 0) {
+        attempts.push(`plugin page_on_front → ${frontId}`);
+        return { id: frontId, type: "page", attempts };
+      }
+      attempts.push(`plugin page_on_front → show_on_front=${data.show_on_front ?? "?"}, id=0`);
+    } else {
+      attempts.push(`plugin page_on_front → ${frontResult.error ?? "no endpoint"}`);
     }
 
-    // Fallback: search pages for home/inicio slug
+    // 2. Legacy: search /pages for home/inicio slug
     const pagesResult = await getWpPages(clienteId, taskId);
     if (pagesResult.ok) {
       const frontPage = pagesResult.data.find(
         (p: { slug: string; id?: number }) => p.slug === "" || p.slug === "home" || p.slug === "inicio"
       );
       if (frontPage && (frontPage as { id?: number }).id) {
-        return { id: (frontPage as { id: number }).id, type: "page" };
+        attempts.push(`/pages slug match → ${(frontPage as { id: number }).id}`);
+        return { id: (frontPage as { id: number }).id, type: "page", attempts };
       }
+      attempts.push(`/pages slug match → no match (${pagesResult.data.length} pages)`);
     }
-    return null;
+
+    return { id: 0, type: "not_found", attempts };
   }
 
-  // ── Plugin resolve-url (≥1.6.2) ────────────────────────────────────
+  // ── 1. Plugin /resolve-url (≥1.6.2) ────────────────────────────────
   const resolveResult = await proxyCall(clienteId, "/resolve-url", {
     method: "POST",
     body: { url: urlPath },
@@ -551,33 +563,44 @@ export async function resolveWpPostId(
   if (resolveResult.ok) {
     const data = resolveResult.data as { id?: number; post_id?: number; type?: string };
     const postId = Number(data.id ?? data.post_id ?? 0);
-    if (postId > 0) return { id: postId, type: data.type ?? "unknown" };
+    if (postId > 0) {
+      attempts.push(`plugin /resolve-url → id=${postId} type=${data.type}`);
+      return { id: postId, type: data.type ?? "unknown", attempts };
+    }
+    attempts.push(`plugin /resolve-url → not_found`);
+  } else {
+    attempts.push(`plugin /resolve-url → ${resolveResult.error ?? "no endpoint"}`);
   }
 
-  // ── WP REST core fallback: pages then posts by slug ─────────────────
-  // This works with ANY WP site, no plugin needed
+  // ── 2. WP REST core: pages then posts by slug ──────────────────────
   for (const postType of ["pages", "posts"]) {
     const restResult = await proxyCall(clienteId, `/wp-rest/${postType}?slug=${encodeURIComponent(slug)}&_fields=id`, { taskId });
     if (restResult.ok) {
       const items = restResult.data as Array<{ id: number }>;
       if (Array.isArray(items) && items.length > 0 && items[0].id > 0) {
-        return { id: items[0].id, type: postType === "pages" ? "page" : "post" };
+        attempts.push(`wp-rest/${postType}?slug=${slug} → id=${items[0].id}`);
+        return { id: items[0].id, type: postType === "pages" ? "page" : "post", attempts };
       }
+      attempts.push(`wp-rest/${postType}?slug=${slug} → empty`);
+    } else {
+      attempts.push(`wp-rest/${postType} → ${restResult.error ?? "error"}`);
     }
   }
 
-  // ── Legacy: plugin /pages by slug ───────────────────────────────────
+  // ── 3. Legacy: plugin /pages by slug ───────────────────────────────
   const pagesResult = await getWpPages(clienteId, taskId);
   if (pagesResult.ok) {
     const match = pagesResult.data.find(
       (p: { slug: string; id?: number }) => p.slug?.toLowerCase() === slug.toLowerCase()
     );
     if (match && (match as { id?: number }).id) {
-      return { id: (match as { id: number }).id, type: "page" };
+      attempts.push(`legacy /pages slug → ${(match as { id: number }).id}`);
+      return { id: (match as { id: number }).id, type: "page", attempts };
     }
+    attempts.push(`legacy /pages slug → no match`);
   }
 
-  return null;
+  return { id: 0, type: "not_found", attempts };
 }
 
 // ─── Media Upload (image with alt text) ──────────────────────────────────────
