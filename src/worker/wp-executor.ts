@@ -976,6 +976,22 @@ async function executeWpSeo(
     }
   }
 
+  // ── Fetch live page text (evidence of what the site already says) ───
+  let livePageText = "";
+  if (targetUrl) {
+    try {
+      const { getWpElementorPage } = await import("@/lib/wp-proxy-client");
+      if (pageId > 0) {
+        const elemResult = await getWpElementorPage(cerebroClientId, pageId, taskId);
+        if (elemResult.ok && elemResult.data) {
+          // Extract text from Elementor widgets
+          const widgets = (elemResult.data as { widgets?: Array<{ text?: string }> }).widgets ?? [];
+          livePageText = widgets.map((w) => w.text ?? "").filter(Boolean).join("\n").slice(0, 2000);
+        }
+      }
+    } catch { /* live text unavailable */ }
+  }
+
   // ── Generate meta tags with Claude ──────────────────────────────────
   let agentClaims: Array<{ text: string; source: string }> = [];
   if (!metaTitle || !metaDescription) {
@@ -1023,6 +1039,7 @@ async function executeWpSeo(
           brief,
           currentContext,
           clientContextBlock,
+          livePageText ? `\nTEXTO ACTUAL DE LA PAGINA (lo que ya dice es evidencia valida):\n${livePageText.slice(0, 1000)}` : "",
         ].join("\n"),
       }],
     });
@@ -1072,7 +1089,7 @@ async function executeWpSeo(
   let claimsResult: { claims: Array<{ text: string; source: string }>; unsourced: Array<{ text: string; source: string }> } | undefined;
   if (metaTitle || metaDescription) {
     try {
-      const { extractAndValidateClaims, persistUnsourcedClaims } = await import("@/lib/claim-checker");
+      const { extractAndValidateClaims } = await import("@/lib/claim-checker");
       const { getClientContext } = await import("@/lib/client-context");
       const { prisma: db } = await import("@/lib/db");
       const clientRecord = await db.client.findFirst({
@@ -1086,9 +1103,13 @@ async function executeWpSeo(
         const result = extractAndValidateClaims(fullText, mapped, ctx);
         claimsResult = { claims: result.claims, unsourced: result.unsourced };
 
-        // Persist unsourced claims → Notion task for Félix
+        // Save unsourced claims as PENDING (no Notion task yet — created at publish time)
         if (result.hasUnsourced) {
-          await persistUnsourcedClaims(clientRecord.id, taskId, targetUrl ?? null, task.title, result.unsourced);
+          for (const claim of result.unsourced) {
+            await db.claimCheck.create({
+              data: { clientId: clientRecord.id, taskId, url: targetUrl ?? null, claim: claim.text, source: claim.source, status: "PENDING" },
+            }).catch(() => {}); // ignore if table doesn't exist
+          }
         }
       }
     } catch (err) {

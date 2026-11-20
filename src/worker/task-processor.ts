@@ -1111,6 +1111,35 @@ async function processWpTask(
           },
         });
 
+        // Post-step claim check: scan generated content for unsourced claims
+        if (stepResult.stagedChange && cerebroClientId) {
+          try {
+            const sc = stepResult.stagedChange as unknown as Record<string, unknown>;
+            const textToCheck = [
+              sc.meta_title, sc.meta_description, sc.h1, sc.body,
+            ].filter(Boolean).join(" ");
+            if (textToCheck.length > 20) {
+              const { extractAndValidateClaims } = await import("@/lib/claim-checker");
+              const { getClientContext } = await import("@/lib/client-context");
+              const clientRecord = await prisma.client.findFirst({
+                where: { sites: { some: { client: { cerebroClientId } } } },
+                select: { id: true },
+              });
+              if (clientRecord) {
+                const ctx = await getClientContext(clientRecord.id);
+                const result = extractAndValidateClaims(textToCheck, [], ctx);
+                if (result.hasUnsourced) {
+                  for (const claim of result.unsourced) {
+                    await prisma.claimCheck.create({
+                      data: { clientId: clientRecord.id, taskId, claim: claim.text, source: "none", status: "PENDING" },
+                    }).catch(() => {});
+                  }
+                }
+              }
+            }
+          } catch { /* claim check non-critical */ }
+        }
+
         if (stepResult.previewUrl) {
           await prisma.planTask.update({
             where: { id: taskId },

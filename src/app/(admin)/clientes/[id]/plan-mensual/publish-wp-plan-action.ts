@@ -271,6 +271,38 @@ export async function publishWpPlanAction(planId: string): Promise<PublishWpPlan
     }).catch(() => {});
   }
 
+  // Create ONE grouped Notion task for all unsourced claims across all published steps
+  if (metaApplied > 0) {
+    try {
+      const { persistUnsourcedClaims } = await import("@/lib/claim-checker");
+      const pendingClaims = await prisma.claimCheck.findMany({
+        where: {
+          taskId: { in: plan.tasks.map((t) => t.id) },
+          status: "PENDING",
+          notionTaskId: null,
+        },
+        select: { id: true, claim: true, source: true, url: true, clientId: true, taskId: true },
+      });
+      if (pendingClaims.length > 0) {
+        const clientId = pendingClaims[0].clientId;
+        const urls = Array.from(new Set(pendingClaims.map((c) => c.url).filter(Boolean)));
+        const mapped = pendingClaims.map((c) => ({ text: c.claim, source: c.source as "context" | "page" | "none" }));
+        const result = await persistUnsourcedClaims(
+          clientId,
+          pendingClaims[0].taskId ?? planId,
+          urls.join(", ") || null,
+          `Plan ${plan.month}`,
+          mapped,
+        );
+        if (result.notionTaskUrl) {
+          details.push(`Tarea Notion para Felix: ${result.notionTaskUrl} (${pendingClaims.length} afirmaciones)`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[publish-wp-plan] claim task error: ${(err as Error).message}`);
+    }
+  }
+
   console.log(
     `[publish-wp-plan] planId=${planId} meta=${metaApplied} ` +
     `elementor=${elementorApplied} skipped=${skipped} failed=${failed}`,

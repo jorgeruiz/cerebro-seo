@@ -29,9 +29,9 @@ const RISK_PATTERNS = [
   // Services / products
   /\b(venta|alquiler|renta|servicio de|instalación de|mantenimiento de|reparación de)\s+\w+/gi,
   // Locations / zones
-  /\b(en toda la república|a nivel nacional|zona metropolitana|cobertura en)\b/gi,
+  /\b(en toda la república\w*|a nivel nacional|zona metropolitana|cobertura en\s+\w+)/gi,
   // Times / guarantees
-  /\b(entrega en \d|disponibilidad inmediata|garantía de|tiempo de respuesta)\b/gi,
+  /\b(entrega en \d+\s*\w*|disponibilidad inmediata|garantía de\s+\w+|tiempo de respuesta\s*\w*)/gi,
   // Certifications / numbers
   /\b(certificad[oa]s?|ISO \d|NOM-\d|\d+ años de experiencia|\d+ clientes)\b/gi,
   // People / roles
@@ -61,8 +61,17 @@ export function extractAndValidateClaims(
       // Already declared by agent?
       if (agentClaims.some((c) => generatedText.includes(c.text) && c.text.includes(text))) continue;
 
-      // Known fact from context?
-      const isKnown = knownFacts.some((f) => f.toLowerCase().includes(text.toLowerCase()));
+      // Known fact from context? Check substring + significant word overlap
+      const textLower = text.toLowerCase();
+      const isKnown = knownFacts.some((f) => {
+        const fLower = f.toLowerCase();
+        // Substring match (either direction)
+        if (fLower.includes(textLower) || textLower.includes(fLower)) return true;
+        // Word overlap: ≥2 significant words from the fact appear in the text
+        const fWords = fLower.split(/\s+/).filter((w) => w.length > 3);
+        const overlap = fWords.filter((w) => textLower.includes(w)).length;
+        return overlap >= 1 && overlap >= Math.ceil(fWords.length / 2);
+      });
       if (isKnown) {
         claims.push({ text, source: "context", field: "auto-detected" });
         continue;
