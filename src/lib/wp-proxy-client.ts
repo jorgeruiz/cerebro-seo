@@ -485,8 +485,8 @@ export async function getWpSeo(
   if (!result.ok) return null;
   const data = result.data as Record<string, unknown>;
   return {
-    meta_title: String(data.meta_title ?? data.title ?? ""),
-    meta_description: String(data.meta_description ?? data.description ?? ""),
+    meta_title: String(data.seo_title ?? data.meta_title ?? data.title ?? ""),
+    meta_description: String(data.meta_desc ?? data.meta_description ?? data.description ?? ""),
     focus_keyword: data.focus_keyword ? String(data.focus_keyword) : null,
   };
 }

@@ -1018,47 +1018,92 @@ async function executeWpSeo(
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const metaResponse = await anthropic.messages.create({
+    const seoPrompt = [
+      "Genera meta title y meta description para SEO segun este contexto.",
+      "meta_title: 50-60 caracteres exactos, incluye keyword principal.",
+      "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
+      "REGLAS:",
+      "1. Usa primero hechos del contexto del cliente.",
+      "2. Prefiere redaccion neutra antes que inventar detalles.",
+      "3. PROHIBIDO inventar datos del cliente.",
+      "4. PROHIBIDO mencionar servicios que no esten en la lista.",
+      "5. Declara cada afirmacion concreta con su fuente.",
+      "",
+      "CONTEXTO:",
+      brief,
+      currentContext,
+      clientContextBlock,
+      livePageText ? `\nTEXTO ACTUAL DE LA PAGINA:\n${livePageText.slice(0, 1000)}` : "",
+    ].join("\n");
+
+    // Use tool-use for structured output (avoids JSON parse failures)
+    const callSeoTool = async () => anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 500,
+      max_tokens: 1024,
       temperature: 0,
-      messages: [{
-        role: "user",
-        content: [
-          "Genera meta title y meta description para SEO segun este contexto.",
-          "meta_title: 50-60 caracteres exactos, incluye keyword principal.",
-          "meta_description: 140-160 caracteres exactos, incluye beneficio claro y CTA suave.",
-          "REGLAS:",
-          "1. Usa primero hechos del contexto del cliente.",
-          "2. Prefiere redaccion neutra antes que inventar detalles (servicios, zonas, tiempos, precios).",
-          "3. PROHIBIDO inventar datos del cliente.",
-          "4. PROHIBIDO mencionar servicios que no esten en la lista.",
-          '5. Responde SOLO con JSON: {"meta_title": "...", "meta_description": "...", "claims": [{"text": "afirmacion concreta", "source": "context|page|none"}]}',
-          "",
-          "CONTEXTO:",
-          brief,
-          currentContext,
-          clientContextBlock,
-          livePageText ? `\nTEXTO ACTUAL DE LA PAGINA (lo que ya dice es evidencia valida):\n${livePageText.slice(0, 1000)}` : "",
-        ].join("\n"),
+      messages: [{ role: "user", content: seoPrompt }],
+      tools: [{
+        name: "seo_meta",
+        description: "Genera meta tags SEO con claims",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            meta_title: { type: "string", description: "50-60 chars con keyword" },
+            meta_description: { type: "string", description: "140-160 chars con beneficio y CTA" },
+            claims: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: { type: "string" },
+                  source: { type: "string", enum: ["context", "page", "none"] },
+                },
+                required: ["text", "source"],
+              },
+              description: "Cada afirmacion concreta con su fuente",
+            },
+          },
+          required: ["meta_title", "meta_description"],
+        },
       }],
+      tool_choice: { type: "tool", name: "seo_meta" },
     });
 
-    const rawMeta = metaResponse.content[0]?.type === "text" ? metaResponse.content[0].text : "{}";
-    try {
-      const cleaned = rawMeta.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(cleaned) as { meta_title?: string; meta_description?: string; claims?: Array<{ text: string; source: string }> };
-      metaTitle = metaTitle ?? parsed.meta_title;
-      metaDescription = metaDescription ?? parsed.meta_description;
-      agentClaims = parsed.claims ?? [];
-    } catch {
-      // usar lo que tengamos
+    // Try once, retry on failure
+    let totalCostUsd = 0;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await callSeoTool();
+        totalCostUsd += (response.usage.input_tokens * 3 + response.usage.output_tokens * 15) / 1_000_000;
+
+        const toolUse = response.content.find((b) => b.type === "tool_use");
+        if (toolUse && "input" in toolUse) {
+          const input = toolUse.input as { meta_title?: string; meta_description?: string; claims?: Array<{ text: string; source: string }> };
+          metaTitle = metaTitle || input.meta_title;
+          metaDescription = metaDescription || input.meta_description;
+          agentClaims = input.claims ?? [];
+          break; // success
+        }
+        // No tool_use block → retry
+        console.warn(`[wp-executor] SEO tool attempt ${attempt + 1}: no tool_use in response`);
+      } catch (err) {
+        console.warn(`[wp-executor] SEO tool attempt ${attempt + 1} error: ${(err as Error).message}`);
+      }
     }
 
-    const costUsd =
-      Number(metaResponse.usage.input_tokens) * 0.000003 +
-      Number(metaResponse.usage.output_tokens) * 0.000015;
-    await logApiUsage({ provider: "anthropic", endpoint: "wp-seo-meta", cost: costUsd });
+    await logApiUsage({ provider: "anthropic", endpoint: "wp-seo-meta", cost: totalCostUsd });
+  }
+
+  // Guard: empty metas → FAILED (never DONE with "(sin generar)")
+  if (!metaTitle || !metaDescription || metaTitle.length < 10 || metaDescription.length < 30) {
+    return {
+      notes: `wp:seo BLOCKED — generacion de metas falló después de 2 intentos. title="${metaTitle ?? ""}" (${(metaTitle ?? "").length}c) desc="${(metaDescription ?? "").slice(0, 50)}" (${(metaDescription ?? "").length}c)`,
+      stagedChange: {
+        type: "seo", page_id: pageId, meta_title: metaTitle ?? "", meta_description: metaDescription ?? "",
+        focus_keyword: focusKeyword, objective: task.objective.slice(0, 200), generated: false, staged_at: new Date().toISOString(),
+        current_meta_title: currentTitle || undefined, current_meta_description: currentDescription || undefined,
+      } as WpStagedSeoChange,
+    };
   }
 
   // Fetch GSC data for the target URL

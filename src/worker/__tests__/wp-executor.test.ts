@@ -15,9 +15,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@anthropic-ai/sdk", () => {
   class MockAnthropic {
     messages = {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: '{"meta_title":"Título de prueba para SEO","meta_description":"Descripción de prueba para SEO con exactamente el largo correcto y CTA."}' }],
-        usage: { input_tokens: 100, output_tokens: 50 },
+      create: vi.fn().mockImplementation((opts: { tool_choice?: unknown }) => {
+        // Tool-use mode (SEO meta generation)
+        if (opts.tool_choice) {
+          return Promise.resolve({
+            content: [{ type: "tool_use", id: "test", name: "seo_meta", input: {
+              meta_title: "Titulo de prueba para SEO optimizado keyword",
+              meta_description: "Descripcion de prueba para SEO con exactamente el largo correcto para meta description con beneficio claro y CTA suave incluida aqui ahora",
+              claims: [{ text: "servicio de prueba", source: "context" }],
+            } }],
+            usage: { input_tokens: 100, output_tokens: 50 },
+          });
+        }
+        // Text mode (content generation)
+        return Promise.resolve({
+          content: [{ type: "text", text: "<h2>Titulo</h2><p>Contenido de prueba para el articulo con suficiente texto.</p>" }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+        });
       }),
     };
   }
@@ -39,8 +53,9 @@ vi.mock("@/lib/wp-proxy-client", () => ({
   getWpElementorPage: vi.fn().mockResolvedValue({ ok: false, error: "not available" }),
   duplicateWpElementorPage: vi.fn(),
   updateWpElementorWidgets: vi.fn(),
-  getWpSeo: vi.fn().mockResolvedValue(null),
-  resolveWpPostId: vi.fn().mockResolvedValue(null),
+  getWpSeo: vi.fn().mockResolvedValue({ meta_title: "Old Title", meta_description: "Old description", focus_keyword: null }),
+  resolveWpPostId: vi.fn().mockResolvedValue({ id: 42, type: "page", attempts: ["mock → 42"] }),
+  getWpElementorPage: vi.fn().mockResolvedValue({ ok: false }),
 }));
 
 vi.mock("@/server/jobs/workers/base-worker", () => ({
