@@ -95,6 +95,43 @@ async function dfsPost<T>(
 }
 
 /**
+ * Executes a DataForSEO GET request with retry.
+ */
+async function dfsGet<T>(
+  path: string,
+  attempt = 1
+): Promise<{ data: DfsResponse<T>; durationMs: number; cost: number }> {
+  const start = Date.now();
+  try {
+    const res = await fetch(`${DFS_BASE_URL}${path}`, {
+      method: "GET",
+      headers: { Authorization: getAuthHeader() },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`DataForSEO HTTP ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = (await res.json()) as DfsResponse<T>;
+    const durationMs = Date.now() - start;
+    const cost =
+      data.tasks?.reduce((sum, t) => sum + (t.cost ?? 0), 0) ??
+      data.cost ??
+      0;
+
+    return { data, durationMs, cost };
+  } catch (err) {
+    if (attempt < 3) {
+      const delayMs = Math.pow(2, attempt) * 1000;
+      await new Promise((r) => setTimeout(r, delayMs));
+      return dfsGet<T>(path, attempt + 1);
+    }
+    throw err;
+  }
+}
+
+/**
  * Logs a DataForSEO API call to the ApiUsage table.
  * If the database is not available (e.g., during local dev before migration),
  * logs a warning to console and skips silently.
@@ -224,9 +261,8 @@ export class DataForSeoProvider implements SeoDataProvider {
     while (remaining.size > 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 15_000));
 
-      const { data, cost } = await dfsPost<DfsSerpResult>(
-        "/serp/google/organic/tasks_ready",
-        [{}]
+      const { data, cost } = await dfsGet<DfsSerpResult>(
+        "/serp/google/organic/tasks_ready"
       );
 
       void logUsage({ endpoint: "serp/organic/tasks_ready", cost });
@@ -239,9 +275,8 @@ export class DataForSeoProvider implements SeoDataProvider {
       for (const id of readyIds) {
         if (!remaining.has(id)) continue;
 
-        const { data: taskData, cost: taskCost } = await dfsPost<DfsSerpResult>(
-          "/serp/google/organic/task_get/regular/" + id,
-          [{}]
+        const { data: taskData, cost: taskCost } = await dfsGet<DfsSerpResult>(
+          "/serp/google/organic/task_get/regular/" + id
         );
 
         void logUsage({ endpoint: "serp/organic/task_get", cost: taskCost });
