@@ -1,12 +1,19 @@
 /**
- * Worker de ejecución de plan mensual + terminal web.
+ * Worker de ejecución de plan mensual + terminal web + data collection.
  *
  * Entrypoint separado — se despliega como otro servicio en Easypanel
  * (mismo repo, otro comando de inicio: `npx tsx src/worker/plan-runner.ts`).
  *
- * Consume dos colas:
+ * Consume TODAS las colas de background:
  * - "plan-task-execution" — tareas AI del plan (concurrency 1)
  * - "terminal-sessions" — turnos de terminal interactiva (concurrency 1)
+ * - "data-collection" — rank tracking, backlinks, competidores, GSC, audits
+ * - "ai-analysis" — insights, análisis background
+ * - "sync" — sync con Cerebro/Notion
+ *
+ * Los schedulers (cron jobs de BullMQ) se registran aquí al iniciar,
+ * NO en el proceso web. Esto garantiza que siempre corran mientras
+ * el worker esté vivo, independiente de restarts del proceso web.
  *
  * Graceful shutdown: SIGTERM → termina jobs en curso, sale limpiamente.
  */
@@ -22,6 +29,22 @@ import type { PlanTaskJobData } from "@/server/jobs/queues";
 // Import terminal handler — registers its own Worker on "terminal-sessions"
 import "./terminal-handler";
 
+// ── Data collection workers ─────────────────────────────────────────────────
+// Importar aquí registra los Workers de BullMQ para cada cola.
+// Antes vivían en instrumentation.ts (proceso web) — ahora son del worker.
+import "@/server/jobs/workers/rank-tracking-worker";
+import "@/server/jobs/workers/backlinks-worker";
+import "@/server/jobs/workers/competitor-worker";
+import "@/server/jobs/workers/ai-search-worker";
+import "@/server/jobs/workers/page-metrics-worker";
+import "@/server/jobs/workers/insights-worker";
+import "@/server/jobs/workers/decompose-worker";
+import "@/server/jobs/workers/audit-quick-worker";
+import "@/server/jobs/workers/audit-complete-worker";
+import "@/server/jobs/workers/cerebro-sync-worker";
+import "@/server/jobs/workers/cerebro-tasks-sync-worker";
+import "@/server/jobs/workers/package-detect-worker";
+
 import { execSync } from "child_process";
 const COMMIT = (() => {
   const fromEnv = process.env.GIT_SHA;
@@ -30,7 +53,7 @@ const COMMIT = (() => {
   catch { return "unknown"; }
 })();
 
-console.log(`[plan-runner] Starting plan task worker... commit=${COMMIT}`);
+console.log(`[plan-runner] Starting worker... commit=${COMMIT}`);
 
 let isShuttingDown = false;
 
@@ -85,4 +108,19 @@ async function shutdown() {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-console.log("[plan-runner] Worker ready. Listening on plan-task-execution + terminal-sessions.");
+// ── Initialize schedulers (cron jobs) ────────────────────────────────────────
+// Runs idempotently — BullMQ deduplicates by jobId.
+// This is the ONLY place schedulers are registered in production.
+(async () => {
+  try {
+    const { initSchedulers } = await import("@/server/jobs/schedulers");
+    const { initWatchdogScheduler } = await import("@/server/jobs/schedulers/watchdog-scheduler");
+    await initSchedulers();
+    await initWatchdogScheduler();
+    console.log("[plan-runner] Schedulers registered.");
+  } catch (err) {
+    console.error("[plan-runner] Scheduler init failed:", err instanceof Error ? err.message : err);
+  }
+})();
+
+console.log("[plan-runner] Worker ready. Listening on all queues.");

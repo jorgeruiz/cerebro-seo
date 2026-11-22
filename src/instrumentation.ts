@@ -1,16 +1,15 @@
 /**
  * Next.js instrumentation hook — se ejecuta UNA VEZ al startup del servidor Node.js.
- * Inicializa el sistema de jobs BullMQ (workers + schedulers) antes del primer request.
  *
- * Reemplaza el patrón anterior de /api/jobs/init que requería ser llamado manualmente.
- * Ver: src/server/jobs/init.ts
+ * IMPORTANTE: Los workers de data collection y los schedulers ahora viven en el
+ * worker dedicado (src/worker/plan-runner.ts). El proceso web NO registra workers
+ * ni schedulers para evitar duplicación y la fragilidad de depender de instrumentation.
+ *
+ * El proceso web solo necesita poder ENCOLAR jobs (ej: analysis:generate desde el botón
+ * de la UI), lo cual funciona sin workers — BullMQ encola en Redis y el worker consume.
  */
 export async function register() {
-  // Solo en runtime Node.js (no en Edge runtime ni durante next build)
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { initJobs } = await import("./server/jobs/init");
-    await initJobs().catch((err) => {
-      console.error("[instrumentation] Jobs init failed:", err);
-    });
+    console.log("[instrumentation] Web process started. Workers/schedulers run in the dedicated worker service.");
   }
 }

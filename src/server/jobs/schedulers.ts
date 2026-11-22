@@ -1,6 +1,5 @@
 import { dataCollectionQueue, aiAnalysisQueue, syncQueue } from "./queues";
 import { prisma } from "@/lib/db";
-import { env } from "@/env";
 
 /**
  * Registra todos los cron jobs en BullMQ para cada cliente activo.
@@ -59,7 +58,7 @@ export async function registerClientJobs(clientId: string, services: string[] = 
 
     // Insights — diario 6 AM
     // Si INSIGHTS_PILOT_CLIENT_IDS está definido, solo se registra para esos clientes.
-    const pilotIds = env.INSIGHTS_PILOT_CLIENT_IDS
+    const pilotIds = process.env.INSIGHTS_PILOT_CLIENT_IDS
       ?.split(",").map((s) => s.trim()).filter(Boolean);
     const insightsEnabled = !pilotIds || pilotIds.length === 0 || pilotIds.includes(clientId);
 

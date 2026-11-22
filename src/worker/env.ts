@@ -18,6 +18,10 @@ const workerEnvSchema = z.object({
   GITHUB_PAT_CLIENT_REPOS: z.string().min(1),
   WORKSPACES_DIR: z.string().min(1), // ruta al volumen persistente
 
+  // DataForSEO (required for rank tracking, backlinks, competitors)
+  DATAFORSEO_LOGIN: z.string().min(1),
+  DATAFORSEO_PASSWORD: z.string().min(1),
+
   // Worker-specific (optional with defaults)
   AGENT_MAX_TURNS: z.coerce.number().int().positive().default(40), // default for "medium" complexity
   AGENT_MAX_TURNS_CAP: z.coerce.number().int().positive().default(60), // absolute max
