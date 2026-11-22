@@ -19,8 +19,11 @@ export async function middleware(request: NextRequest) {
   // Para el resto de rutas protegidas, verificar sesión (NextAuth JWT).
   const token = await getToken({ req: request });
   if (!token) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", request.url);
+    // request.nextUrl preserva el host original del reverse proxy.
+    // request.url dentro de un contenedor resuelve a localhost:3000.
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("callbackUrl", request.nextUrl.href);
     return NextResponse.redirect(loginUrl);
   }
 
