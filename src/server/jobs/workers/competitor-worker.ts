@@ -14,21 +14,13 @@
  * Concurrencia: 1 cliente a la vez (para no reventar cuota DataForSEO).
  */
 
-import { createWorker } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { DataForSeoProvider } from "@/server/providers/dataforseo";
 import { InsightType } from "@prisma/client";
 
-interface CompetitorJobData {
-  clientId: string;
-}
 
-export const competitorWorker = createWorker<CompetitorJobData>(
-  "data-collection",
-  async (job) => {
-    if (job.name !== "analysis:competitors") return;
-
-    const { clientId } = job.data;
+/** Exported for use by data-collection-dispatcher. */
+export async function runCompetitorJob(clientId: string): Promise<void> {
 
     const client = await prisma.client.findUniqueOrThrow({
       where: { id: clientId },
@@ -135,9 +127,7 @@ export const competitorWorker = createWorker<CompetitorJobData>(
     await generateCompetitorInsights({ clientId, competitors });
 
     console.log(`[competitors] ${client.name}: análisis completo (${competitors.length} competidores)`);
-  },
-  { concurrency: 1 }
-);
+}
 
 // ─── Insights algorítmicos ──────────────────────────────────────────────────
 

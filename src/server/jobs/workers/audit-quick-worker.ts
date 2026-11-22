@@ -6,19 +6,9 @@
  * Frecuencia: miércoles 2 AM para todos los clientes activos.
  */
 
-import { createWorker } from "./base-worker";
 import { runAuditProcessor } from "../processors/audit-processor";
 
-export const auditQuickWorker = createWorker<
-  { clientId: string; mode?: string },
-  Awaited<ReturnType<typeof runAuditProcessor>>
->(
-  "data-collection",
-  async (job) => {
-    const { clientId } = job.data;
-    return runAuditProcessor({ clientId, mode: "quick" });
-  },
-  {
-    concurrency: 2,
-  }
-);
+/** Exported for use by data-collection-dispatcher. */
+export async function runAuditQuickJob(clientId: string) {
+  return runAuditProcessor({ clientId, mode: "quick" });
+}

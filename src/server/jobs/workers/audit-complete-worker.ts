@@ -7,19 +7,9 @@
  * Timeout elevado: 5 min (el crawl puede tardar 2-3 min en sitios grandes).
  */
 
-import { createWorker } from "./base-worker";
 import { runAuditProcessor } from "../processors/audit-processor";
 
-export const auditCompleteWorker = createWorker<
-  { clientId: string; mode?: string },
-  Awaited<ReturnType<typeof runAuditProcessor>>
->(
-  "data-collection",
-  async (job) => {
-    const { clientId } = job.data;
-    return runAuditProcessor({ clientId, mode: "complete" });
-  },
-  {
-    concurrency: 1, // crawl es intensivo — 1 a la vez
-  }
-);
+/** Exported for use by data-collection-dispatcher. */
+export async function runAuditCompleteJob(clientId: string) {
+  return runAuditProcessor({ clientId, mode: "complete" });
+}

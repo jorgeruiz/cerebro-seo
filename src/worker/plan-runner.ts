@@ -29,21 +29,19 @@ import type { PlanTaskJobData } from "@/server/jobs/queues";
 // Import terminal handler — registers its own Worker on "terminal-sessions"
 import "./terminal-handler";
 
-// ── Data collection workers ─────────────────────────────────────────────────
-// Importar aquí registra los Workers de BullMQ para cada cola.
-// Antes vivían en instrumentation.ts (proceso web) — ahora son del worker.
-import "@/server/jobs/workers/rank-tracking-worker";
-import "@/server/jobs/workers/backlinks-worker";
-import "@/server/jobs/workers/competitor-worker";
-import "@/server/jobs/workers/ai-search-worker";
-import "@/server/jobs/workers/page-metrics-worker";
+// ── Data collection (cola "data-collection") ────────────────────────────────
+// UN solo Worker para la cola "data-collection" que despacha por job.name.
+// Antes había un Worker por tipo en la misma cola — BullMQ repartía round-robin
+// y los jobs caían en el worker equivocado (completados sin trabajo).
+import "@/server/jobs/workers/data-collection-dispatcher";
+
+// ── Analysis workers (cola "ai-analysis") ───────────────────────────────────
 import "@/server/jobs/workers/insights-worker";
 import "@/server/jobs/workers/decompose-worker";
-import "@/server/jobs/workers/audit-quick-worker";
-import "@/server/jobs/workers/audit-complete-worker";
+
+// ── Sync workers (cola "sync") ──────────────────────────────────────────────
 import "@/server/jobs/workers/cerebro-sync-worker";
 import "@/server/jobs/workers/cerebro-tasks-sync-worker";
-import "@/server/jobs/workers/package-detect-worker";
 
 import { execSync } from "child_process";
 const COMMIT = (() => {

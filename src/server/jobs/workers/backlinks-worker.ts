@@ -14,21 +14,13 @@
  * Concurrencia: 2 clientes en paralelo.
  */
 
-import { createWorker } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { DataForSeoProvider } from "@/server/providers/dataforseo";
 import { InsightType } from "@prisma/client";
 
-interface BacklinksJobData {
-  clientId: string;
-}
 
-export const backlinksWorker = createWorker<BacklinksJobData>(
-  "data-collection",
-  async (job) => {
-    if (job.name !== "analysis:backlinks") return;
-
-    const { clientId } = job.data;
+/** Exported for use by data-collection-dispatcher. */
+export async function runBacklinksJob(clientId: string): Promise<void> {
     const client = await prisma.client.findUniqueOrThrow({
       where: { id: clientId },
       select: { id: true, name: true, domain: true, services: true },
@@ -157,9 +149,7 @@ export const backlinksWorker = createWorker<BacklinksJobData>(
       `[backlinks] ${client.name}: ${summary.totalBacklinks} total, ` +
         `+${gainedCount} nuevos, -${lostBacklinks.length} perdidos`
     );
-  },
-  { concurrency: 2 }
-);
+}
 
 // ─── Insights algorítmicos ──────────────────────────────────────────────────
 

@@ -18,13 +18,10 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { CLAUDE_MODEL_HAIKU } from "@/lib/anthropic-config";
-import { createWorker, logApiUsage, calculateClaudeCost } from "./base-worker";
+import { logApiUsage, calculateClaudeCost } from "./base-worker";
 import { prisma } from "@/lib/db";
 import { InsightType } from "@prisma/client";
 
-interface AiSearchJobData {
-  clientId: string;
-}
 
 // Modelo Haiku para minimizar costo — las queries son simples
 const MODEL = CLAUDE_MODEL_HAIKU;
@@ -37,12 +34,8 @@ const SYSTEM_PROMPT =
   `Si no conoces opciones específicas, menciona las más conocidas a nivel nacional. ` +
   `Responde siempre en español. Solo incluye el nombre, sin descripción ni URLs.`;
 
-export const aiSearchWorker = createWorker<AiSearchJobData>(
-  "data-collection",
-  async (job) => {
-    if (job.name !== "analysis:ai-search") return;
-
-    const { clientId } = job.data;
+/** Exported for use by data-collection-dispatcher. */
+export async function runAiSearchJob(clientId: string): Promise<void> {
 
     const client = await prisma.client.findUniqueOrThrow({
       where: { id: clientId },
@@ -142,9 +135,7 @@ export const aiSearchWorker = createWorker<AiSearchJobData>(
     console.log(
       `[ai-search] ${client.name}: ${mentionedCount}/${keywords.length} queries con mención (${Math.round(mentionRate * 100)}%)`
     );
-  },
-  { concurrency: 1 }
-);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

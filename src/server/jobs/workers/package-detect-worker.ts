@@ -5,14 +5,5 @@
  * Queue: data-collection
  */
 
-import { createWorker } from "./base-worker";
-import { runPackageDetectProcessor } from "../processors/package-detect-processor";
-
-export const packageDetectWorker = createWorker(
-  "data-collection",
-  async (job) => {
-    if (job.name !== "packages:detect") return;
-    return runPackageDetectProcessor();
-  },
-  { concurrency: 1 }
-);
+// Re-export for dispatcher
+export { runPackageDetectProcessor } from "../processors/package-detect-processor";
