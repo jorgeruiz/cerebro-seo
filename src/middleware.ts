@@ -38,8 +38,9 @@ export const config = {
     // - api/jobs: endpoints internos con x-internal-secret propio
     // - api/internal: endpoints internos con Authorization: Bearer propio
     // - api/agent: Agent API con AGENT_API_TOKEN propio
+    // - api/admin: endpoints admin con ADMIN_SECRET propio
     // - reportes/*/embed: embeds públicos con token firmado
     // - archivos estáticos de Next.js
-    "/((?!login|api/auth|api/jobs|api/internal|api/agent|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login|api/auth|api/jobs|api/internal|api/agent|api/admin|_next/static|_next/image|favicon.ico).*)",
   ],
 };
