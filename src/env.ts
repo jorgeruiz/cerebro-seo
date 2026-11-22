@@ -58,6 +58,10 @@ const envSchema = z.object({
   // Internal secret — guard Bearer para endpoints internos (Constructor, Cerebro bridge).
   SEO_INTERNAL_SECRET: z.string().min(1),
 
+  // Agent API — token Bearer para acceso de agentes externos (Grok Bot).
+  // Opcional: si no se define, los endpoints /api/agent/* responden 503.
+  AGENT_API_TOKEN: z.string().min(32).optional(),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])
