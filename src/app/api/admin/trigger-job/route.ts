@@ -21,10 +21,10 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { dataCollectionQueue } from "@/server/jobs/queues";
+import { dataCollectionQueue, aiAnalysisQueue } from "@/server/jobs/queues";
 import { prisma } from "@/lib/db";
 
-const ALLOWED_JOBS = [
+const DATA_COLLECTION_JOBS = [
   "tracking:rankings-priority",
   "tracking:rankings-bulk",
   "analysis:backlinks",
@@ -32,6 +32,12 @@ const ALLOWED_JOBS = [
   "gsc:page-metrics",
   "gsc:page-metrics-backfill",
 ] as const;
+
+const AI_ANALYSIS_JOBS = [
+  "analysis:generate",
+] as const;
+
+const ALLOWED_JOBS = [...DATA_COLLECTION_JOBS, ...AI_ANALYSIS_JOBS] as const;
 
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
@@ -79,6 +85,34 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Special case: re-run analyses for all clients that had analyses before
+  if (body.job === "all-analyses") {
+    // Find clients that have at least one analysis
+    const clientsWithAnalysis = await prisma.clientAnalysis.findMany({
+      distinct: ["clientId"],
+      orderBy: { createdAt: "desc" },
+      select: { clientId: true, client: { select: { name: true, status: true } } },
+    });
+
+    const active = clientsWithAnalysis.filter((c) => c.client.status === "ACTIVE");
+    const enqueued: string[] = [];
+
+    for (const c of active) {
+      await aiAnalysisQueue.add(
+        "analysis:generate",
+        { clientId: c.clientId, triggeredBy: "admin:re-run" },
+        { jobId: `manual-analysis:${c.clientId}:${Date.now()}` }
+      );
+      enqueued.push(c.client.name);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      enqueued: enqueued.length,
+      clients: enqueued,
+    });
+  }
+
   // Single job
   if (!body.job || !ALLOWED_JOBS.includes(body.job as (typeof ALLOWED_JOBS)[number])) {
     return NextResponse.json(
@@ -99,10 +133,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  const mode = body.job.includes("bulk") ? "bulk" : "priority";
-  await dataCollectionQueue.add(
+  // Route to the correct queue
+  const isAiJob = (AI_ANALYSIS_JOBS as readonly string[]).includes(body.job);
+  const queue = isAiJob ? aiAnalysisQueue : dataCollectionQueue;
+  const jobData = isAiJob
+    ? { clientId: client.id, triggeredBy: "admin:manual" }
+    : { clientId: client.id, mode: body.job.includes("bulk") ? "bulk" : "priority", days: body.job.includes("backfill") ? 90 : undefined };
+
+  await queue.add(
     body.job,
-    { clientId: client.id, mode, days: body.job.includes("backfill") ? 90 : undefined },
+    jobData,
     { jobId: `manual:${body.job}:${client.id}:${Date.now()}` }
   );
 
