@@ -203,12 +203,16 @@ export class DataForSeoProvider implements SeoDataProvider {
       for (const entry of items) {
         if (entry.type !== "organic") continue;
         const url: string = entry.url ?? "";
-        if (domainMatches(url, domain)) {
+        if (domainMatches(url, domain, entry.breadcrumb)) {
+          const isGoogleRedirect = url.includes("google.com/goto");
+          const realUrl = isGoogleRedirect && entry.breadcrumb
+            ? entry.breadcrumb.split(/\s*›/)[0].trim()
+            : url;
           return {
             keyword,
             domain,
             position: entry.rank_absolute ?? null,
-            rankingUrl: url,
+            rankingUrl: realUrl,
             searchEngine: "google",
             country,
             language,
@@ -296,12 +300,17 @@ export class DataForSeoProvider implements SeoDataProvider {
           for (const entry of serpItems) {
             if (entry.type !== "organic") continue;
             const url: string = entry.url ?? "";
-            if (domain && domainMatches(url, domain)) {
+            if (domain && domainMatches(url, domain, entry.breadcrumb)) {
+              // For Google redirect URLs, prefer the breadcrumb as the display URL
+              const isGoogleRedirect = url.includes("google.com/goto");
+              const realUrl = isGoogleRedirect && entry.breadcrumb
+                ? entry.breadcrumb.split(/\s*›/)[0].trim()
+                : url;
               results.push({
                 keyword: kw,
                 domain,
                 position: entry.rank_absolute ?? null,
-                rankingUrl: url,
+                rankingUrl: realUrl,
                 searchEngine: "google",
                 country: keywords.find((k) => k.keyword === kw)?.country ?? "MX",
                 language: keywords.find((k) => k.keyword === kw)?.language ?? "es",
@@ -1052,14 +1061,36 @@ function locationCode(country: string): number {
   return codes[country.toUpperCase()] ?? 2484;
 }
 
-function domainMatches(url: string, domain: string): boolean {
+/**
+ * Checks if a URL belongs to a domain. Handles Google redirect URLs
+ * (google.com/goto?url=...) by falling back to breadcrumb field.
+ */
+function domainMatches(url: string, domain: string, breadcrumb?: string): boolean {
+  const clean = domain.replace(/^www\./, "").toLowerCase();
+
+  // Try the direct URL first
   try {
     const hostname = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
-    const clean = domain.replace(/^www\./, "").toLowerCase();
-    return hostname.replace(/^www\./, "").toLowerCase() === clean;
-  } catch {
-    return false;
+    const hostClean = hostname.replace(/^www\./, "").toLowerCase();
+    if (hostClean === clean) return true;
+    // If URL is a Google redirect, it won't match — fall through to breadcrumb
+    if (!hostname.includes("google.com")) return false;
+  } catch { /* invalid URL */ }
+
+  // Google SERP sometimes wraps organic results in google.com/goto redirects.
+  // The breadcrumb field contains the real URL path like "https://www.example.com › page".
+  if (breadcrumb) {
+    try {
+      // breadcrumb format: "https://www.example.com › path › page"
+      const breadcrumbUrl = breadcrumb.split(/\s*›/)[0].trim();
+      const bcHostname = new URL(
+        breadcrumbUrl.startsWith("http") ? breadcrumbUrl : `https://${breadcrumbUrl}`
+      ).hostname;
+      return bcHostname.replace(/^www\./, "").toLowerCase() === clean;
+    } catch { /* invalid breadcrumb */ }
   }
+
+  return false;
 }
 
 // ─── AEO Research types ─────────────────────────────────────────────────────
@@ -1079,6 +1110,8 @@ interface DfsSerpItem {
   type: string;
   rank_absolute: number | null;
   url?: string;
+  domain?: string;
+  breadcrumb?: string;
   title?: string; // presente en items de tipo people_also_ask
 }
 
