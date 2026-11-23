@@ -119,12 +119,14 @@ model Site {
   gscProperty        String?
   ga4Property        String?
 
-  audits          Audit[]
-  pageMetrics     PageMetric[]
-  backlinks       Backlink[]
-  researchReports ResearchReport[]
-  planTasks       PlanTask[]
-  packages        SitePackage[]
+  audits           Audit[]
+  pageMetrics      PageMetric[]
+  queryMetrics     QueryMetric[]
+  pageSpeedMetrics PageSpeedMetric[]
+  backlinks        Backlink[]
+  researchReports  ResearchReport[]
+  planTasks        PlanTask[]
+  packages         SitePackage[]
 }
 
 // ─── Site Packages (infrastructure) ──────────────────────────────────────────
@@ -410,6 +412,46 @@ model PageMetric {
 
   @@unique([siteId, url, date, source], name: "siteId_url_date_source")
   @@index([siteId, url, date])
+}
+
+// ─── Query Metrics (GSC per-query data) ──────────────────────────────────────
+
+model QueryMetric {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+  query       String
+  page        String?  // landing page for this query (null = aggregated)
+  date        DateTime
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float?
+  position    Float?
+
+  @@unique([siteId, query, page, date], name: "siteId_query_page_date")
+  @@index([siteId, date])
+  @@index([siteId, query])
+}
+
+// ─── PageSpeed Metrics ───────────────────────────────────────────────────────
+
+model PageSpeedMetric {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+  url         String
+  device      String   // "mobile" | "desktop"
+  date        DateTime
+  score       Float?   // 0-100
+  lcp         Float?   // ms
+  inp         Float?   // ms (formerly FID)
+  cls         Float?
+  fcp         Float?   // ms
+  ttfb        Float?   // ms
+  fieldData   Json?    // CrUX field data if available
+
+  @@unique([siteId, url, device, date], name: "siteId_url_device_date")
+  @@index([siteId, date])
 }
 
 // ─── Claim Checks (F2e: afirmaciones por confirmar) ──────────────────────────
