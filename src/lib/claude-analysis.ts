@@ -381,8 +381,10 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   const lines: string[] = [];
 
   lines.push(`# Contexto SEO — ${client.name}`);
-  lines.push(`**Fecha actual: ${now.toISOString().slice(0, 10)}** (mes: ${currentYearMonth})`);
+  lines.push(`**Fecha de este análisis: ${now.toISOString().slice(0, 10)}** (mes: ${currentYearMonth})`);
   lines.push(`Dominio: ${client.domain} | Plan: ${client.plan} | Servicios: ${client.services.join(", ")} | Estado: ${client.status}`);
+  lines.push("");
+  lines.push("INSTRUCCIÓN DE DATOS: Cada sección indica la fecha de medición. Si un dato falta (ej: posición = null, GSC sin datos, backlinks sin snapshot), escríbelo explícitamente como 'SIN DATOS: [razón]'. NUNCA inferir que un keyword 'no rankea' por falta de dato — puede ser que el tracking no estaba activo. Distingue 'verificado que no rankea en top 30 (medición del DD/MM)' de 'sin dato de posición (tracking no configurado)'.");
 
   // Elegibilidad
   if (site) {
@@ -451,14 +453,20 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     lines.push("");
   }
 
-  // Keywords
+  // Keywords — with date annotations
   const priorityKws = keywords.filter((k) => k.isPriority);
   lines.push(`## Keywords (${keywords.length} total, ${priorityKws.length} prioritarias)`);
   for (const kw of priorityKws) {
     const latest = kw.rankings[0];
-    const pos = latest?.position != null ? `#${latest.position}` : "sin posición";
-    const delta = latest?.delta != null ? (latest.delta > 0 ? `(▲${latest.delta})` : `(▼${Math.abs(latest.delta)})`) : "";
-    lines.push(`  - "${kw.term}": ${pos} ${delta}`);
+    if (latest) {
+      const pos = latest.position != null
+        ? `#${latest.position} (medición: ${latest.date.toISOString().slice(0, 10)})`
+        : `verificado fuera del top 30 (medición: ${latest.date.toISOString().slice(0, 10)})`;
+      const delta = latest.delta != null ? (latest.delta > 0 ? ` ▲${latest.delta}` : ` ▼${Math.abs(latest.delta)}`) : "";
+      lines.push(`  - "${kw.term}": ${pos}${delta}`);
+    } else {
+      lines.push(`  - "${kw.term}": SIN DATOS DE POSICIÓN (tracking no configurado o sin historial)`);
+    }
   }
   lines.push("");
 
@@ -473,7 +481,10 @@ async function gatherUnifiedContext(clientId: string): Promise<{
 
   // Backlinks
   if (backlinkSnapshot) {
-    lines.push(`## Backlinks: ${backlinkSnapshot.totalBacklinks} total | ${backlinkSnapshot.uniqueDomains} dominios | +${backlinkSnapshot.gainedThisWeek} -${backlinkSnapshot.lostThisWeek} semana`);
+    lines.push(`## Backlinks (medición: ${backlinkSnapshot.capturedAt.toISOString().slice(0, 10)}): ${backlinkSnapshot.totalBacklinks} total | ${backlinkSnapshot.uniqueDomains} dominios | +${backlinkSnapshot.gainedThisWeek} -${backlinkSnapshot.lostThisWeek} semana`);
+    lines.push("");
+  } else {
+    lines.push("## Backlinks: SIN DATOS (no hay snapshot de backlinks)");
     lines.push("");
   }
 
