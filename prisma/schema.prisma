@@ -829,6 +829,7 @@ model PlanTask {
   category           String         // "blog" | "meta" | "schema" | "tecnico" | "landing" | etc.
   actionType         String?        // "create_blog" | "update_meta" | "schema" | etc. (template lookup key)
   targetKeyword      String?        // keyword objetivo SEO (2-6 palabras, sin verbos de instrucción)
+  targetUrl          String?        // URL objetivo o slug sugerido (de urlObjetivo de la candidata)
   sourceCandidateId  String?        // ID de la candidata en el Análisis
   sourceRef          Json?          // { module, itemId, snapshot } — origen desde módulo (no Análisis)
   status             PlanTaskStatus @default(PLANNING)

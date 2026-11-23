@@ -53,6 +53,8 @@ async function handler(
       category: true,
       actionType: true,
       targetKeyword: true,
+      targetUrl: true,
+      mode: true,
       priority: true,
       status: true,
       objective: true,
@@ -64,13 +66,44 @@ async function handler(
   const actions = tasks.map((t) => ({
     id: t.id,
     type: t.actionType ?? t.category,
-    url: t.resultUrls[0] ?? t.previewUrl ?? null,
+    targetUrl: t.targetUrl ?? null,
+    resultUrl: t.resultUrls[0] ?? t.previewUrl ?? null,
     priority: t.priority,
     status: t.status.toLowerCase(),
+    mode: t.mode.toLowerCase(),
     description: t.title,
     proposedChange: t.objective,
     targetKeyword: t.targetKeyword,
   }));
+
+  // Extract candidatas from analysis as proposals (not yet in PlanTask)
+  const candidatas = Array.isArray(parsed.candidatas) ? parsed.candidatas as Array<{
+    titulo?: string;
+    descripcion?: string;
+    categoria?: string;
+    actionType?: string;
+    keywordObjetivo?: string;
+    urlObjetivo?: string;
+    fuente?: string;
+    impactoEsperado?: string;
+    kind?: string;
+  }> : [];
+
+  // Build proposals: candidatas that are NOT already in actions
+  const actionTitles = new Set(tasks.map((t) => t.title.toLowerCase()));
+  const proposals = candidatas
+    .filter((c) => c.titulo && !actionTitles.has(c.titulo.toLowerCase()))
+    .map((c) => ({
+      type: c.actionType ?? c.categoria ?? "other",
+      status: "proposed",
+      description: c.titulo ?? "",
+      proposedChange: c.descripcion ?? "",
+      targetKeyword: c.keywordObjetivo ?? null,
+      targetUrl: c.urlObjetivo ?? null,
+      impact: c.impactoEsperado ?? null,
+      source: c.fuente ?? "analisis",
+      kind: c.kind ?? null,
+    }));
 
   return NextResponse.json({
     analysis: {
@@ -80,6 +113,7 @@ async function handler(
       content: parsed,
     },
     actions,
+    proposals,
   });
 }
 

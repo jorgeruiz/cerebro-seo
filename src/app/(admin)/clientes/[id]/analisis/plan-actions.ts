@@ -211,6 +211,7 @@ export async function actionSendToPlan(
         category,
         actionType: resolvedActionType ?? candidate.actionType ?? null,
         targetKeyword: candidate.keywordObjetivo ?? null,
+        targetUrl: candidate.urlObjetivo ?? null,
         sourceCandidateId: candidate.id,
         sourceRef: candidate.urlObjetivo ? { targetUrl: candidate.urlObjetivo } as unknown as Parameters<typeof prisma.planTask.create>[0]["data"]["sourceRef"] : undefined,
         status: "PLANNING",
