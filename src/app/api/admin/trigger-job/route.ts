@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       await dataCollectionQueue.add(
         "tracking:rankings-priority",
         { clientId: client.id, mode: "priority" },
-        { jobId: `manual-rank:${client.id}:${Date.now()}` }
+        { jobId: `manual-rank-${client.id}-${Date.now()}` }
       );
       enqueued.push(`${client.name} (${kws} kws)`);
     }
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       await aiAnalysisQueue.add(
         "analysis:generate",
         { clientId: c.clientId, triggeredBy: "admin:re-run" },
-        { jobId: `manual-analysis:${c.clientId}:${Date.now()}` }
+        { jobId: `manual-analysis-${c.clientId}-${Date.now()}` }
       );
       enqueued.push(c.client.name);
     }
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
   await queue.add(
     body.job,
     jobData,
-    { jobId: `manual:${body.job}:${client.id}:${Date.now()}` }
+    { jobId: `manual-${body.job.replace(/:/g, "-")}-${client.id}-${Date.now()}` }
   );
 
   return NextResponse.json({

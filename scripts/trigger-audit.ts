@@ -55,7 +55,7 @@ async function main() {
     jobName,
     { clientId, mode },
     {
-      jobId: `audit-manual:${clientId}:${mode}:${new Date().toISOString().slice(0, 19)}`,
+      jobId: `audit-manual-${clientId}-${mode}-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}`,
     }
   );
 

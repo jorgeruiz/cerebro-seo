@@ -68,7 +68,7 @@ async function main() {
     jobName,
     { clientId, mode },
     {
-      jobId: `tracking-manual:${clientId}:${mode}:${new Date().toISOString().slice(0, 19)}`,
+      jobId: `tracking-manual-${clientId}-${mode}-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}`,
     }
   );
 
