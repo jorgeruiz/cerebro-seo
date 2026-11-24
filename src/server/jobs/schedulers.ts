@@ -46,14 +46,14 @@ export async function registerClientJobs(clientId: string, services: string[] = 
     await dataCollectionQueue.add(
       "tracking:rankings-priority",
       { clientId, mode: "priority" },
-      { repeat: { pattern: "0 3 * * *" }, jobId: `rankings-priority:${clientId}` }
+      { repeat: { pattern: "0 3 * * *" }, jobId: `rankings-priority-${clientId}` }
     );
 
     // Rankings bulk — lunes 4 AM
     await dataCollectionQueue.add(
       "tracking:rankings-bulk",
       { clientId, mode: "bulk" },
-      { repeat: { pattern: "0 4 * * 1" }, jobId: `rankings-bulk:${clientId}` }
+      { repeat: { pattern: "0 4 * * 1" }, jobId: `rankings-bulk-${clientId}` }
     );
 
     // Insights — diario 6 AM
@@ -66,7 +66,7 @@ export async function registerClientJobs(clientId: string, services: string[] = 
       await aiAnalysisQueue.add(
         "insights:generate",
         { clientId, trigger: "scheduled" },
-        { repeat: { pattern: "0 6 * * *" }, jobId: `insights:${clientId}` }
+        { repeat: { pattern: "0 6 * * *" }, jobId: `insights-${clientId}` }
       );
     }
 
@@ -74,35 +74,35 @@ export async function registerClientJobs(clientId: string, services: string[] = 
     await dataCollectionQueue.add(
       "analysis:backlinks",
       { clientId },
-      { repeat: { pattern: "0 5 * * 4" }, jobId: `backlinks:${clientId}` }
+      { repeat: { pattern: "0 5 * * 4" }, jobId: `backlinks-${clientId}` }
     );
 
     // Competidores — días 1 y 15 del mes, 7 AM
     await dataCollectionQueue.add(
       "analysis:competitors",
       { clientId },
-      { repeat: { pattern: "0 7 1,15 * *" }, jobId: `competitors:${clientId}` }
+      { repeat: { pattern: "0 7 1,15 * *" }, jobId: `competitors-${clientId}` }
     );
 
     // AI Search Visibility — viernes 6 AM
     await dataCollectionQueue.add(
       "analysis:ai-search",
       { clientId },
-      { repeat: { pattern: "0 6 * * 5" }, jobId: `ai-search:${clientId}` }
+      { repeat: { pattern: "0 6 * * 5" }, jobId: `ai-search-${clientId}` }
     );
 
     // GSC Page Metrics — diario 5 AM (popula PageMetric + QueryMetric)
     await dataCollectionQueue.add(
       "gsc:page-metrics",
       { clientId },
-      { repeat: { pattern: "0 5 * * *" }, jobId: `page-metrics:${clientId}` }
+      { repeat: { pattern: "0 5 * * *" }, jobId: `page-metrics-${clientId}` }
     );
 
     // PageSpeed Insights — sábados 4 AM (CWV semanal)
     await dataCollectionQueue.add(
       "pagespeed:collect",
       { clientId },
-      { repeat: { pattern: "0 4 * * 6" }, jobId: `pagespeed:${clientId}` }
+      { repeat: { pattern: "0 4 * * 6" }, jobId: `pagespeed-${clientId}` }
     );
   }
 
@@ -112,14 +112,14 @@ export async function registerClientJobs(clientId: string, services: string[] = 
   await dataCollectionQueue.add(
     "crawler:audit-quick",
     { clientId, mode: "quick" },
-    { repeat: { pattern: "0 2 * * 3" }, jobId: `audit-quick:${clientId}` }
+    { repeat: { pattern: "0 2 * * 3" }, jobId: `audit-quick-${clientId}` }
   );
 
   // Audit completo — 1ro de cada mes, 1 AM (gratis para todos)
   await dataCollectionQueue.add(
     "crawler:audit",
     { clientId, mode: "full" },
-    { repeat: { pattern: "0 1 1 * *" }, jobId: `audit-full:${clientId}` }
+    { repeat: { pattern: "0 1 1 * *" }, jobId: `audit-full-${clientId}` }
   );
 }
 
@@ -136,7 +136,7 @@ async function registerGlobalJobs(
     { runForAllClients: true },
     {
       repeat: { pattern: "0 2 1 * *" },
-      jobId: "cycle:close:global",
+      jobId: "cycle-close-global",
     }
   );
 
@@ -147,7 +147,7 @@ async function registerGlobalJobs(
     { runForAllClients: true },
     {
       repeat: { pattern: "0 6 2 * *" },
-      jobId: "report:monthly:global",
+      jobId: "report-monthly-global",
     }
   );
 
@@ -157,7 +157,7 @@ async function registerGlobalJobs(
     {},
     {
       repeat: { pattern: "0 */6 * * *" },
-      jobId: "sync:cerebro:global",
+      jobId: "sync-cerebro-global",
     }
   );
 
@@ -165,7 +165,7 @@ async function registerGlobalJobs(
   await dataCollectionQueue.add(
     "packages:detect",
     {},
-    { repeat: { pattern: "0 3 * * 0" }, jobId: "packages:detect:global" }
+    { repeat: { pattern: "0 3 * * 0" }, jobId: "packages-detect-global" }
   );
 
   // Sync de tareas y estrategia — cada 15min, solo clientes SEO
@@ -175,7 +175,7 @@ async function registerGlobalJobs(
       { clientId: client.id },
       {
         repeat: { pattern: "*/15 * * * *" },
-        jobId: `sync:cerebro-tasks:${client.id}`,
+        jobId: `sync-cerebro-tasks-${client.id}`,
       }
     );
   }
@@ -187,16 +187,16 @@ async function registerGlobalJobs(
  */
 export async function removeClientJobs(clientId: string): Promise<void> {
   const jobIds = [
-    `rankings-priority:${clientId}`,
-    `rankings-bulk:${clientId}`,
-    `audit-quick:${clientId}`,
-    `audit-full:${clientId}`,
-    `insights:${clientId}`,
-    `backlinks:${clientId}`,
-    `competitors:${clientId}`,
-    `ai-search:${clientId}`,
-    `pagespeed:${clientId}`,
-    `page-metrics:${clientId}`,
+    `rankings-priority-${clientId}`,
+    `rankings-bulk-${clientId}`,
+    `audit-quick-${clientId}`,
+    `audit-full-${clientId}`,
+    `insights-${clientId}`,
+    `backlinks-${clientId}`,
+    `competitors-${clientId}`,
+    `ai-search-${clientId}`,
+    `pagespeed-${clientId}`,
+    `page-metrics-${clientId}`,
   ];
 
   for (const jobId of jobIds) {

@@ -49,7 +49,7 @@ async function main() {
     { clientId, trigger: "scheduled" },
     {
       // jobId único por fecha para no duplicar si ya corrió hoy
-      jobId: `insights-manual:${clientId}:${new Date().toISOString().slice(0, 10)}:${Date.now()}`,
+      jobId: `insights-manual-${clientId}-${new Date().toISOString().slice(0, 10)}-${Date.now()}`,
     }
   );
 
