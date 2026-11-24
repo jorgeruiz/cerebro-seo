@@ -37,6 +37,10 @@ function normalizePropertyId(raw: string): string {
   return raw.replace(/^properties\//, "");
 }
 
+export interface Ga4PageDailyRow extends Ga4PageRow {
+  date: string; // "YYYY-MM-DD"
+}
+
 export class GoogleAnalytics4Provider {
   constructor(private auth: OAuth2Client) {}
 
@@ -196,5 +200,49 @@ export class GoogleAnalytics4Provider {
     } catch { /* Redis caído — devolver datos sin cachear */ }
 
     return rows;
+  }
+
+  async getPagesMetricsDaily(
+    propertyId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Ga4PageDailyRow[]> {
+    const analyticsData = google.analyticsdata({ version: "v1beta", auth: this.auth });
+    const { data } = await analyticsData.properties.runReport({
+      property: `properties/${normalizePropertyId(propertyId)}`,
+      requestBody: {
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "date" }, { name: "pagePath" }],
+        metrics: [
+          { name: "sessions" },
+          { name: "totalUsers" },
+          { name: "conversions" },
+          { name: "bounceRate" },
+          { name: "averageSessionDuration" },
+        ],
+        dimensionFilter: {
+          filter: {
+            fieldName: "sessionDefaultChannelGrouping",
+            stringFilter: { value: "Organic Search" },
+          },
+        },
+        orderBys: [{ dimension: { dimensionName: "date" } }],
+        limit: "10000",
+      },
+    });
+
+    return (data.rows ?? []).map((row) => ({
+      date: parseGa4Date(row.dimensionValues?.[0]?.value ?? ""),
+      page: row.dimensionValues?.[1]?.value ?? "",
+      sessions: parseInt(row.metricValues?.[0]?.value ?? "0"),
+      users: parseInt(row.metricValues?.[1]?.value ?? "0"),
+      conversions: parseInt(row.metricValues?.[2]?.value ?? "0"),
+      bounceRate: parseFloat(
+        (parseFloat(row.metricValues?.[3]?.value ?? "0") * 100).toFixed(1)
+      ),
+      avgSessionDuration: parseFloat(
+        parseFloat(row.metricValues?.[4]?.value ?? "0").toFixed(0)
+      ),
+    }));
   }
 }

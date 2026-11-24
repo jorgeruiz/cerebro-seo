@@ -13,6 +13,9 @@ import { prisma } from "@/lib/db";
 import { resolveSite } from "@/server/sites/resolve-site";
 import { dataForSeoProvider } from "@/server/providers/dataforseo";
 import type { KeywordQuery } from "@/server/providers/seo-data";
+import type { BulkRankingResult, RankingFetchStatus } from "@/server/providers/dataforseo";
+import { locationCode } from "@/server/providers/dataforseo";
+import { normalizeDomain } from "@/lib/normalize-domain";
 
 export type TrackingMode = "priority" | "bulk";
 
@@ -149,9 +152,20 @@ export async function runRankTrackingProcessor(
 
   const site = await resolveSite(clientId).catch(() => null);
 
-  const domain = site?.url
-    ? new URL(site.url.startsWith("http") ? site.url : `https://${site.url}`).hostname.replace(/^www\./, "")
-    : client.domain.replace(/^www\./, "");
+  const domain = normalizeDomain(site?.url) ?? normalizeDomain(client.domain);
+
+  if (!domain) {
+    console.warn(`[rank-tracking] client=${clientId} skipped: invalid domain (site.url=${site?.url ?? "null"}, client.domain=${client.domain})`);
+    return {
+      clientId,
+      mode,
+      keywordsTracked: 0,
+      keywordsSkipped: 0,
+      insightsGenerated: 0,
+      totalCost: 0,
+      durationMs: Date.now() - start,
+    };
+  }
 
   const keywords = await prisma.keyword.findMany({
     where: {
@@ -180,10 +194,13 @@ export async function runRankTrackingProcessor(
 
   // ── Verificar cuáles ya tienen ranking hoy (idempotencia) ─────────────────
 
+  // Only skip keywords that already have a successful ranking today (OK or NOT_IN_TOP_N).
+  // Keywords that FAILED today should be retried.
   const existingToday = await prisma.keywordRanking.findMany({
     where: {
       keywordId: { in: keywords.map((k) => k.id) },
       date: { gte: today, lt: tomorrow },
+      fetchStatus: { in: ["OK", "NOT_IN_TOP_N"] },
     },
     select: { keywordId: true },
   });
@@ -214,7 +231,7 @@ export async function runRankTrackingProcessor(
     language: kw.language,
   }));
 
-  const rankingResults = await dataForSeoProvider.bulkGetRankings(queries, 30);
+  const rankingResults: BulkRankingResult[] = await dataForSeoProvider.bulkGetRankings(queries, 30);
 
   // Estimar costo: ~$0.00195/query con depth:30 Standard Queue
   const estimatedCost = toTrack.length * 0.00195;
@@ -222,34 +239,47 @@ export async function runRankTrackingProcessor(
   // ── Persistir rankings + calcular deltas ─────────────────────────────────
 
   // Cargar último ranking anterior para calcular delta
+  // Only consider previous rankings with fetchStatus OK or NOT_IN_TOP_N (or legacy null)
   const previousRankings = await prisma.keywordRanking.findMany({
     where: {
       keywordId: { in: toTrack.map((k) => k.id) },
       date: { lt: today },
+      OR: [
+        { fetchStatus: "OK" },
+        { fetchStatus: "NOT_IN_TOP_N" },
+        { fetchStatus: null }, // legacy records
+      ],
     },
     orderBy: { date: "desc" },
     distinct: ["keywordId"],
-    select: { keywordId: true, position: true },
+    select: { keywordId: true, position: true, fetchStatus: true },
   });
-  const prevByKeywordId = new Map(previousRankings.map((r) => [r.keywordId, r.position]));
+  const prevByKeywordId = new Map(previousRankings.map((r) => [r.keywordId, { position: r.position, fetchStatus: r.fetchStatus }]));
 
   let insightsGenerated = 0;
   let positionDrops = 0; // para detección de caída masiva
 
+  // Build keyword lookup by term for matching (normalized: lowercase trimmed)
+  const kwByTerm = new Map(toTrack.map((k) => [k.term.toLowerCase().trim(), k]));
+
   for (const result of rankingResults) {
-    const kw = toTrack.find((k) => k.term === result.keyword);
+    const kw = kwByTerm.get(result.keyword.toLowerCase().trim());
     if (!kw) continue;
 
-    const prevPosition = prevByKeywordId.get(kw.id) ?? null;
-    const currPosition = result.position; // null = fuera del top 30
+    const fetchStatus: RankingFetchStatus = result.fetchStatus;
+    const prev = prevByKeywordId.get(kw.id);
+    const prevPosition = prev?.position ?? null;
+    const currPosition = result.position;
 
-    // delta: negativo = bajó posiciones (peor), positivo = subió (mejor)
-    const delta =
-      prevPosition !== null && currPosition !== null
-        ? prevPosition - currPosition // ej: prev=10, curr=15 → delta=-5 (bajó)
-        : null;
+    // Only compute delta if both current and previous have valid data
+    const canComputeDelta = (fetchStatus === "OK" || fetchStatus === "NOT_IN_TOP_N")
+      && prev && (prev.fetchStatus === "OK" || prev.fetchStatus === "NOT_IN_TOP_N" || prev.fetchStatus === null);
 
-    // Contar caídas para detección masiva
+    const delta = canComputeDelta && prevPosition !== null && currPosition !== null
+      ? prevPosition - currPosition
+      : null;
+
+    // Count drops only for valid measurements
     if (delta !== null && delta < -5) positionDrops++;
 
     await prisma.keywordRanking.create({
@@ -260,18 +290,26 @@ export async function runRankTrackingProcessor(
         rankingUrl: result.rankingUrl,
         searchEngine: result.searchEngine,
         delta,
+        fetchStatus,
+        fetchError: result.fetchError,
+        depth: result.depth,
+        locationCode: locationCode(kw.country),
+        checkedAt: result.checkedAt,
       },
     });
 
-    const generated = await maybeCreateRankingInsight({
-      clientId,
-      keywordTerm: kw.term,
-      positionBefore: prevPosition,
-      positionAfter: currPosition,
-      delta,
-      mode,
-    });
-    if (generated) insightsGenerated++;
+    // Only generate insights for valid measurements
+    if (fetchStatus === "OK" || fetchStatus === "NOT_IN_TOP_N") {
+      const generated = await maybeCreateRankingInsight({
+        clientId,
+        keywordTerm: kw.term,
+        positionBefore: prevPosition,
+        positionAfter: currPosition,
+        delta,
+        mode,
+      });
+      if (generated) insightsGenerated++;
+    }
   }
 
   // ── Detección de caída masiva (>50% keywords con drops) ───────────────────

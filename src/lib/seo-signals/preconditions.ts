@@ -17,6 +17,8 @@ export interface PreconditionResult {
  * sin llamar a Claude.
  */
 export async function checkPreconditions(clientId: string): Promise<PreconditionResult> {
+  const fourDaysAgo = new Date(Date.now() - 4 * 86400000);
+
   const [
     keywordCount,
     priorityKeywordCount,
@@ -24,6 +26,11 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
     latestRanking,
     latestAudit,
     site,
+    // Rankings quality: count OK + NOT_IN_TOP_N vs total recent
+    recentRankingsTotal,
+    recentRankingsValid,
+    latestGscPage,
+    latestGa4,
   ] = await Promise.all([
     prisma.keyword.count({ where: { clientId, deletedAt: null } }),
     prisma.keyword.count({ where: { clientId, isPriority: true, deletedAt: null } }),
@@ -39,12 +46,38 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       select: { id: true },
     }),
     resolveSite(clientId).catch(() => null),
+    // Count recent rankings (last 7 days)
+    prisma.keywordRanking.count({
+      where: { keyword: { clientId }, date: { gte: new Date(Date.now() - 7 * 86400000) } },
+    }),
+    prisma.keywordRanking.count({
+      where: {
+        keyword: { clientId },
+        date: { gte: new Date(Date.now() - 7 * 86400000) },
+        fetchStatus: { in: ["OK", "NOT_IN_TOP_N"] },
+      },
+    }),
+    // Latest GSC data
+    prisma.pageMetric.findFirst({
+      where: { site: { clientId }, source: "gsc" },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }),
+    // Latest GA4 data
+    prisma.pageMetric.findFirst({
+      where: { site: { clientId }, source: "ga4" },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }),
   ]);
 
   const hasKeywords = priorityKeywordCount > 0;
   const hasCompetitors = competitorCount >= 2;
   const hasRankingData = latestRanking !== null;
   const hasSiteAudit = latestAudit !== null;
+  const gscIsFresh = latestGscPage ? latestGscPage.date >= fourDaysAgo : false;
+  const _ga4IsFresh = latestGa4 ? latestGa4.date >= fourDaysAgo : false; // Reserved for future use
+  const rankingsQualityPct = recentRankingsTotal > 0 ? recentRankingsValid / recentRankingsTotal : 0;
 
   const setupSteps: NextStep[] = [];
 
@@ -115,6 +148,43 @@ export async function checkPreconditions(clientId: string): Promise<Precondition
       esfuerzo: "bajo",
       impacto: "alto",
       kind: "tecnico",
+      targetUrl: null,
+      keywords: null,
+    });
+  }
+
+  // GSC freshness check
+  if (site?.gscProperty && !gscIsFresh && latestGscPage) {
+    const daysStale = Math.floor((Date.now() - latestGscPage.date.getTime()) / 86400000);
+    setupSteps.push({
+      titulo: `GSC sin datos frescos (último dato hace ${daysStale} días)`,
+      descripcion:
+        `La última fecha con datos de GSC es ${latestGscPage.date.toISOString().slice(0, 10)}. Los datos deberían actualizarse diariamente. Verificar que la propiedad GSC sigue accesible.`,
+      categoria: "setup",
+      prioridad: 2,
+      seccionDestino: "configuracion",
+      evidencia: `Último dato GSC: ${latestGscPage.date.toISOString().slice(0, 10)} (hace ${daysStale} días)`,
+      esfuerzo: "bajo",
+      impacto: "alto",
+      kind: "otro",
+      targetUrl: null,
+      keywords: null,
+    });
+  }
+
+  // Rankings quality check
+  if (hasRankingData && rankingsQualityPct < 0.5 && recentRankingsTotal > 0) {
+    setupSteps.push({
+      titulo: `Calidad de rankings baja: solo ${Math.round(rankingsQualityPct * 100)}% de consultas exitosas`,
+      descripcion:
+        `De ${recentRankingsTotal} rankings recientes, solo ${recentRankingsValid} tienen datos válidos (${Math.round(rankingsQualityPct * 100)}%). Muchas consultas pueden estar fallando por dominio inválido o error de API.`,
+      categoria: "setup",
+      prioridad: 2,
+      seccionDestino: "keywords",
+      evidencia: `Rankings válidos: ${recentRankingsValid}/${recentRankingsTotal} (${Math.round(rankingsQualityPct * 100)}%)`,
+      esfuerzo: "bajo",
+      impacto: "alto",
+      kind: "otro",
       targetUrl: null,
       keywords: null,
     });

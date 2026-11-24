@@ -60,10 +60,13 @@ export const dataCollectionWorker = createWorker(
       }
 
       // ── GSC Page Metrics ──────────────────────────────────────────
-      case "gsc:page-metrics":
+      case "gsc:page-metrics": {
+        if (!clientId) throw new Error("clientId required for page-metrics");
+        return await runPageMetricsProcessor({ clientId, days: 10 }); // 10-day rolling window
+      }
       case "gsc:page-metrics-backfill": {
         if (!clientId) throw new Error("clientId required for page-metrics");
-        const days = job.name === "gsc:page-metrics-backfill" ? (data.days ?? 90) : 1;
+        const days = (data as { days?: number }).days ?? 90;
         return await runPageMetricsProcessor({ clientId, days });
       }
 
@@ -75,6 +78,13 @@ export const dataCollectionWorker = createWorker(
       case "crawler:audit": {
         if (!clientId) throw new Error("clientId required for audit");
         return await runAuditCompleteJob(clientId);
+      }
+
+      // ── PageSpeed ──────────────────────────────────────────────────
+      case "pagespeed:collect": {
+        if (!clientId) throw new Error("clientId required for pagespeed");
+        const { runPageSpeedCollector } = await import("../processors/pagespeed-collector");
+        return await runPageSpeedCollector(clientId);
       }
 
       // ── Package Detection ─────────────────────────────────────────

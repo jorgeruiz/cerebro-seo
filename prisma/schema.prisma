@@ -243,8 +243,14 @@ model KeywordRanking {
   rankingUrl   String?
   searchEngine String   @default("google")
   delta        Int?
+  fetchStatus  String?  // "OK" | "NOT_IN_TOP_N" | "FAILED" | "SKIPPED" — null for legacy records
+  fetchError   String?  @db.Text
+  depth        Int?     // SERP depth used (e.g. 30, 100)
+  locationCode Int?     // DataForSEO location code (e.g. 2484 = Mexico)
+  checkedAt    DateTime? // When the SERP was actually checked
 
   @@index([keywordId, date])
+  @@index([keywordId, fetchStatus])
 }
 
 model Competitor {
@@ -630,12 +636,29 @@ model JobLog {
   id        String   @id @default(cuid())
   jobName   String
   clientId  String?
-  status    String
+  status    String   // "completed" | "failed"
   error     String?  @db.Text
   attempts  Int
   createdAt DateTime @default(now())
 
   @@index([jobName, createdAt])
+  @@index([clientId, jobName])
+}
+
+model DataSourceRun {
+  id            String   @id @default(cuid())
+  source        String   // "rankings" | "gsc_pages" | "gsc_queries" | "ga4" | "backlinks" | "competitors" | "pagespeed" | "ai_search"
+  clientId      String
+  status        String   // "ok" | "empty_unexpected" | "failed" | "skipped" | "not_connected"
+  rows          Int      @default(0)
+  lastDataDate  DateTime? // Date of the most recent data point
+  error         String?  @db.Text // Redacted error message (no secrets)
+  cost          Float    @default(0) // Estimated API cost in USD
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+
+  @@index([clientId, source])
+  @@index([source, startedAt])
 }
 
 enum SeoPlan {

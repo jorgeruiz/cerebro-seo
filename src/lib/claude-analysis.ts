@@ -73,6 +73,21 @@ PRINCIPIOS:
 - Los datos de PageSpeed/Core Web Vitals YA están incluidos en Site Audit. PROHIBIDO proponer "auditar", "correr Lighthouse/PageSpeed" o "medir velocidad" como candidata. Propón la corrección concreta basada en los datos ya disponibles.
 - Si un MonthlyCycle NO es del mes actual, trátalo como vencido: no uses sus deadlines, solo como antecedente histórico
 
+REGLA DE DATOS FALTANTES (OBLIGATORIA):
+- Revisa siempre la sección "FRESCURA DE DATOS" al inicio del contexto.
+- Si una fuente dice STALE (>4 días sin datos), vacía o con error: NUNCA concluir "0 tráfico", "sin tráfico", "no rankea", "no tiene backlinks" ni "no es citada". Escribe: "SIN DATOS: [fuente] sin sync desde [fecha]".
+- Si GSC muestra 0 impresiones pero GA4 muestra sesiones (o viceversa): reportar la discrepancia, NO concluir "sin tráfico".
+- Si una keyword tiene fetchStatus=FAILED o SKIPPED: NO es "fuera del top 30". Es un error de medición.
+
+HERRAMIENTAS EXTERNAS (PROHIBIDO):
+- NUNCA proponer usar Ahrefs, SEMrush, Moz, Ubersuggest, Screaming Frog, Similarweb, GTmetrix ni ninguna herramienta de tracking/monitoreo externa.
+- El tracking de keywords es interno (DataForSEO). No asignar al equipo tareas de "verificar tracking" o "ampliar tracking".
+- Backlinks y autoridad de dominio salen del snapshot de DataForSEO. Si no hay snapshot: "SIN DATOS: snapshot de backlinks pendiente".
+
+AI SEARCH:
+- Los datos de AI Search solo cubren Claude Haiku. NO afirmar presencia/ausencia en ChatGPT, Gemini, Perplexity o AI Overviews sin datos medidos.
+- Excluir consultas que contienen el nombre de marca del cliente al calcular % de mención.
+
 CANDIDATAS — PLATAFORMA (LEE ESTO PRIMERO, ES OBLIGATORIO):
 El contexto incluye "Platform (producción): WORDPRESS | NEXTJS | MIGRACION | OTRO".
 
@@ -284,7 +299,7 @@ async function gatherUnifiedContext(clientId: string): Promise<{
       where: { clientId, deletedAt: null },
       select: {
         term: true, isPriority: true, targetUrl: true,
-        rankings: { orderBy: { date: "desc" }, take: 2, select: { position: true, date: true, delta: true } },
+        rankings: { orderBy: { date: "desc" }, take: 2, select: { position: true, date: true, delta: true, fetchStatus: true, depth: true } },
       },
       orderBy: [{ isPriority: "desc" }, { createdAt: "asc" }],
       take: 20,
@@ -418,6 +433,113 @@ async function gatherUnifiedContext(clientId: string): Promise<{
   }
   lines.push("");
 
+  // ── FRESHNESS block ─────────────────────────────────────────────────────
+  {
+    const STALE_DAYS = 4;
+    lines.push("## FRESCURA DE DATOS");
+
+    const latestSources: Array<{ name: string; lastDate: Date | null; status: string }> = [];
+
+    // Rankings
+    const latestRanking = keywords.flatMap((k) => k.rankings).sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+    latestSources.push({
+      name: "Rankings (DataForSEO)",
+      lastDate: latestRanking?.date ?? null,
+      status: latestRanking ? "connected" : "sin datos",
+    });
+
+    // GSC pages
+    const latestGscPage = site ? await prisma.pageMetric.findFirst({
+      where: { siteId: site.id, source: "gsc" },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }) : null;
+    latestSources.push({
+      name: "GSC páginas",
+      lastDate: latestGscPage?.date ?? null,
+      status: site?.gscProperty ? "connected" : "no conectado",
+    });
+
+    // GSC queries
+    const latestGscQuery = site ? await prisma.queryMetric.findFirst({
+      where: { siteId: site.id },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }) : null;
+    latestSources.push({
+      name: "GSC queries",
+      lastDate: latestGscQuery?.date ?? null,
+      status: site?.gscProperty ? "connected" : "no conectado",
+    });
+
+    // GA4
+    const latestGa4 = site ? await prisma.pageMetric.findFirst({
+      where: { siteId: site.id, source: "ga4" },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }) : null;
+    latestSources.push({
+      name: "GA4",
+      lastDate: latestGa4?.date ?? null,
+      status: site?.ga4Property ? "connected" : "no conectado",
+    });
+
+    // Backlinks
+    latestSources.push({
+      name: "Backlinks (DataForSEO)",
+      lastDate: backlinkSnapshot?.capturedAt ?? null,
+      status: backlinkSnapshot ? "connected" : "sin datos",
+    });
+
+    // Competitors
+    const latestComp = competitors.flatMap((c) => c.snapshots).sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+    latestSources.push({
+      name: "Competidores",
+      lastDate: latestComp?.capturedAt ?? null,
+      status: competitors.length > 0 ? "connected" : "sin competidores",
+    });
+
+    // PageSpeed
+    const latestPsi = site ? await prisma.pageSpeedMetric.findFirst({
+      where: { siteId: site.id },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }) : null;
+    latestSources.push({
+      name: "PageSpeed (CWV)",
+      lastDate: latestPsi?.date ?? null,
+      status: latestPsi ? "connected" : "sin datos",
+    });
+
+    // AI Search
+    const latestAiSearch = aiSearchRecent.length > 0 ? new Date(Math.max(...aiSearchRecent.map(() => Date.now()))) : null;
+    const aiSearchDb = await prisma.aiSearchVisibility.findFirst({
+      where: { clientId },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    });
+    latestSources.push({
+      name: "AI Search (solo Claude Haiku)",
+      lastDate: aiSearchDb?.date ?? latestAiSearch,
+      status: aiSearchDb ? "connected" : "sin datos",
+    });
+
+    for (const src of latestSources) {
+      if (!src.lastDate) {
+        if (src.status === "no conectado") {
+          lines.push(`  ${src.name}: NO CONECTADO`);
+        } else {
+          lines.push(`  ${src.name}: SIN DATOS`);
+        }
+      } else {
+        const daysAgo = Math.floor((now.getTime() - src.lastDate.getTime()) / 86400000);
+        const staleTag = daysAgo > STALE_DAYS ? " ⚠ STALE" : "";
+        lines.push(`  ${src.name}: último dato ${src.lastDate.toISOString().slice(0, 10)} (hace ${daysAgo}d)${staleTag}`);
+      }
+    }
+    lines.push("");
+  }
+
   // Ciclo
   if (cycle) {
     if (cycleIsCurrent) {
@@ -453,15 +575,29 @@ async function gatherUnifiedContext(clientId: string): Promise<{
     lines.push("");
   }
 
-  // Keywords — with date annotations
+  // Keywords — with date annotations and fetchStatus
   const priorityKws = keywords.filter((k) => k.isPriority);
   lines.push(`## Keywords (${keywords.length} total, ${priorityKws.length} prioritarias)`);
   for (const kw of priorityKws) {
     const latest = kw.rankings[0];
     if (latest) {
-      const pos = latest.position != null
-        ? `#${latest.position} (medición: ${latest.date.toISOString().slice(0, 10)})`
-        : `verificado fuera del top 30 (medición: ${latest.date.toISOString().slice(0, 10)})`;
+      const status = latest.fetchStatus ?? (latest.position != null ? "OK" : "NOT_IN_TOP_N");
+      const dateStr = latest.date.toISOString().slice(0, 10);
+      const depth = latest.depth ?? 30;
+
+      let pos: string;
+      if (status === "OK" && latest.position != null) {
+        pos = `#${latest.position} (medición: ${dateStr})`;
+      } else if (status === "NOT_IN_TOP_N") {
+        pos = `fuera del top ${depth} (medición: ${dateStr})`;
+      } else if (status === "FAILED" || status === "SKIPPED") {
+        pos = `SIN DATO: falló la consulta a DataForSEO el ${dateStr}`;
+      } else if (latest.position != null) {
+        pos = `#${latest.position} (medición: ${dateStr})`;
+      } else {
+        pos = `fuera del top ${depth} (medición: ${dateStr})`;
+      }
+
       const delta = latest.delta != null ? (latest.delta > 0 ? ` ▲${latest.delta}` : ` ▼${Math.abs(latest.delta)}`) : "";
       lines.push(`  - "${kw.term}": ${pos}${delta}`);
     } else {
@@ -500,8 +636,24 @@ async function gatherUnifiedContext(clientId: string): Promise<{
 
   // AI Search
   if (aiSearchRecent.length > 0) {
-    const mentioned = aiSearchRecent.filter((r) => r.mentioned).length;
-    lines.push(`## AI Search: ${Math.round((mentioned / aiSearchRecent.length) * 100)}% mención (${mentioned}/${aiSearchRecent.length})`);
+    // Exclude brand mentions from % calculation
+    const brandTerms = client.name.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+    const nonBrandQueries = aiSearchRecent.filter((r) => {
+      const qLower = r.query.toLowerCase();
+      return !brandTerms.some((bt) => qLower.includes(bt));
+    });
+    const relevantSet = nonBrandQueries.length > 0 ? nonBrandQueries : aiSearchRecent;
+    const mentioned = relevantSet.filter((r) => r.mentioned).length;
+    lines.push(`## AI Search (medido solo en Claude Haiku): ${Math.round((mentioned / relevantSet.length) * 100)}% mención no-marca (${mentioned}/${relevantSet.length} consultas)`);
+    if (nonBrandQueries.length < aiSearchRecent.length) {
+      lines.push(`  (${aiSearchRecent.length - nonBrandQueries.length} consultas de marca excluidas del %)`);
+    }
+    lines.push("  NOTA: estos datos solo cubren Claude Haiku. NO hay datos de ChatGPT, Gemini, Perplexity ni AI Overviews. No afirmar presencia/ausencia en esos motores sin datos.");
+    lines.push("");
+  } else {
+    // No AI search data in 28 days
+    lines.push("## AI Search: SIN DATOS (no hay registros en los últimos 28 días)");
+    lines.push("  NOTA: medido solo en Claude Haiku. No hay datos de ChatGPT, Gemini, Perplexity ni AI Overviews.");
     lines.push("");
   }
 
@@ -698,9 +850,19 @@ export async function generateClientAnalysis(
 
     // Filter out system tasks (regla 6b) — Cerebro SEO internal tasks don't belong in the plan
     const SYSTEM_TASK_FILTER = /plugin\s*cerebro|rank\s*tracker|configurar\s*gsc|configurar\s*propiedad|depurar|probar\s*endpoint|correr\s*audit/i;
+
+    // Filter out external tool references — all data comes from Cerebro SEO's own providers
+    const EXTERNAL_TOOL_FILTER = /semrush|ahrefs|\bmoz\b|ubersuggest|screaming\s*frog|similarweb|gtmetrix|herramienta\s+(de\s+)?(tracking|monitoreo|seo)|tracking\s+de\s+keywords|rastreador\s+de\s+keywords|verificar\s+configuraci[oó]n\s+(de(l)?\s+)?(tracking|rank)|ampliar\s+tracking/i;
+
     analysis.candidatas = analysis.candidatas.filter((c) => {
+      const textToCheck = `${c.titulo} ${c.descripcion ?? ""}`;
+
       if (SYSTEM_TASK_FILTER.test(c.titulo)) {
         console.log(`[analysis] Filtrada tarea del sistema (6b): "${c.titulo}"`);
+        return false;
+      }
+      if (EXTERNAL_TOOL_FILTER.test(textToCheck)) {
+        console.log(`[analysis] Filtrada candidata con herramienta externa: "${c.titulo}"`);
         return false;
       }
       return true;

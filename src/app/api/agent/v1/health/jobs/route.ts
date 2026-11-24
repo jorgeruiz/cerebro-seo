@@ -25,6 +25,7 @@ const MONITORED_JOBS = [
   { name: "analysis:competitors", queue: "data-collection", label: "Competitors", expectedFrequency: "biweekly" },
   { name: "analysis:ai-search", queue: "data-collection", label: "AI Search Visibility", expectedFrequency: "weekly" },
   { name: "gsc:page-metrics", queue: "data-collection", label: "GSC Page Metrics", expectedFrequency: "daily" },
+  { name: "pagespeed:collect", queue: "data-collection", label: "PageSpeed CWV", expectedFrequency: "weekly" },
   { name: "insights:generate", queue: "ai-analysis", label: "Insights", expectedFrequency: "daily" },
   { name: "sync:cerebro", queue: "sync", label: "Cerebro Sync", expectedFrequency: "6h" },
 ] as const;
