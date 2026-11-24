@@ -91,11 +91,18 @@ export async function registerClientJobs(clientId: string, services: string[] = 
       { repeat: { pattern: "0 6 * * 5" }, jobId: `ai-search:${clientId}` }
     );
 
-    // GSC Page Metrics — diario 5 AM (popula PageMetric)
+    // GSC Page Metrics — diario 5 AM (popula PageMetric + QueryMetric)
     await dataCollectionQueue.add(
       "gsc:page-metrics",
       { clientId },
       { repeat: { pattern: "0 5 * * *" }, jobId: `page-metrics:${clientId}` }
+    );
+
+    // PageSpeed Insights — sábados 4 AM (CWV semanal)
+    await dataCollectionQueue.add(
+      "pagespeed:collect",
+      { clientId },
+      { repeat: { pattern: "0 4 * * 6" }, jobId: `pagespeed:${clientId}` }
     );
   }
 
@@ -188,6 +195,8 @@ export async function removeClientJobs(clientId: string): Promise<void> {
     `backlinks:${clientId}`,
     `competitors:${clientId}`,
     `ai-search:${clientId}`,
+    `pagespeed:${clientId}`,
+    `page-metrics:${clientId}`,
   ];
 
   for (const jobId of jobIds) {

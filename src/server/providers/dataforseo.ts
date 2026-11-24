@@ -49,9 +49,61 @@ interface DfsResponse<T> {
   cost?: number;
 }
 
+/** Returns true if the HTTP status code is retryable (429 or 5xx). */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/** Adds jitter to exponential backoff delay. */
+function backoffWithJitter(attempt: number): number {
+  const base = Math.pow(2, attempt) * 1000;
+  const jitter = Math.random() * 500;
+  return base + jitter;
+}
+
 /**
- * Executes a DataForSEO POST request with exponential backoff (3 attempts).
- * Returns parsed JSON response and the time taken in ms.
+ * Error class for non-retryable DataForSEO errors (4xx except 429).
+ * Preserves the full error body for diagnostics.
+ */
+export class DfsClientError extends Error {
+  constructor(
+    public readonly httpStatus: number,
+    public readonly path: string,
+    public readonly responseBody: string,
+  ) {
+    super(`DataForSEO HTTP ${httpStatus} on ${path}: ${responseBody.slice(0, 500)}`);
+    this.name = "DfsClientError";
+  }
+}
+
+/**
+ * Validates that a DataForSEO task completed successfully.
+ * task.status_code 20000 = OK.
+ * Throws DfsTaskError if the task failed.
+ */
+export function assertTaskOk(task: { id: string; status_code: number; status_message: string }, path: string): void {
+  if (task.status_code !== 20000) {
+    throw new DfsTaskError(task.id, task.status_code, task.status_message, path);
+  }
+}
+
+export class DfsTaskError extends Error {
+  constructor(
+    public readonly taskId: string,
+    public readonly statusCode: number,
+    public readonly statusMessage: string,
+    public readonly path: string,
+  ) {
+    super(`DataForSEO task ${taskId} failed (${statusCode}): ${statusMessage} [${path}]`);
+    this.name = "DfsTaskError";
+  }
+}
+
+/**
+ * Executes a DataForSEO POST request with smart retry:
+ * - Retries on 429, 5xx, and network errors (3 attempts with jittered backoff).
+ * - Fails fast on 4xx (client errors like 400, 401, 403, 404).
+ * - Preserves full error body for diagnostics.
  */
 async function dfsPost<T>(
   path: string,
@@ -71,13 +123,16 @@ async function dfsPost<T>(
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`DataForSEO HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      // 4xx (except 429) = client error, fail fast
+      if (!isRetryableStatus(res.status)) {
+        throw new DfsClientError(res.status, path, errText);
+      }
+      throw new Error(`DataForSEO HTTP ${res.status} on ${path}: ${errText.slice(0, 500)}`);
     }
 
     const data = (await res.json()) as DfsResponse<T>;
     const durationMs = Date.now() - start;
 
-    // Aggregate cost across tasks
     const cost =
       data.tasks?.reduce((sum, t) => sum + (t.cost ?? 0), 0) ??
       data.cost ??
@@ -85,8 +140,11 @@ async function dfsPost<T>(
 
     return { data, durationMs, cost };
   } catch (err) {
+    // Don't retry client errors
+    if (err instanceof DfsClientError) throw err;
+
     if (attempt < 3) {
-      const delayMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+      const delayMs = backoffWithJitter(attempt);
       await new Promise((r) => setTimeout(r, delayMs));
       return dfsPost<T>(path, body, attempt + 1);
     }
@@ -95,7 +153,7 @@ async function dfsPost<T>(
 }
 
 /**
- * Executes a DataForSEO GET request with retry.
+ * Executes a DataForSEO GET request with smart retry (same policy as dfsPost).
  */
 async function dfsGet<T>(
   path: string,
@@ -110,7 +168,10 @@ async function dfsGet<T>(
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`DataForSEO HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      if (!isRetryableStatus(res.status)) {
+        throw new DfsClientError(res.status, path, errText);
+      }
+      throw new Error(`DataForSEO HTTP ${res.status} on ${path}: ${errText.slice(0, 500)}`);
     }
 
     const data = (await res.json()) as DfsResponse<T>;
@@ -122,8 +183,10 @@ async function dfsGet<T>(
 
     return { data, durationMs, cost };
   } catch (err) {
+    if (err instanceof DfsClientError) throw err;
+
     if (attempt < 3) {
-      const delayMs = Math.pow(2, attempt) * 1000;
+      const delayMs = backoffWithJitter(attempt);
       await new Promise((r) => setTimeout(r, delayMs));
       return dfsGet<T>(path, attempt + 1);
     }
@@ -232,89 +295,133 @@ export class DataForSeoProvider implements SeoDataProvider {
   //   depth:100 ≈ $0.0051/req  ← evitar en bulk
   // Envía las tasks y luego hace polling hasta que completan.
 
-  async bulkGetRankings(keywords: KeywordQuery[], depth = 30): Promise<RankingResult[]> {
+  async bulkGetRankings(keywords: KeywordQuery[], depth = 30): Promise<BulkRankingResult[]> {
     if (keywords.length === 0) return [];
 
-    // 1. Post tasks in batches of 100
+    // Build a lookup by index for tag-based matching
+    const keywordByIndex = new Map<number, KeywordQuery>();
+    keywords.forEach((kw, i) => keywordByIndex.set(i, kw));
+
+    // 1. Post tasks in batches of 100, using tag field with keyword index
     const BATCH_SIZE = 100;
-    const taskIds: string[] = [];
+    const taskIdToIndex = new Map<string, number>();
 
     for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
       const batch = keywords.slice(i, i + BATCH_SIZE);
       const { data, cost } = await dfsPost<{ id: string }>(
         "/serp/google/organic/task_post",
-        batch.map((kw) => ({
+        batch.map((kw, batchIdx) => ({
           keyword: kw.keyword,
           location_code: locationCode(kw.country),
           language_code: kw.language,
           depth,
+          tag: String(i + batchIdx), // Use keyword index as tag for reliable matching
         }))
       );
 
       void logUsage({ endpoint: "serp/organic/task_post", cost });
 
-      const ids = data.tasks?.map((t) => t.id).filter(Boolean) ?? [];
-      taskIds.push(...ids);
+      // Map task IDs to keyword indices
+      if (data.tasks) {
+        for (let j = 0; j < data.tasks.length; j++) {
+          const task = data.tasks[j];
+          if (task.id) {
+            taskIdToIndex.set(task.id, i + j);
+          }
+        }
+      }
     }
 
     // 2. Poll for results (max 10 min, checking every 15s)
-    const results: RankingResult[] = [];
-    const remaining = new Set(taskIds);
+    const results: BulkRankingResult[] = [];
+    const processedIndices = new Set<number>();
+    const remaining = new Set(taskIdToIndex.keys());
     const deadline = Date.now() + 10 * 60 * 1000;
 
     while (remaining.size > 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 15_000));
 
-      const { data, cost } = await dfsGet<DfsSerpResult>(
-        "/serp/google/organic/tasks_ready"
-      );
-
-      void logUsage({ endpoint: "serp/organic/tasks_ready", cost });
-
-      const readyIds =
-        data.tasks?.flatMap((t) =>
+      let readyIds: string[];
+      try {
+        const { data, cost } = await dfsGet<DfsSerpResult>(
+          "/serp/google/organic/tasks_ready"
+        );
+        void logUsage({ endpoint: "serp/organic/tasks_ready", cost });
+        readyIds = data.tasks?.flatMap((t) =>
           (t.result ?? []).map((r) => r.id)
         ) ?? [];
+      } catch (err) {
+        console.warn("[bulkGetRankings] tasks_ready error, will retry:", (err as Error).message);
+        continue;
+      }
 
       for (const id of readyIds) {
         if (!remaining.has(id)) continue;
 
-        const { data: taskData, cost: taskCost } = await dfsGet<DfsSerpResult>(
-          "/serp/google/organic/task_get/regular/" + id
-        );
+        try {
+          const { data: taskData, cost: taskCost } = await dfsGet<DfsSerpResult>(
+            "/serp/google/organic/task_get/regular/" + id
+          );
+          void logUsage({ endpoint: "serp/organic/task_get", cost: taskCost });
 
-        void logUsage({ endpoint: "serp/organic/task_get", cost: taskCost });
-
-        const task = taskData.tasks?.[0];
-        if (!task?.result) {
+          const task = taskData.tasks?.[0];
           remaining.delete(id);
-          continue;
-        }
 
-        for (const item of task.result) {
-          const serpItems = item.items ?? [];
-          const kw = item.keyword ?? "";
-          const domain = keywords.find((k) => k.keyword === kw)?.domain ?? "";
+          // Match by tag (keyword index) first, fallback to keyword text
+          const tagIndex = task?.result?.[0]
+            ? parseInt((task.result[0] as unknown as { tag?: string }).tag ?? "", 10)
+            : NaN;
+          const kwIndex = !isNaN(tagIndex) ? tagIndex : taskIdToIndex.get(id);
 
+          if (kwIndex === undefined) continue;
+          if (processedIndices.has(kwIndex)) continue;
+          processedIndices.add(kwIndex);
+
+          const kw = keywordByIndex.get(kwIndex);
+          if (!kw) continue;
+
+          if (!task?.result) {
+            // Task completed but no result — record as FAILED
+            results.push({
+              keyword: kw.keyword,
+              domain: kw.domain,
+              position: null,
+              rankingUrl: null,
+              searchEngine: "google",
+              country: kw.country,
+              language: kw.language,
+              checkedAt: new Date(),
+              fetchStatus: "FAILED" as const,
+              fetchError: `task ${id}: no result`,
+              depth,
+            });
+            continue;
+          }
+
+          // Search for domain in SERP
+          const serpItems = task.result[0]?.items ?? [];
           let found = false;
+
           for (const entry of serpItems) {
             if (entry.type !== "organic") continue;
             const url: string = entry.url ?? "";
-            if (domain && domainMatches(url, domain, entry.breadcrumb)) {
-              // For Google redirect URLs, prefer the breadcrumb as the display URL
+            if (kw.domain && domainMatches(url, kw.domain, entry.breadcrumb)) {
               const isGoogleRedirect = url.includes("google.com/goto");
               const realUrl = isGoogleRedirect && entry.breadcrumb
                 ? entry.breadcrumb.split(/\s*›/)[0].trim()
                 : url;
               results.push({
-                keyword: kw,
-                domain,
+                keyword: kw.keyword,
+                domain: kw.domain,
                 position: entry.rank_absolute ?? null,
                 rankingUrl: realUrl,
                 searchEngine: "google",
-                country: keywords.find((k) => k.keyword === kw)?.country ?? "MX",
-                language: keywords.find((k) => k.keyword === kw)?.language ?? "es",
+                country: kw.country,
+                language: kw.language,
                 checkedAt: new Date(),
+                fetchStatus: "OK" as const,
+                fetchError: null,
+                depth,
               });
               found = true;
               break;
@@ -323,19 +430,61 @@ export class DataForSeoProvider implements SeoDataProvider {
 
           if (!found) {
             results.push({
-              keyword: kw,
-              domain,
+              keyword: kw.keyword,
+              domain: kw.domain,
               position: null,
               rankingUrl: null,
               searchEngine: "google",
-              country: keywords.find((k) => k.keyword === kw)?.country ?? "MX",
-              language: keywords.find((k) => k.keyword === kw)?.language ?? "es",
+              country: kw.country,
+              language: kw.language,
               checkedAt: new Date(),
+              fetchStatus: "NOT_IN_TOP_N" as const,
+              fetchError: null,
+              depth,
             });
           }
+        } catch (err) {
+          remaining.delete(id);
+          const kwIndex = taskIdToIndex.get(id);
+          if (kwIndex !== undefined && !processedIndices.has(kwIndex)) {
+            processedIndices.add(kwIndex);
+            const kw = keywordByIndex.get(kwIndex);
+            if (kw) {
+              results.push({
+                keyword: kw.keyword,
+                domain: kw.domain,
+                position: null,
+                rankingUrl: null,
+                searchEngine: "google",
+                country: kw.country,
+                language: kw.language,
+                checkedAt: new Date(),
+                fetchStatus: "FAILED" as const,
+                fetchError: (err as Error).message?.slice(0, 300) ?? "task_get error",
+                depth,
+              });
+            }
+          }
         }
+      }
+    }
 
-        remaining.delete(id);
+    // 3. Mark keywords that timed out as FAILED
+    for (const [index, kw] of Array.from(keywordByIndex.entries())) {
+      if (!processedIndices.has(index)) {
+        results.push({
+          keyword: kw.keyword,
+          domain: kw.domain,
+          position: null,
+          rankingUrl: null,
+          searchEngine: "google",
+          country: kw.country,
+          language: kw.language,
+          checkedAt: new Date(),
+          fetchStatus: "FAILED" as const,
+          fetchError: "polling deadline exceeded (10 min)",
+          depth,
+        });
       }
     }
 
@@ -1049,7 +1198,7 @@ export const dataForSeoProvider = new DataForSeoProvider();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function locationCode(country: string): number {
+export function locationCode(country: string): number {
   const codes: Record<string, number> = {
     MX: 2484,
     US: 2840,
@@ -1346,4 +1495,14 @@ export interface StrikingDistanceKeyword {
   keywordDifficulty: number | null;
   url: string | null;
   intent: string | null;
+}
+
+// ─── Bulk Ranking Result (with fetch status) ────────────────────────────────
+
+export type RankingFetchStatus = "OK" | "NOT_IN_TOP_N" | "FAILED" | "SKIPPED";
+
+export interface BulkRankingResult extends RankingResult {
+  fetchStatus: RankingFetchStatus;
+  fetchError: string | null;
+  depth: number;
 }

@@ -38,7 +38,14 @@ async function handler(
       keyword: { clientId, deletedAt: null },
       date: { gte: from, lte: to },
     },
-    include: {
+    select: {
+      position: true,
+      rankingUrl: true,
+      delta: true,
+      date: true,
+      fetchStatus: true,
+      depth: true,
+      checkedAt: true,
       keyword: { select: { term: true, isPriority: true, targetUrl: true, category: true } },
     },
     orderBy: [{ date: "desc" }, { keyword: { term: "asc" } }],
@@ -53,6 +60,9 @@ async function handler(
     rankingUrl: r.rankingUrl,
     targetUrl: r.keyword.targetUrl,
     delta: r.delta,
+    fetchStatus: r.fetchStatus ?? (r.position != null ? "OK" : "NOT_IN_TOP_N"), // backward compat
+    depth: r.depth ?? null,
+    checkedAt: r.checkedAt?.toISOString() ?? r.date.toISOString(),
     date: r.date.toISOString(),
   }));
 

@@ -26,6 +26,17 @@ vi.mock("@/server/providers/dataforseo", () => ({
   dataForSeoProvider: {
     bulkGetRankings: mockBulkGetRankings,
   },
+  locationCode: (country: string) => country === "MX" ? 2484 : 2840,
+}));
+
+vi.mock("@/lib/normalize-domain", () => ({
+  normalizeDomain: (input: string | null | undefined) => {
+    if (!input) return null;
+    try {
+      const withScheme = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+      return new URL(withScheme).hostname.replace(/^www\./, "").toLowerCase();
+    } catch { return null; }
+  },
 }));
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -57,11 +68,11 @@ describe("runRankTrackingProcessor", () => {
     vi.mocked(prisma.keywordRanking.findMany)
       .mockResolvedValueOnce([]) // existingToday
       .mockResolvedValueOnce([  // previousRankings
-        { keywordId: "kw-1", position: 8 },
-        { keywordId: "kw-2", position: 12 },
-        { keywordId: "kw-3", position: 25 },
-        { keywordId: "kw-4", position: 5 },
-        { keywordId: "kw-5", position: 3 },
+        { keywordId: "kw-1", position: 8, fetchStatus: "OK" },
+        { keywordId: "kw-2", position: 12, fetchStatus: "OK" },
+        { keywordId: "kw-3", position: 25, fetchStatus: "OK" },
+        { keywordId: "kw-4", position: 5, fetchStatus: "OK" },
+        { keywordId: "kw-5", position: 3, fetchStatus: "OK" },
       ] as never);
 
     vi.mocked(prisma.keywordRanking.create).mockResolvedValue({} as never);
@@ -69,11 +80,11 @@ describe("runRankTrackingProcessor", () => {
     vi.mocked(prisma.insight.create).mockResolvedValue({} as never);
 
     mockBulkGetRankings.mockResolvedValue([
-      { keyword: "harina industrial", domain: "molinoazteca.mx", position: 6, rankingUrl: "https://molinoazteca.mx/harina", searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
-      { keyword: "harina para tamales", domain: "molinoazteca.mx", position: 10, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
-      { keyword: "distribuidora de harina", domain: "molinoazteca.mx", position: 20, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
-      { keyword: "harina de maíz", domain: "molinoazteca.mx", position: 4, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
-      { keyword: "molino azteca", domain: "molinoazteca.mx", position: 2, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
+      { keyword: "harina industrial", domain: "molinoazteca.mx", position: 6, rankingUrl: "https://molinoazteca.mx/harina", searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
+      { keyword: "harina para tamales", domain: "molinoazteca.mx", position: 10, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
+      { keyword: "distribuidora de harina", domain: "molinoazteca.mx", position: 20, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
+      { keyword: "harina de maíz", domain: "molinoazteca.mx", position: 4, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
+      { keyword: "molino azteca", domain: "molinoazteca.mx", position: 2, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
     ]);
 
     const { runRankTrackingProcessor } = await import("../processors/rank-tracking-processor");
@@ -119,14 +130,14 @@ describe("runRankTrackingProcessor", () => {
 
     vi.mocked(prisma.keywordRanking.findMany)
       .mockResolvedValueOnce([]) // sin ranking hoy
-      .mockResolvedValueOnce([{ keywordId: "kw-a", position: 5 }] as never); // prev = posición 5
+      .mockResolvedValueOnce([{ keywordId: "kw-a", position: 5, fetchStatus: "OK" }] as never); // prev = posición 5
 
     vi.mocked(prisma.keywordRanking.create).mockResolvedValue({} as never);
     vi.mocked(prisma.insight.findFirst).mockResolvedValue(null); // no existe insight reciente
     vi.mocked(prisma.insight.create).mockResolvedValue({} as never);
 
     mockBulkGetRankings.mockResolvedValue([
-      { keyword: "keyword caída", domain: "caida.mx", position: 18, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
+      { keyword: "keyword caída", domain: "caida.mx", position: 18, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
     ]);
 
     const { runRankTrackingProcessor } = await import("../processors/rank-tracking-processor");
@@ -152,13 +163,13 @@ describe("runRankTrackingProcessor", () => {
 
     vi.mocked(prisma.keywordRanking.findMany)
       .mockResolvedValueOnce([]) // sin ranking hoy
-      .mockResolvedValueOnce([{ keywordId: "kw-b", position: 10 }] as never); // prev = 10
+      .mockResolvedValueOnce([{ keywordId: "kw-b", position: 10, fetchStatus: "OK" }] as never); // prev = 10
 
     vi.mocked(prisma.keywordRanking.create).mockResolvedValue({} as never);
     vi.mocked(prisma.insight.findFirst).mockResolvedValue(null);
 
     mockBulkGetRankings.mockResolvedValue([
-      { keyword: "keyword bulk", domain: "bulk.mx", position: 18, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date() },
+      { keyword: "keyword bulk", domain: "bulk.mx", position: 18, rankingUrl: null, searchEngine: "google", country: "MX", language: "es", checkedAt: new Date(), fetchStatus: "OK", fetchError: null, depth: 30 },
     ]);
 
     const { runRankTrackingProcessor } = await import("../processors/rank-tracking-processor");
