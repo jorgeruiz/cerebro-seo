@@ -82,7 +82,7 @@ function toNotionUuid(id: string): string {
  */
 export async function logPlanToBitacora(
   planId: string,
-  mergedByEmail: string,
+  _mergedByEmail: string,
 ): Promise<void> {
   try {
     const plan = await prisma.monthlyPlan.findUnique({
@@ -143,7 +143,7 @@ export async function logPlanToBitacora(
         clienteNombre,
         actividad: `Plan ${plan.month}: ${task.title}`,
         area: areaMap[task.kind] ?? "SEO",
-        encargadoNombre: mergedByEmail.split("@")[0] ?? "Cerebro SEO",
+        encargadoNombre: "Felix",
         fecha,
         campanaOPagina: routes[0] ?? urls[0] ?? undefined,
         resultadoObtenido: resultado,
@@ -168,7 +168,7 @@ export async function logBlogToBitacora(
   clientId: string,
   articleTitle: string,
   articleUrl: string,
-  publishedByEmail: string,
+  _publishedByEmail: string,
 ): Promise<void> {
   try {
     const client = await prisma.client.findUnique({
@@ -186,7 +186,7 @@ export async function logBlogToBitacora(
       clienteNombre: client.name,
       actividad: `Blog publicado: ${articleTitle}`,
       area: "Contenido",
-      encargadoNombre: publishedByEmail.split("@")[0] ?? "Cerebro SEO",
+      encargadoNombre: "Felix",
       fecha: new Date().toISOString().slice(0, 10),
       campanaOPagina: articleUrl,
       resultadoObtenido: `Artículo en ${articleUrl}`,
@@ -353,7 +353,7 @@ export async function uploadPlanToNotion(
       clienteNombre,
       actividad: `Plan ${plan.month}: ${task.title}`,
       area: areaMap[task.kind] ?? "SEO",
-      encargadoNombre: uploadedByEmail.split("@")[0] ?? "Cerebro SEO",
+      encargadoNombre: "Felix",
       fecha,
       campanaOPagina: routes[0] ?? urls[0] ?? undefined,
       resultadoObtenido: resultado,

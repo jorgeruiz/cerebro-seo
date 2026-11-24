@@ -1053,8 +1053,8 @@ export async function actionUploadToNotion(
   draftSaved: boolean;
 } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({
