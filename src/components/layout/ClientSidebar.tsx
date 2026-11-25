@@ -58,6 +58,14 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const PLAN_MENSUAL: NavItem = {
+  label: "Plan Mensual",
+  href: "plan-mensual",
+  icon: ClipboardList,
+  description: "Centro de trabajo del mes",
+  requiresSeo: true,
+};
+
 const FEATURED: NavItem = {
   label: "Análisis Claude",
   href: "analisis",
@@ -88,7 +96,6 @@ const GROUPS: NavGroup[] = [
   {
     title: "Estrategia",
     items: [
-      { label: "Plan Mensual",           href: "plan-mensual",      icon: ClipboardList, description: "Tareas SEO del mes",   requiresSeo: true },
       { label: "Plan de Contenido",    href: "contenido",         icon: Lightbulb,   description: "Roadmap editorial",     requiresSeo: true },
       { label: "Eventos / Timeline",   href: "timeline",          icon: Calendar,    description: "Hitos y cambios",       requiresSeo: false },
       { label: "Reporte Mensual",      href: "reporte",           icon: FileText,    description: "Resumen ejecutivo",     requiresSeo: true },
@@ -111,12 +118,14 @@ function SidebarNavItem({
   hasSeo,
   pathname,
   featured = false,
+  primary = false,
 }: {
   item: NavItem;
   clientId: string;
   hasSeo: boolean;
   pathname: string;
   featured?: boolean;
+  primary?: boolean;
 }) {
   const fullHref = `/clientes/${clientId}/${item.href}`;
   const active = pathname === fullHref || pathname.startsWith(fullHref + "/");
@@ -149,20 +158,24 @@ function SidebarNavItem({
       className={cn(
         "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors group",
         featured ? "py-2.5" : "",
-        active
-          ? "bg-primary/10 text-foreground"
-          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.03]"
+        primary && "border-l-2 border-primary bg-primary/10 py-2.5",
+        primary && active && "bg-primary/15 border-primary",
+        primary && !active && "hover:bg-primary/10",
+        !primary && active && "bg-primary/10 text-foreground",
+        !primary && !active && "text-muted-foreground hover:text-foreground hover:bg-white/[0.03]"
       )}
     >
       <Icon className={cn(
         "h-3.5 w-3.5 shrink-0",
-        active ? "text-primary" : "opacity-60 group-hover:opacity-80",
-        featured && active && "text-primary"
+        primary ? "text-primary" : "",
+        !primary && active ? "text-primary" : "",
+        !primary && !active && "opacity-60 group-hover:opacity-80",
       )} />
       <div className="flex-1 min-w-0">
         <span className={cn(
           "font-mono text-[0.76rem] truncate block",
-          featured && "font-medium"
+          (featured || primary) && "font-medium",
+          primary && "text-[0.8rem]"
         )}>
           {item.label}
         </span>
@@ -252,8 +265,15 @@ function ClientSidebarContent({
 
       {/* Scrollable nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-3">
-        {/* Featured item */}
-        <div className="pb-2 border-b border-sidebar-border/50">
+        {/* Plan Mensual — primary item */}
+        <div className="pb-2 border-b border-sidebar-border/50 space-y-1">
+          <SidebarNavItem
+            item={PLAN_MENSUAL}
+            clientId={clientId}
+            hasSeo={hasSeo}
+            pathname={pathname}
+            primary
+          />
           <SidebarNavItem
             item={FEATURED}
             clientId={clientId}
