@@ -19,18 +19,32 @@ export async function getOAuth2Client(userId: string) {
  */
 export async function getServiceOAuth2Client() {
   const email = process.env.GSC_SERVICE_EMAIL;
-  if (!email) return null;
+  if (!email) {
+    console.warn("[getServiceOAuth2Client] GSC_SERVICE_EMAIL not set");
+    return null;
+  }
 
   const user = await prisma.user.findFirst({
-    where: { email: { equals: email, mode: "insensitive" } },
+    where: { email: { equals: email.trim(), mode: "insensitive" } },
     select: { id: true },
   });
-  if (!user) return null;
+  if (!user) {
+    const masked = email.replace(/^(..)[^@]*(@.*)$/, "$1***$2");
+    console.warn(`[getServiceOAuth2Client] No User found for GSC_SERVICE_EMAIL=${masked}`);
+    return null;
+  }
 
   const account = await prisma.account.findFirst({
     where: { userId: user.id, provider: "google" },
   });
-  if (!account?.access_token) return null;
+  if (!account?.access_token) {
+    console.warn(
+      `[getServiceOAuth2Client] Google Account for userId=${user.id.slice(0, 8)}… ` +
+      `has no access_token (refresh_token=${account?.refresh_token ? "present" : "missing"}, ` +
+      `expires_at=${account?.expires_at ?? "null"}). User needs to re-login.`
+    );
+    return null;
+  }
 
   return buildOAuth2Client(account);
 }
