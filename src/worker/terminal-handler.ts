@@ -1,3 +1,4 @@
+// @deprecated Reemplazado por agent-chat (F5). Borrar tras validar en produccion.
 /**
  * Terminal handler: procesa jobs de la cola "terminal-sessions".
  *

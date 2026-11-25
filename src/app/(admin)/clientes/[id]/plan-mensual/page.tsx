@@ -41,7 +41,7 @@ export default async function PlanMensualPage({
             Plan Mensual
           </h1>
           <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
-            {client.domain} · tareas SEO del mes con ejecucion AI y seguimiento de progreso
+            {client.domain} · centro de trabajo del mes: tareas, ejecucion y cambios al sitio
           </p>
         </div>
 

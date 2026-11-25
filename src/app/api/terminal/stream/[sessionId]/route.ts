@@ -1,3 +1,4 @@
+// @deprecated Reemplazado por agent-chat (F5). Borrar tras validar en produccion.
 export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";

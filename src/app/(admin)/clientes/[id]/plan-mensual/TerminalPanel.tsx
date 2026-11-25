@@ -1,3 +1,4 @@
+// @deprecated Reemplazado por agent-chat (F5). Borrar tras validar en produccion.
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
