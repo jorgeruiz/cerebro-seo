@@ -50,6 +50,25 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    async signIn({ user, account }) {
+      // On every Google login, update the stored tokens so GSC/GA4 jobs always have fresh credentials.
+      if (account?.provider === "google" && user?.id && account.access_token) {
+        try {
+          await prisma.account.updateMany({
+            where: { userId: user.id, provider: "google" },
+            data: {
+              access_token: account.access_token,
+              ...(account.refresh_token ? { refresh_token: account.refresh_token } : {}),
+              ...(account.expires_at ? { expires_at: account.expires_at } : {}),
+              ...(account.scope ? { scope: account.scope } : {}),
+            },
+          });
+        } catch (err) {
+          console.error("[auth:signIn] Failed to update Google tokens:", (err as Error).message);
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       // user solo existe en el primer login — persistir id y role en el token
       if (user) {
