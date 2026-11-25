@@ -223,8 +223,8 @@ export async function actionExecuteTask(
   taskId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores pueden ejecutar tareas." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const task = await prisma.planTask.findUnique({
@@ -284,7 +284,7 @@ export async function actionResumeBlockedTask(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   "use server";
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const task = await prisma.planTask.findUnique({
     where: { id: taskId },
@@ -421,8 +421,8 @@ export async function actionVoidTask(
   reason: string
 ): Promise<{ ok: true; reverted: number } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const task = await prisma.planTask.findUnique({
@@ -490,8 +490,8 @@ export async function actionResetTask(
   mode: "resume" | "redo"
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const task = await prisma.planTask.findUnique({
@@ -579,8 +579,8 @@ export async function actionArchivePlan(
   planId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({ where: { id: planId } });
@@ -603,8 +603,8 @@ export async function actionRunWatchdog(
   planId: string
 ): Promise<{ ok: true; retried: number; failed: number } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({ where: { id: planId } });
@@ -620,8 +620,8 @@ export async function actionSubmitForReview(
   planId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({
@@ -715,8 +715,8 @@ export async function actionActivatePlan(
   planId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({
@@ -752,8 +752,8 @@ export async function actionMergePlan(
   planId: string
 ): Promise<{ ok: true; mergedAt: string; warnings: string[]; published?: boolean } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({
@@ -1148,8 +1148,8 @@ export async function actionPublishWpPlan(
   details: string[];
 } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") {
-    return { ok: false, error: "Solo administradores." };
+  if (!session?.user) {
+    return { ok: false, error: "No autenticado." };
   }
 
   const plan = await prisma.monthlyPlan.findUnique({
@@ -1340,7 +1340,7 @@ export async function actionFixPreflight(
   value: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const site = await prisma.site.findFirst({ where: { clientId } });
 
@@ -1396,7 +1396,7 @@ export async function actionRedoOutdatedTasks(
   planId: string
 ): Promise<{ ok: true; redone: number; total: number } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const { DECOMPOSER_VERSION } = await import("@/lib/task-templates");
 
@@ -1445,7 +1445,7 @@ export async function actionReclassifyTask(
   newActionType: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const { isValidActionType, getCatalogEntry } = await import("@/lib/plan/task-catalog");
 
@@ -1508,7 +1508,7 @@ export async function actionSetManualTask(
   instructions: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const task = await prisma.planTask.findUnique({
     where: { id: taskId },
@@ -1566,7 +1566,7 @@ export async function actionSplitTask(
 ): Promise<{ ok: true; created: number } | { ok: false; error: string }> {
   "use server";
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
   if (objectives.length < 2) return { ok: false, error: "Se necesitan al menos 2 objetivos." };
   if (objectives.length > 5) return { ok: false, error: "Máximo 5 sub-tareas." };
 
@@ -1650,7 +1650,7 @@ export async function actionVoidNeedsDefinition(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   "use server";
   const session = await getSession();
-  if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
+  if (!session?.user) return { ok: false, error: "No autenticado." };
 
   const task = await prisma.planTask.findUnique({
     where: { id: taskId },
