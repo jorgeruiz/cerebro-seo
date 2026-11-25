@@ -50,6 +50,22 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    async signIn({ user, account }) {
+      // On every Google login, update the stored tokens so they stay fresh.
+      // NextAuth's PrismaAdapter only writes tokens on first link, not on re-login.
+      if (account?.provider === "google" && user.id) {
+        await prisma.account.updateMany({
+          where: { userId: user.id, provider: "google" },
+          data: {
+            access_token: account.access_token,
+            ...(account.refresh_token && { refresh_token: account.refresh_token }),
+            ...(account.expires_at && { expires_at: account.expires_at }),
+            ...(account.scope && { scope: account.scope }),
+          },
+        });
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       // user solo existe en el primer login — persistir id y role en el token
       if (user) {

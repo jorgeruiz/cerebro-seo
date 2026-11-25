@@ -19,18 +19,29 @@ export async function getOAuth2Client(userId: string) {
  */
 export async function getServiceOAuth2Client() {
   const email = process.env.GSC_SERVICE_EMAIL;
-  if (!email) return null;
+  if (!email) {
+    console.warn("[gsc-service] GSC_SERVICE_EMAIL no está configurado");
+    return null;
+  }
+
+  const masked = email.replace(/(.{2}).+(@.+)/, "$1***$2");
 
   const user = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
     select: { id: true },
   });
-  if (!user) return null;
+  if (!user) {
+    console.warn(`[gsc-service] No existe User con email ${masked}`);
+    return null;
+  }
 
   const account = await prisma.account.findFirst({
     where: { userId: user.id, provider: "google" },
   });
-  if (!account?.access_token) return null;
+  if (!account?.access_token) {
+    console.warn(`[gsc-service] Account google de ${masked} sin access_token`);
+    return null;
+  }
 
   return buildOAuth2Client(account);
 }
