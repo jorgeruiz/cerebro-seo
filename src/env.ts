@@ -62,6 +62,10 @@ const envSchema = z.object({
   // Opcional: si no se define, los endpoints /api/agent/* responden 503.
   AGENT_API_TOKEN: z.string().min(32).optional(),
 
+  // Constructor — URL base y secret para el agent chat de cambios.
+  CONSTRUCTOR_URL: z.string().url().optional(),
+  CONSTRUCTOR_INTERNAL_SECRET: z.string().optional(),
+
   // Node env
   NODE_ENV: z
     .enum(["development", "production", "test"])
