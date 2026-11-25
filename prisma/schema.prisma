@@ -28,6 +28,7 @@ model User {
 
   accounts Account[]
   sessions Session[]
+  agentConversations AgentConversation[]
 }
 
 model Account {
@@ -103,6 +104,7 @@ model Client {
   verifiedServices       String[] @default([])  // servicios que ofrece (ej: "renta de montacargas")
   excludedServices       String[] @default([])  // servicios que NO ofrece (ej: "venta de montacargas")
   claimChecks            ClaimCheck[]
+  agentConversations     AgentConversation[]
 }
 
 model Site {
@@ -801,6 +803,9 @@ model MonthlyPlan {
   mergedById    String?
   completedAt   DateTime?
   createdById   String?
+  source        String?           // "agent" | "analysis" | null (manual/legacy)
+  focus         String?           // "all" | "technical_only"
+  summary       String?        @db.Text  // resumen ejecutivo del plan
   notionReport  Json?             // Draft: { objetivos, plan, generatedAt }
   notionBitacoraIds String[]  @default([]) // Notion page IDs of bitácora entries
   notionEstrategiaId String?      // Notion page ID of estrategia mensual
@@ -810,6 +815,7 @@ model MonthlyPlan {
 
   tasks PlanTask[]
   terminalSessions TerminalSession[]
+  agentConversations AgentConversation[]
 
   @@unique([clientId, month])
   @@index([clientId, month])
@@ -867,6 +873,12 @@ model PlanTask {
   remedy             String?        @db.Text  // how to unblock
   failureReason      String?        @db.Text
   voidReason         String?        @db.Text
+  assignee           String?        // "ejecutor" | "felix"
+  requiresApproval   Boolean        @default(false)
+  dataSource         String?        @db.Text  // fuente que justifica la tarea
+  statusNote         String?        @db.Text  // nota al cambiar estado (blocked/skipped reason)
+  statusChangedBy    String?        // quién cambió el estado
+  statusChangedAt    DateTime?      // cuándo cambió el estado
   completedById      String?
   completedAt        DateTime?
   createdAt          DateTime       @default(now())
@@ -938,4 +950,54 @@ model TaskRun {
 
   @@index([taskId, startedAt])
   @@index([stepId])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Chat — conversaciones con el agente de cambios (reemplaza Terminal)
+// ---------------------------------------------------------------------------
+
+enum AgentConversationStatus {
+  OPEN
+  SUBMITTED
+  CLOSED
+}
+
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+  TOOL_USE
+  TOOL_RESULT
+}
+
+model AgentConversation {
+  id                 String                   @id @default(cuid())
+  clientId           String
+  client             Client                   @relation(fields: [clientId], references: [id])
+  notionClientId     String                   // cerebroClientId (32 hex, sin dashes)
+  planId             String?
+  plan               MonthlyPlan?             @relation(fields: [planId], references: [id])
+  userId             String
+  user               User                     @relation(fields: [userId], references: [id])
+  status             AgentConversationStatus  @default(OPEN)
+  constructorCrId    String?
+  constructorCrCode  String?
+  tokensIn           Int                      @default(0)
+  tokensOut          Int                      @default(0)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  messages AgentMessage[]
+
+  @@index([clientId])
+}
+
+model AgentMessage {
+  id              String           @id @default(cuid())
+  conversationId  String
+  conversation    AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            AgentMessageRole
+  content         Json
+  createdAt       DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
 }

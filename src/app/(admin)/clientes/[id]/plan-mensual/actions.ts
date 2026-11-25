@@ -60,6 +60,15 @@ export interface PlanTaskFullView {
   blockedReason: string | null;
   remedy: string | null;
   completedAt: string | null;
+  targetKeyword: string | null;
+  targetUrl: string | null;
+  // Agent plan fields
+  assignee: string | null;
+  requiresApproval: boolean;
+  dataSource: string | null;
+  statusNote: string | null;
+  statusChangedBy: string | null;
+  statusChangedAt: string | null;
   steps: PlanStepView[];
   runs: TaskRunView[];
 }
@@ -77,6 +86,11 @@ export interface PlanFullView {
   totalCostUsd: number;
   platform: string | null;
   githubRepo: string | null;
+  // Agent plan fields
+  source: string | null;
+  focus: string | null;
+  summary: string | null;
+  createdAt: string | null;
   tasks: PlanTaskFullView[];
 }
 
@@ -161,6 +175,10 @@ export async function getPlanData(
     totalCostUsd,
     platform: site?.platform ?? null,
     githubRepo: site?.githubRepo ?? null,
+    source: plan.source ?? null,
+    focus: plan.focus ?? null,
+    summary: plan.summary ?? null,
+    createdAt: plan.createdAt?.toISOString() ?? null,
     tasks: plan.tasks.map((t) => ({
       id: t.id,
       order: t.order,
@@ -186,6 +204,14 @@ export async function getPlanData(
       blockedReason: t.blockedReason ?? null,
       remedy: t.remedy ?? null,
       completedAt: t.completedAt?.toISOString() ?? null,
+      targetKeyword: t.targetKeyword ?? null,
+      targetUrl: t.targetUrl ?? null,
+      assignee: t.assignee ?? null,
+      requiresApproval: t.requiresApproval,
+      dataSource: t.dataSource ?? null,
+      statusNote: t.statusNote ?? null,
+      statusChangedBy: t.statusChangedBy ?? null,
+      statusChangedAt: t.statusChangedAt?.toISOString() ?? null,
       steps: t.steps.map((s) => ({
         id: s.id,
         order: s.order,
@@ -1675,6 +1701,63 @@ export async function actionVoidNeedsDefinition(
       failureReason: reason || "Anulada por el equipo",
     },
   });
+
+  return { ok: true };
+}
+
+// ─── Agent plan: mark action done/blocked/skipped from UI ───────────────────
+
+export async function actionAgentTaskStatus(
+  taskId: string,
+  status: "done" | "blocked" | "skipped",
+  note: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  "use server";
+  const session = await getSession();
+  if (!session?.user) return { ok: false, error: "No autenticado." };
+
+  if ((status === "blocked" || status === "skipped") && !note.trim()) {
+    return { ok: false, error: "Se requiere una nota." };
+  }
+
+  const task = await prisma.planTask.findUnique({
+    where: { id: taskId },
+    select: { id: true, planId: true, status: true },
+  });
+  if (!task) return { ok: false, error: "Tarea no encontrada." };
+
+  const statusMap = { done: "DONE", blocked: "BLOCKED", skipped: "VOIDED" } as const;
+  const now = new Date();
+
+  await prisma.planTask.update({
+    where: { id: taskId },
+    data: {
+      status: statusMap[status],
+      statusNote: note || null,
+      statusChangedBy: session.user.email ?? "ui",
+      statusChangedAt: now,
+      ...(status === "blocked" && { blockedReason: note }),
+      ...(status === "skipped" && { voidReason: note }),
+      ...(status === "done" && { completedAt: now, completedById: session.user.email ?? "ui" }),
+    },
+  });
+
+  // Auto-complete agent plan if all actions are closed
+  const plan = await prisma.monthlyPlan.findUnique({
+    where: { id: task.planId },
+    select: { id: true, status: true, source: true, tasks: { select: { status: true } } },
+  });
+  if (plan?.source === "agent") {
+    const allClosed = plan.tasks.every(
+      (t) => t.status === "DONE" || t.status === "VOIDED"
+    );
+    if (allClosed && plan.status !== "PUBLISHED") {
+      await prisma.monthlyPlan.update({
+        where: { id: plan.id },
+        data: { status: "PUBLISHED", completedAt: now },
+      });
+    }
+  }
 
   return { ok: true };
 }

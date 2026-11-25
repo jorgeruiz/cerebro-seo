@@ -62,10 +62,20 @@ export default async function AnalisisPage({
           <h1 className="font-display font-extrabold text-[clamp(1.6rem,2.5vw,2.4rem)] tracking-tight leading-[1.05] text-foreground flex items-center gap-3">
             <Sparkles className="h-6 w-6 text-primary shrink-0" />
             Análisis Claude
+            <span className="ml-2 font-mono text-[0.6rem] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 uppercase tracking-wider">
+              Deprecated
+            </span>
           </h1>
           <p className="font-mono text-[0.75rem] text-muted-foreground mt-1">
             {client.domain} · análisis ejecutivo on-demand con todo el contexto SEO del cliente
           </p>
+          <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs text-amber-800">
+              Esta sección está deprecada. El plan mensual ahora lo genera el agente Analista SEO Click
+              desde la API de agentes. Los resultados aquí se conservan para referencia y comparación.
+              La ejecución manual sigue disponible.
+            </p>
+          </div>
         </div>
 
         {/* Panel principal */}

@@ -39,6 +39,7 @@ import {
 } from "./actions";
 import { TerminalPanel } from "./TerminalPanel";
 import { ContentPreviewModal } from "./ContentPreviewModal";
+import { AgentPlanView } from "./AgentPlanView";
 
 /** Must match DECOMPOSER_VERSION in src/lib/task-templates.ts */
 const CURRENT_DECOMPOSER_VERSION = "2026-11-11-v1";
@@ -2234,6 +2235,8 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
 
         {!plan ? (
           <EmptyState clientId={clientId} />
+        ) : plan.source === "agent" ? (
+          <AgentPlanView plan={plan} onRefresh={() => refresh()} />
         ) : (
           <>
             {/* Overall progress */}
