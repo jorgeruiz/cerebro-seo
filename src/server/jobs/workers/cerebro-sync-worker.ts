@@ -12,12 +12,22 @@ import { Worker } from "bullmq";
 import { redisBullMQ } from "@/lib/redis";
 import { prisma } from "@/lib/db";
 import { getClientsFromNotion } from "@/lib/notion-direct";
-import { ClientStatus, SeoPlan } from "@prisma/client";
+import { ClientStatus, SeoPlan, SitePlatform } from "@prisma/client";
 
 const ESTADO_MAP: Record<string, ClientStatus> = {
   "Activo": ClientStatus.ACTIVE,
   "En Pausa": ClientStatus.PAUSED,
 };
+
+/** Derive SitePlatform from Notion's framework field (source of truth). */
+function frameworkToPlatform(framework: string | null, githubRepo?: string | null): SitePlatform {
+  if (framework === "nextjs") return SitePlatform.NEXTJS;
+  if (framework === "wordpress") {
+    // WordPress en Notion pero con repo GitHub → probablemente migración
+    return githubRepo ? SitePlatform.MIGRACION : SitePlatform.WORDPRESS;
+  }
+  return SitePlatform.OTRO;
+}
 
 const worker = new Worker(
   "sync",
@@ -49,7 +59,7 @@ const worker = new Worker(
 
       const existing = await prisma.client.findUnique({
         where: { cerebroClientId: nc.notionPageId },
-        include: { sites: { take: 1 } },
+        include: { sites: { take: 1, select: { id: true, url: true, platform: true, githubRepo: true } } },
       });
 
       if (!existing) {
@@ -68,6 +78,8 @@ const worker = new Worker(
                 gscProperty: nc.gscProperty ?? null,
                 ga4Property: nc.ga4PropertyId ?? null,
                 framework: nc.framework,
+                platform: frameworkToPlatform(nc.framework),
+                platformDetectedAt: new Date(),
               },
             },
           },
@@ -85,18 +97,26 @@ const worker = new Worker(
           },
         });
 
-        // Actualizar Site.url y framework si cambiaron en Notion
+        // Actualizar Site: url, framework y platform desde Notion
         if (existing.sites[0]) {
-          const siteUpdate: Record<string, string> = {};
-          if (nc.framework) siteUpdate.framework = nc.framework;
-          // Update url if Notion has a value and it's different from the current one
-          if (nc.siteUrl && nc.siteUrl !== "https://" && existing.sites[0].url !== nc.siteUrl) {
-            siteUpdate.url = nc.siteUrl;
+          const site = existing.sites[0];
+          const siteData: Record<string, unknown> = {};
+          if (nc.framework) {
+            siteData.framework = nc.framework;
+            // Derive platform from Notion's framework (source of truth)
+            const newPlatform = frameworkToPlatform(nc.framework, site.githubRepo);
+            if (site.platform !== newPlatform) {
+              siteData.platform = newPlatform;
+              siteData.platformDetectedAt = new Date();
+            }
           }
-          if (Object.keys(siteUpdate).length > 0) {
+          if (nc.siteUrl && nc.siteUrl !== "https://" && site.url !== nc.siteUrl) {
+            siteData.url = nc.siteUrl;
+          }
+          if (Object.keys(siteData).length > 0) {
             await prisma.site.update({
-              where: { id: existing.sites[0].id },
-              data: siteUpdate,
+              where: { id: site.id },
+              data: siteData,
             });
           }
         }
