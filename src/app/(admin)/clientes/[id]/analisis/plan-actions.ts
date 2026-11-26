@@ -82,6 +82,11 @@ export async function actionSendToPlan(
   analysisId: string,
   candidates: AnalysisCandidate[]
 ): Promise<{ ok: true; result: SendToPlanResult } | { ok: false; error: string }> {
+  // PLAN_SOURCE=agent → los planes los crea el agente, no el análisis in-app
+  if (process.env.PLAN_SOURCE === "agent") {
+    return { ok: false, error: "Creación de planes desactivada (PLAN_SOURCE=agent). Los planes se crean desde el agente externo." };
+  }
+
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") {
     return { ok: false, error: "Solo administradores pueden enviar al plan." };
@@ -404,6 +409,9 @@ export async function actionConfirmProposal(
   analysisId: string,
   selectedIds: string[],
 ): Promise<{ ok: true; result: SendToPlanResult } | { ok: false; error: string }> {
+  if (process.env.PLAN_SOURCE === "agent") {
+    return { ok: false, error: "Creación de planes desactivada (PLAN_SOURCE=agent). Los planes se crean desde el agente externo." };
+  }
   const session = await getSession();
   if (session?.user?.role !== "ADMIN") return { ok: false, error: "Solo administradores." };
 

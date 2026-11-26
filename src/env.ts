@@ -51,6 +51,10 @@ const envSchema = z.object({
   // Ejemplo: "clxyz123abc,clxyz456def,clxyz789ghi"
   INSIGHTS_PILOT_CLIENT_IDS: z.string().optional(),
 
+  // "agent" = planes los crea el agente externo; desactiva análisis→plan y análisis→candidatas.
+  // Cualquier otro valor o ausente = flujo legacy (análisis in-app crea planes).
+  PLAN_SOURCE: z.enum(["agent", "legacy"]).optional().default("legacy"),
+
   // Embed token signing — firma tokens de vida corta para embeber reportes en Constructor.
   // Canónico en Bitwarden, sincronizar a .env.local y Easypanel.
   SEO_EMBED_TOKEN_SECRET: z.string().min(1),

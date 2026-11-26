@@ -876,6 +876,7 @@ model PlanTask {
   assignee           String?        // "ejecutor" | "felix"
   requiresApproval   Boolean        @default(false)
   dataSource         String?        @db.Text  // fuente que justifica la tarea
+  agentSteps         Json?          // pasos/sugerencias del agente: string[] o [{title,detail}]
   statusNote         String?        @db.Text  // nota al cambiar estado (blocked/skipped reason)
   statusChangedBy    String?        // quién cambió el estado
   statusChangedAt    DateTime?      // cuándo cambió el estado

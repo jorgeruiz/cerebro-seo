@@ -10,7 +10,7 @@ const patchSchema = z.object({
   status: z.enum(["pending", "in_progress", "blocked", "waiting_approval", "done", "skipped"]),
   note: z.string().max(2000).optional(),
   url: z.string().url().max(500).optional(),
-  steps: z.string().max(10000).optional(),
+  steps: z.array(z.string().max(1000)).max(20).optional(),
 });
 
 const STATUS_MAP: Record<string, PlanTaskStatus> = {
@@ -78,7 +78,7 @@ async function handler(
       ...(status === "blocked" && { blockedReason: note }),
       ...(status === "skipped" && { voidReason: note }),
       ...(status === "done" && { completedAt: now, completedById: "agent" }),
-      ...(steps && { objective: steps }),
+      ...(steps && { agentSteps: steps }),
     },
     select: {
       id: true,
@@ -88,6 +88,7 @@ async function handler(
       statusChangedBy: true,
       statusChangedAt: true,
       completedAt: true,
+      agentSteps: true,
     },
   });
 
@@ -123,6 +124,7 @@ async function handler(
     changedBy: updated.statusChangedBy,
     changedAt: updated.statusChangedAt?.toISOString() ?? null,
     completedAt: updated.completedAt?.toISOString() ?? null,
+    steps: updated.agentSteps ?? null,
   });
 }
 

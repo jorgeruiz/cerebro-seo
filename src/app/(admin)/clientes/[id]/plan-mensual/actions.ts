@@ -66,6 +66,7 @@ export interface PlanTaskFullView {
   assignee: string | null;
   requiresApproval: boolean;
   dataSource: string | null;
+  agentSteps: unknown | null;
   statusNote: string | null;
   statusChangedBy: string | null;
   statusChangedAt: string | null;
@@ -209,6 +210,7 @@ export async function getPlanData(
       assignee: t.assignee ?? null,
       requiresApproval: t.requiresApproval,
       dataSource: t.dataSource ?? null,
+      agentSteps: t.agentSteps ?? null,
       statusNote: t.statusNote ?? null,
       statusChangedBy: t.statusChangedBy ?? null,
       statusChangedAt: t.statusChangedAt?.toISOString() ?? null,

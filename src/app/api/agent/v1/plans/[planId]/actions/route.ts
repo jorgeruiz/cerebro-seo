@@ -18,6 +18,7 @@ const actionSchema = z.object({
   assignee: z.enum(["ejecutor", "felix"]).default("ejecutor"),
   requiresApproval: z.boolean().default(false),
   dataSource: z.string().max(2000).optional(),
+  steps: z.array(z.string().max(1000)).max(20).optional(),
 });
 
 const batchSchema = z.array(actionSchema).min(1).max(50);
@@ -123,6 +124,7 @@ async function handlePost(
           assignee: action.assignee,
           requiresApproval: action.requiresApproval,
           dataSource: action.dataSource ?? null,
+          agentSteps: action.steps ?? undefined,
         },
         select: {
           id: true,

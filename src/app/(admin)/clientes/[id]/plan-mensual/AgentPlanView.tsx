@@ -131,10 +131,22 @@ function ActionRow({
       {/* Expanded content */}
       {expanded && (
         <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/50">
-          {/* Description / steps */}
-          {task.objective && (
+          {/* Agent steps */}
+          {Array.isArray(task.agentSteps) && task.agentSteps.length > 0 && (
             <div className="mt-2">
-              <p className="font-mono text-[0.55rem] text-muted-foreground mb-0.5">Pasos / Descripción</p>
+              <p className="font-mono text-[0.55rem] text-muted-foreground mb-0.5">Pasos</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-xs text-foreground/80 bg-muted/50 rounded p-2">
+                {(task.agentSteps as string[]).map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Description */}
+          {task.objective && !Array.isArray(task.agentSteps) && (
+            <div className="mt-2">
+              <p className="font-mono text-[0.55rem] text-muted-foreground mb-0.5">Descripción</p>
               <pre className="whitespace-pre-wrap text-xs text-foreground/80 leading-relaxed bg-muted/50 rounded p-2 font-sans">
                 {task.objective}
               </pre>
