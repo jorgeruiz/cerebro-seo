@@ -103,11 +103,14 @@ async function runEngine(
     select: { role: true, content: true },
   });
 
-  const messages: Anthropic.MessageParam[] = history.map((m) => ({
-    role: m.role === "USER" || m.role === "TOOL_RESULT" ? "user" : "assistant",
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    content: m.content as any,
-  }));
+  // TOOL_USE role is legacy (tool_use blocks are inside ASSISTANT content) — skip
+  const messages: Anthropic.MessageParam[] = history
+    .filter((m) => m.role !== "TOOL_USE")
+    .map((m) => ({
+      role: m.role === "USER" || m.role === "TOOL_RESULT" ? "user" : "assistant",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      content: m.content as any,
+    }));
 
   // Build SEO context for system prompt
   let seoPlanSummary: string | null = null;
@@ -212,6 +215,15 @@ async function runEngine(
       break;
     }
 
+    // Save assistant message FIRST (it contains the tool_use blocks) — correct replay order
+    await prisma.agentMessage.create({
+      data: {
+        conversationId,
+        role: "ASSISTANT",
+        content: finalMessage.content as unknown as Prisma.InputJsonValue,
+      },
+    });
+
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
     for (const block of toolUseBlocks) {
@@ -222,16 +234,7 @@ async function runEngine(
       const result = await executeTool(block.name, input, toolCtx);
       emit(controller, encoder, "tool_result", { name: block.name, result });
 
-      // Save tool_use message
-      await prisma.agentMessage.create({
-        data: {
-          conversationId,
-          role: "TOOL_USE",
-          content: { name: block.name, id: block.id, input } as unknown as Prisma.InputJsonValue,
-        },
-      });
-
-      // Save tool_result message
+      // Save tool_result message (tool_use is already in the assistant content above)
       await prisma.agentMessage.create({
         data: {
           conversationId,
@@ -246,15 +249,6 @@ async function runEngine(
         content: result,
       });
     }
-
-    // Save assistant message with full content (including tool_use blocks)
-    await prisma.agentMessage.create({
-      data: {
-        conversationId,
-        role: "ASSISTANT",
-        content: finalMessage.content as unknown as Prisma.InputJsonValue,
-      },
-    });
 
     currentMessages = [
       ...currentMessages,

@@ -40,6 +40,7 @@ import {
 import { TerminalPanel } from "./TerminalPanel";
 import { ContentPreviewModal } from "./ContentPreviewModal";
 import { AgentPlanView } from "./AgentPlanView";
+import { AgentChatPanel } from "./AgentChatPanel";
 
 /** Must match DECOMPOSER_VERSION in src/lib/task-templates.ts */
 const CURRENT_DECOMPOSER_VERSION = "2026-11-11-v1";
@@ -2065,6 +2066,53 @@ function EmptyState({ clientId }: { clientId: string }) {
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 
+// ─── Right Panel: Chat + Terminal toggle ─────────────────────────────────
+
+function RightPanel({ clientId, plan }: { clientId: string; plan: PlanFullView | null }) {
+  const [tab, setTab] = useState<"chat" | "terminal">("chat");
+
+  return (
+    <div className="hidden xl:flex w-96 shrink-0 flex-col">
+      {/* Tab selector */}
+      <div className="flex border-b border-border mb-2">
+        <button
+          onClick={() => setTab("chat")}
+          className={cn(
+            "flex-1 font-mono text-[0.65rem] py-1.5 text-center transition-colors",
+            tab === "chat"
+              ? "text-foreground border-b-2 border-primary font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Chat Agente
+        </button>
+        <button
+          onClick={() => setTab("terminal")}
+          className={cn(
+            "flex-1 font-mono text-[0.65rem] py-1.5 text-center transition-colors",
+            tab === "terminal"
+              ? "text-foreground border-b-2 border-primary font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Terminal
+        </button>
+      </div>
+
+      {tab === "chat" ? (
+        <AgentChatPanel clientId={clientId} />
+      ) : (
+        <TerminalPanel
+          planId={plan?.id ?? ""}
+          taskId={null}
+          isAdmin={true}
+          planLocked={plan ? hasActiveWork(plan.tasks) : false}
+        />
+      )}
+    </div>
+  );
+}
+
 interface Props {
   clientId: string;
   initialPlan: PlanFullView | null;
@@ -2310,15 +2358,8 @@ export function PlanMensualPanel({ clientId, initialPlan, initialMonths }: Props
         )}
       </div>
 
-      {/* Right column — Terminal */}
-      <div className="hidden xl:flex w-96 shrink-0 flex-col">
-        <TerminalPanel
-          planId={plan?.id ?? ""}
-          taskId={null}
-          isAdmin={true}
-          planLocked={plan ? hasActiveWork(plan.tasks) : false}
-        />
-      </div>
+      {/* Right column — Chat / Terminal */}
+      <RightPanel clientId={clientId} plan={plan} />
     </div>
   );
 }
